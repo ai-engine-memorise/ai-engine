@@ -1,0 +1,42 @@
+import os
+from dotenv import load_dotenv
+
+CODE_DIR = os.path.dirname(os.path.realpath(__file__))
+ROOT_DIR = os.path.dirname(CODE_DIR)
+DATA_DIR = os.path.join(ROOT_DIR, 'data')
+
+load_dotenv()
+
+##################
+##### Qdrant #####
+##################
+
+QDRANT_API_URL = os.environ.get("QDRANT_API_URL")
+QDRANT_API_KEY = os.environ.get("QDRANT_API_KEY")
+
+COLLECTION_NAME = "bergen-belsen"
+FIELD_NAME_GEO = "locations"
+
+EMBEDDING_MODEL = 'sentence-transformers/all-MiniLM-L6-v2'
+
+SEARCH_LIMIT = 5
+
+
+##################
+##### SQLite #####
+##################
+
+SQL_DB_NAME = "events.db" 
+SQL_DB_URL = os.environ.get("SQL_API_URL")
+SQL_DB_KEY = os.environ.get("SQL_API_KEY")
+
+TABLE_USERS = "users"
+TABLE_EVENTS = "user_events"
+
+
+##################
+### User State ###
+##################
+
+READING_SPEED_WPS = 4.2       # 250 words per minute / 60 seconds
+IMG_EXTRA_FIXED_TIME = 1.3   # Assumed fixed time to view an image, in seconds
