@@ -17,6 +17,7 @@ dependencies = [
     "pandas (>=2.3.3,<3.0.0)",
     "loguru (>=0.7.3,<0.8.0)"
 ]
+packages = [{ include = "ai_engine", from = "src" }]
 
 
 [build-system]

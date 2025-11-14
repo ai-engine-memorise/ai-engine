@@ -4,7 +4,7 @@ from dataclasses import asdict
 from qdrant_client.models import RecommendStrategy
 
 from ai_engine.projection_builder import ProjectionBuilder
-from ai_engine.common import Item
+from ai_engine.common import SearchResult, hit_to_item
 from ai_engine.config import SEARCH_LIMIT, COLLECTION_NAME
 
 
@@ -31,7 +31,7 @@ class UserRecommender:
 
         return positives, negatives, events
 
-    def recommend_for_user(self, user_id: int, limit: int = SEARCH_LIMIT) -> List[Item]:
+    def recommend_for_user(self, user_id: int, limit: int = SEARCH_LIMIT) -> SearchResult:
         positives, negatives, events = self._get_user_signals(user_id)
 
         if not positives:
@@ -41,7 +41,7 @@ class UserRecommender:
         positive_ids = [int(i) for i in positives]
         negative_ids = [int(i) for i in negatives] if negatives else None
 
-        recommendations = self.client.recommend(
+        results = self.client.recommend(
             collection_name=self.collection_name,
             positive=positive_ids,
             negative=negative_ids,
@@ -51,24 +51,18 @@ class UserRecommender:
             strategy=RecommendStrategy.AVERAGE_VECTOR,
         )
 
-        logger.info(f"User {user_id} recommendations: {[point.id for point in recommendations]}")
-        items: List[Item] = [
-            Item.from_payload(point.payload)
-            for point in recommendations
+        items = [
+            hit_to_item(hit=hit, source="user", query_text=None)
+            for hit in results
         ]
 
-        # Optional: post-processing
-        # items = self._rerank_on_engagement(user_id, items, events)
-        # items = self._apply_mmr(items)
+        return SearchResult(
+            search_type="hybrid",
+            query_text=None,
+            lat=None,
+            lon=None,
+            radius_meters=None,
+            items=items,
+            next_offset=None,
+        )
 
-        return items
-
-    @staticmethod
-    def items_to_response(items: List[Item]):
-        out = []
-        for item in items:
-            data = asdict(item)
-            data["image_url"] = item.image_url
-            data["has_medium"] = bool(item.image_url)
-            out.append(data)
-        return out

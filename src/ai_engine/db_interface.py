@@ -139,7 +139,7 @@ class DB_Interface():
                     if result.rowcount == 1:
                         new_id = result.lastrowid
                     transaction.commit()
-            logger.info(f'Successful insert of event {event.item_id} user {event.user_id}')
+            logger.info(f'Successful insert of event {event.event_type} for {event.item_id} and user {event.user_id}')
             return f"{new_id}"
         
         except Exception as e:

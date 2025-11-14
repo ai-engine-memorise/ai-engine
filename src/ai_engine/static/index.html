@@ -281,6 +281,88 @@
       padding: 8px;
     }
 
+    .item-detail-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.82);
+      backdrop-filter: blur(6px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms ease-out;
+    }
+
+    .item-detail-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .item-detail-card {
+      background: #020617;
+      border-radius: 20px;
+      padding: 20px;
+      width: min(640px, 100%);
+      max-height: 90vh;
+      overflow-y: auto;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      box-shadow: 0 30px 80px rgba(2, 6, 23, 0.6);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .detail-close {
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      font-size: 1.4rem;
+      cursor: pointer;
+    }
+
+    .detail-image {
+      width: 100%;
+      max-height: 320px;
+      object-fit: cover;
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      background: rgba(15, 23, 42, 0.6);
+    }
+
+    .detail-title {
+      margin: 0;
+      font-size: 1.3rem;
+    }
+
+    .detail-meta {
+      display: grid;
+      grid-template-columns: max-content 1fr;
+      gap: 4px 12px;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+
+    .detail-meta dt {
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .detail-link {
+      align-self: flex-start;
+      border-radius: 999px;
+      padding: 8px 14px;
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      color: var(--text);
+      text-decoration: none;
+    }
+
     @media (max-width: 900px) {
       .page {
         grid-template-columns: minmax(0, 1fr);
@@ -351,9 +433,23 @@
     </div>
   </div>
 
+  <div class="item-detail-overlay" id="itemDetailOverlay" aria-hidden="true">
+    <div class="item-detail-card" role="dialog" aria-modal="true">
+      <button class="detail-close" id="detailCloseBtn" aria-label="Close detail view">&times;</button>
+      <img id="detailImage" class="detail-image" alt="" />
+      <h2 id="detailTitle" class="detail-title"></h2>
+      <p id="detailCreator" class="detail-creator"></p>
+      <p id="detailText" class="detail-text"></p>
+      <dl id="detailMeta" class="detail-meta"></dl>
+      <a id="detailLink" class="detail-link" href="#" target="_blank" rel="noopener noreferrer">Open record ↗</a>
+    </div>
+  </div>
+
   <script>
     // --- Memorial hallmarks -------------------------------------------------
     // --- Map: OpenStreetMap tiles via Leaflet ------------------------------
+    const ACTIVE_USER_ID = 10;
+
     const map = L.map('map'); // no setView yet, we'll do it after loading
 
     // --- Memorial hallmarks (loaded from memorials.json) --------------------
@@ -402,6 +498,14 @@
     const btnClear = document.getElementById('btnClear');
     const radiusSlider = document.getElementById('radiusSlider');
     const locStatus = document.getElementById('locStatus');
+    const detailOverlay = document.getElementById('itemDetailOverlay');
+    const detailCloseBtn = document.getElementById('detailCloseBtn');
+    const detailImage = document.getElementById('detailImage');
+    const detailTitleEl = document.getElementById('detailTitle');
+    const detailCreatorEl = document.getElementById('detailCreator');
+    const detailTextEl = document.getElementById('detailText');
+    const detailMetaEl = document.getElementById('detailMeta');
+    const detailLinkEl = document.getElementById('detailLink');
 
     function updateRadiusLabel() {
       radiusLabel.textContent = radius.toLocaleString('en-US') + ' m';
@@ -659,6 +763,7 @@
     // --- Results rendering --------------------------------------------------
     const resultsList = document.getElementById('resultsList');
     const resultsCount = document.getElementById('resultsCount');
+    let activeInteraction = null;
 
     function normalizeResults(json) {
       // Our backend returns: { result: { items: [...] } }
@@ -670,6 +775,122 @@
       if (Array.isArray(json.items)) return json.items;
       if (Array.isArray(json)) return json;
       return [];
+    }
+
+    function getItemId(item) {
+      if (!item) return null;
+      const payload = item.payload || {};
+      return item.id ?? payload.id ?? payload.item_id ?? null;
+    }
+
+    function hideItemDetailUI() {
+      detailOverlay.classList.remove('open');
+      detailOverlay.setAttribute('aria-hidden', 'true');
+      detailImage.src = '';
+      detailImage.style.display = 'none';
+      detailLinkEl.style.display = 'none';
+    }
+
+    function showItemDetail(item) {
+      const payload = item.payload || {};
+      const title = payload.title || '(No title)';
+      const text = payload.text || 'No description provided.';
+      const creator = payload.creator || '';
+      const imageUrl = payload.image_url || payload.imageUrl || '';
+      const publicUrl = payload.public_url || payload.publicUrl || '';
+      const coords = extractLatLonFromPayload(payload);
+      const created = payload.time_metadata?.dates_of_creation;
+
+      detailTitleEl.textContent = title;
+      detailCreatorEl.textContent = creator ? `Creator: ${creator}` : 'Creator unknown';
+      detailTextEl.textContent = text;
+
+      if (imageUrl) {
+        detailImage.src = imageUrl;
+        detailImage.style.display = 'block';
+      } else {
+        detailImage.style.display = 'none';
+      }
+
+      if (publicUrl) {
+        detailLinkEl.href = publicUrl;
+        detailLinkEl.style.display = 'inline-flex';
+      } else {
+        detailLinkEl.style.display = 'none';
+      }
+
+      const metaParts = [];
+      if (coords) {
+        metaParts.push(`<dt>Location</dt><dd>${coords.lat.toFixed(5)}, ${coords.lon.toFixed(5)}</dd>`);
+      }
+      if (created) {
+        const value = Array.isArray(created) ? created.join(', ') : created;
+        metaParts.push(`<dt>Date</dt><dd>${value}</dd>`);
+      }
+      if (item.score !== undefined) {
+        const score = typeof item.score === 'number' ? item.score.toFixed(3) : item.score;
+        metaParts.push(`<dt>Score</dt><dd>${score}</dd>`);
+      }
+
+      detailMetaEl.innerHTML = metaParts.length ? metaParts.join('') : '<dt>Details</dt><dd>No extra metadata.</dd>';
+
+      detailOverlay.classList.add('open');
+      detailOverlay.setAttribute('aria-hidden', 'false');
+    }
+
+    async function sendInteractionEvent(itemId, eventType, { useBeacon = false } = {}) {
+      if (!itemId) return;
+      const payload = {
+        id: Date.now(),
+        user_id: ACTIVE_USER_ID,
+        item_id: itemId,
+        event_type: eventType,
+        ts: new Date().toISOString()
+      };
+
+      if (useBeacon && navigator.sendBeacon) {
+        const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+        navigator.sendBeacon('/db/events', blob);
+        return;
+      }
+
+      try {
+        await fetch('/db/events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          keepalive: useBeacon
+        });
+      } catch (err) {
+        console.error('Failed to log event', err);
+      }
+    }
+
+    async function finalizeActiveInteraction(targetItemId = null, options = {}) {
+      if (!activeInteraction) return;
+      if (targetItemId && activeInteraction.itemId !== targetItemId) return;
+      const { itemId } = activeInteraction;
+      activeInteraction = null;
+      await sendInteractionEvent(itemId, 'end', options);
+    }
+
+    async function handleResultClick(item) {
+      await finalizeActiveInteraction();
+      hideItemDetailUI();
+
+      const payload = item.payload || {};
+      const coords = extractLatLonFromPayload(payload);
+      if (coords) {
+        const targetZoom = Math.min(Math.max(map.getZoom(), 12) + 1.1, 16);
+        map.flyTo([coords.lat, coords.lon], targetZoom, { duration: 0.5 });
+      }
+
+      const itemId = getItemId(item);
+      if (!itemId) return;
+
+      activeInteraction = { itemId, startedAt: Date.now() };
+      await sendInteractionEvent(itemId, 'start');
+      showItemDetail(item);
     }
 
     function renderResults(items, sourceLabel) {
@@ -736,6 +957,12 @@
 
         card.appendChild(img);
         card.appendChild(info);
+        card.addEventListener('click', () => handleResultClick(item));
+        link.addEventListener('click', (event) => {
+          event.stopPropagation();
+          hideItemDetailUI();
+          finalizeActiveInteraction(getItemId(item), { useBeacon: true });
+        });
         resultsList.appendChild(card);
       });
 
@@ -762,6 +989,8 @@
         const res = await fetch('/api/search/geo?' + params.toString());
         const json = await res.json();
         const items = normalizeResults(json);
+        await finalizeActiveInteraction();
+        hideItemDetailUI();
         renderResults(items, 'Geo');
         plotGeoResultMarkers(items, { adjustView: true });
       } catch (err) {
@@ -783,6 +1012,8 @@
         const res = await fetch('/api/search?' + params.toString());
         const json = await res.json();
         const items = normalizeResults(json);
+        await finalizeActiveInteraction();
+        hideItemDetailUI();
         renderResults(items, 'Text');
         plotGeoResultMarkers(items, { adjustView: false });
       } catch (err) {
@@ -798,6 +1029,34 @@
     textQueryInput.addEventListener('keydown', e => {
       if (e.key === 'Enter') doTextSearch();
     });
+
+    detailCloseBtn.addEventListener('click', () => {
+      hideItemDetailUI();
+      finalizeActiveInteraction();
+    });
+
+    detailOverlay.addEventListener('click', (event) => {
+      if (event.target === detailOverlay) {
+        hideItemDetailUI();
+        finalizeActiveInteraction();
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && detailOverlay.classList.contains('open')) {
+        hideItemDetailUI();
+        finalizeActiveInteraction();
+      }
+    });
+
+    window.addEventListener('beforeunload', () => {
+      if (!activeInteraction) return;
+      const { itemId } = activeInteraction;
+      activeInteraction = null;
+      sendInteractionEvent(itemId, 'end', { useBeacon: true });
+    });
+
+    hideItemDetailUI();
   </script>
 </body>
 </html>

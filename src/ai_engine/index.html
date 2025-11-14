@@ -126,6 +126,85 @@
       gap: 0.75rem;
     }
 
+    .item-detail-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.75);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 150ms ease-out;
+    }
+
+    .item-detail-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .item-detail-card {
+      background: white;
+      width: min(640px, 100%);
+      max-height: 90vh;
+      overflow-y: auto;
+      border-radius: 0.75rem;
+      box-shadow: 0 25px 60px rgba(15, 23, 42, 0.35);
+      position: relative;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .detail-close {
+      position: absolute;
+      top: 0.6rem;
+      right: 0.75rem;
+      border: none;
+      background: transparent;
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: #4b5563;
+    }
+
+    .detail-image {
+      width: 100%;
+      border-radius: 0.5rem;
+      object-fit: cover;
+      background: #e5e7eb;
+      max-height: 320px;
+    }
+
+    .detail-title {
+      margin: 0;
+      font-size: 1.3rem;
+    }
+
+    .detail-meta {
+      display: grid;
+      grid-template-columns: max-content 1fr;
+      gap: 0.35rem 0.75rem;
+      font-size: 0.9rem;
+      color: #4b5563;
+    }
+
+    .detail-meta dt {
+      font-weight: 600;
+    }
+
+    .detail-link {
+      align-self: flex-start;
+      border-radius: 999px;
+      padding: 0.4rem 0.9rem;
+      background: #111827;
+      color: #f9fafb;
+      text-decoration: none;
+      font-size: 0.9rem;
+    }
+
     .item-card {
       background: white;
       border-radius: 0.5rem;
@@ -249,6 +328,21 @@
     </div>
 
     <div id="results"></div>
+    <div
+      class="item-detail-overlay"
+      id="itemDetailOverlay"
+      aria-hidden="true"
+    >
+      <div class="item-detail-card" role="dialog" aria-modal="true">
+        <button class="detail-close" id="detailCloseBtn" aria-label="Close detail view">&times;</button>
+        <img id="detailImage" class="detail-image" alt="">
+        <h2 id="detailTitle" class="detail-title"></h2>
+        <p id="detailCreator" class="detail-creator"></p>
+        <p id="detailText" class="detail-text"></p>
+        <dl id="detailMeta" class="detail-meta"></dl>
+        <a id="detailLink" class="detail-link" href="#" target="_blank" rel="noopener noreferrer">Open record</a>
+      </div>
+    </div>
   </main>
 
   <!-- Leaflet JS -->
@@ -263,6 +357,8 @@
     // If it's on another host/port, set API_BASE = "http://localhost:8000" etc.
     const API_BASE = "http://localhost:8000";
 
+    const ACTIVE_USER_ID = 11;
+
     const searchInput = document.getElementById("searchQuery");
     const btnTextSearch = document.getElementById("btnTextSearch");
     const btnGeoSearch = document.getElementById("btnGeoSearch");
@@ -272,10 +368,19 @@
     const statusMessage = document.getElementById("statusMessage");
     const locationStatus = document.getElementById("locationStatus");
     const resultsContainer = document.getElementById("results");
+    const detailOverlay = document.getElementById("itemDetailOverlay");
+    const detailCloseBtn = document.getElementById("detailCloseBtn");
+    const detailImage = document.getElementById("detailImage");
+    const detailTitleEl = document.getElementById("detailTitle");
+    const detailCreatorEl = document.getElementById("detailCreator");
+    const detailTextEl = document.getElementById("detailText");
+    const detailMetaEl = document.getElementById("detailMeta");
+    const detailLinkEl = document.getElementById("detailLink");
 
     let selectedLatLon = null;
     let marker = null;
     let circle = null;
+    let activeInteraction = null;
 
     // Initialize map (center on your example coords)
     const map = L.map("map").setView([52.7579, 9.9048], 12);
@@ -341,7 +446,97 @@
       updateLocationDisplay();
     });
 
-    // Normalize result item to {title, text, imageUrl, publicUrl}
+    function toNumberLike(value) {
+      if (typeof value === "number" && Number.isFinite(value)) {
+        return value;
+      }
+      if (typeof value === "string" && value.trim() !== "") {
+        const parsed = Number.parseFloat(value);
+        if (Number.isFinite(parsed)) {
+          return parsed;
+        }
+      }
+      return null;
+    }
+
+    function findLatLon(candidate) {
+      if (!candidate) return null;
+
+      if (Array.isArray(candidate)) {
+        for (const entry of candidate) {
+          const found = findLatLon(entry);
+          if (found) return found;
+        }
+        return null;
+      }
+
+      if (typeof candidate === "string") {
+        const parts = candidate.split(/[,;]/).map((p) => p.trim());
+        if (parts.length >= 2) {
+          const lat = toNumberLike(parts[0]);
+          const lon = toNumberLike(parts[1]);
+          if (lat !== null && lon !== null) {
+            return { lat, lon };
+          }
+        }
+        return null;
+      }
+
+      if (typeof candidate === "object") {
+        const latKeys = ["lat", "latitude", "lat_deg"];
+        const lonKeys = ["lon", "lng", "longitude", "lon_deg"];
+
+        let lat = null;
+        let lon = null;
+
+        for (const key of latKeys) {
+          if (lat === null && key in candidate) {
+            lat = toNumberLike(candidate[key]);
+          }
+        }
+        for (const key of lonKeys) {
+          if (lon === null && key in candidate) {
+            lon = toNumberLike(candidate[key]);
+          }
+        }
+
+        if (lat !== null && lon !== null) {
+          return { lat, lon };
+        }
+
+        if ("coordinates" in candidate) {
+          const coords = findLatLon(candidate.coordinates);
+          if (coords) return coords;
+        }
+
+        if ("point" in candidate) {
+          const point = findLatLon(candidate.point);
+          if (point) return point;
+        }
+
+        return null;
+      }
+
+      return null;
+    }
+
+    function extractLatLonFromItem(raw) {
+      const payload = raw?.payload || raw || {};
+      return (
+        findLatLon(payload.locations) ||
+        findLatLon(payload.geo_metadata) ||
+        findLatLon(payload.location) ||
+        findLatLon({ lat: payload.lat, lon: payload.lon })
+      );
+    }
+
+    function getItemId(raw) {
+      if (!raw) return null;
+      const payload = raw.payload || raw;
+      return payload.id ?? raw.id ?? payload.item_id ?? null;
+    }
+
+    // Normalize result item to {title, text, previewText, imageUrl, publicUrl, creator}
     function normalizeItem(raw) {
       // Sometimes your API might return bare Items,
       // sometimes Qdrant hits like { id, payload: { ...Item... } }
@@ -349,6 +544,7 @@
 
       const title = payload.title || "(untitled)";
       const text = payload.text || "";
+      const creator = payload.creator || "";
       const publicUrl = payload.public_url || payload.publicUrl || null;
 
       let imageUrl = null;
@@ -359,19 +555,27 @@
         imageUrl = publicUrl;
       }
 
-      return { title, text, imageUrl, publicUrl };
+      const previewText =
+        text && text.length > 200 ? text.slice(0, 200) + "…" : text || "";
+
+      return { title, text, previewText, imageUrl, publicUrl, creator };
     }
 
     function renderResults(items) {
       resultsContainer.innerHTML = "";
 
-      if (!items || items.length === 0) {
+      let list = items;
+      if (!Array.isArray(list)) {
+        list = list?.items || [];
+      }
+
+      if (!list || list.length === 0) {
         resultsContainer.innerHTML = "<p>No results.</p>";
         return;
       }
 
-      for (const raw of items) {
-        const { title, text, imageUrl, publicUrl } = normalizeItem(raw);
+      for (const raw of list) {
+        const { title, previewText, imageUrl, publicUrl } = normalizeItem(raw);
 
         const card = document.createElement("div");
         card.className = "item-card";
@@ -392,16 +596,21 @@
         titleEl.className = "item-title";
         titleEl.textContent = title;
 
-        const textEl = document.createElement("p");
-        textEl.className = "item-text";
-        textEl.textContent =
-          text && text.length > 200 ? text.slice(0, 200) + "…" : text || "";
-
         info.appendChild(titleEl);
-        if (text) info.appendChild(textEl);
+
+        if (previewText) {
+          const textEl = document.createElement("p");
+          textEl.className = "item-text";
+          textEl.textContent = previewText;
+          info.appendChild(textEl);
+        }
 
         header.appendChild(info);
         card.appendChild(header);
+
+        card.addEventListener("click", () => {
+          handleResultClick(raw);
+        });
 
         if (publicUrl) {
           const footer = document.createElement("div");
@@ -412,12 +621,144 @@
           link.rel = "noopener noreferrer";
           link.className = "item-link";
           link.textContent = "Open item";
+          link.addEventListener("click", (event) => {
+            event.stopPropagation();
+            hideItemDetailUI();
+            finalizeActiveInteraction(getItemId(raw), { useBeacon: true });
+          });
           footer.appendChild(link);
           card.appendChild(footer);
         }
 
         resultsContainer.appendChild(card);
       }
+    }
+
+    function hideItemDetailUI() {
+      detailOverlay.classList.remove("open");
+      detailOverlay.setAttribute("aria-hidden", "true");
+      detailImage.src = "";
+      detailLinkEl.style.display = "none";
+    }
+
+    function showItemDetail(raw) {
+      const { title, text, imageUrl, publicUrl, creator } = normalizeItem(raw);
+      const payload = raw.payload || raw || {};
+      const metaItems = [];
+
+      const coords = extractLatLonFromItem(raw);
+      if (coords) {
+        metaItems.push({
+          label: "Location",
+          value: `${coords.lat.toFixed(5)}, ${coords.lon.toFixed(5)}`
+        });
+      }
+
+      if (payload.time_metadata?.dates_of_creation) {
+        metaItems.push({
+          label: "Date",
+          value: Array.isArray(payload.time_metadata.dates_of_creation)
+            ? payload.time_metadata.dates_of_creation.join(", ")
+            : payload.time_metadata.dates_of_creation
+        });
+      }
+
+      if (payload.score !== undefined) {
+        const scoreText =
+          typeof payload.score === "number"
+            ? payload.score.toFixed(3)
+            : payload.score;
+        metaItems.push({ label: "Score", value: scoreText });
+      }
+
+      detailTitleEl.textContent = title;
+      detailCreatorEl.textContent = creator ? `Creator: ${creator}` : "Creator unknown";
+      detailTextEl.textContent = text || "No description provided.";
+
+      if (imageUrl) {
+        detailImage.src = imageUrl;
+        detailImage.style.display = "block";
+      } else {
+        detailImage.style.display = "none";
+      }
+
+      if (publicUrl) {
+        detailLinkEl.href = publicUrl;
+        detailLinkEl.style.display = "inline-flex";
+      } else {
+        detailLinkEl.style.display = "none";
+      }
+
+      if (metaItems.length) {
+        detailMetaEl.innerHTML = metaItems
+          .map(
+            (item) => `
+              <dt>${item.label}</dt>
+              <dd>${item.value}</dd>
+            `
+          )
+          .join("");
+      } else {
+        detailMetaEl.innerHTML = "<dt>Details</dt><dd>No extra metadata.</dd>";
+      }
+
+      detailOverlay.classList.add("open");
+      detailOverlay.setAttribute("aria-hidden", "false");
+    }
+
+    async function sendInteractionEvent(itemId, eventType, { useBeacon = false } = {}) {
+      if (!itemId) return;
+      const payload = {
+        id: Date.now(),
+        user_id: ACTIVE_USER_ID,
+        item_id: itemId,
+        event_type: eventType,
+        ts: new Date().toISOString()
+      };
+      const endpoint = `${API_BASE}/db/events`;
+
+      if (useBeacon && navigator.sendBeacon) {
+        const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
+        navigator.sendBeacon(endpoint, blob);
+        return;
+      }
+
+      try {
+        await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          keepalive: useBeacon
+        });
+      } catch (err) {
+        console.error("Failed to log event", err);
+      }
+    }
+
+    async function finalizeActiveInteraction(targetItemId = null, options = {}) {
+      if (!activeInteraction) return;
+      if (targetItemId && activeInteraction.itemId !== targetItemId) return;
+      const { itemId } = activeInteraction;
+      activeInteraction = null;
+      await sendInteractionEvent(itemId, "end", options);
+    }
+
+    async function handleResultClick(raw) {
+      await finalizeActiveInteraction();
+      hideItemDetailUI();
+
+      const coords = extractLatLonFromItem(raw);
+      if (coords) {
+        const targetZoom = Math.min(Math.max(map.getZoom(), 12) + 1.2, 16);
+        map.flyTo([coords.lat, coords.lon], targetZoom, { duration: 0.6 });
+      }
+
+      const itemId = getItemId(raw);
+      if (!itemId) return;
+
+      activeInteraction = { itemId, startedAt: Date.now() };
+      await sendInteractionEvent(itemId, "start");
+      showItemDetail(raw);
     }
 
     function setStatus(msg, isError = false) {
@@ -440,6 +781,7 @@
           throw new Error(`HTTP ${res.status}`);
         }
         const data = await res.json();
+        await finalizeActiveInteraction();
         renderResults(data.result || []);
         setStatus(`Text search done. ${ (data.result || []).length } result(s).`);
       } catch (err) {
@@ -471,6 +813,7 @@
           throw new Error(`HTTP ${res.status}`);
         }
         const data = await res.json();
+        await finalizeActiveInteraction();
         renderResults(data.result || []);
         setStatus(
           `Geo search done. ${ (data.result || []).length } result(s).`
@@ -497,6 +840,32 @@
         e.preventDefault();
         doTextSearch();
       }
+    });
+
+    detailCloseBtn.addEventListener("click", () => {
+      hideItemDetailUI();
+      finalizeActiveInteraction();
+    });
+
+    detailOverlay.addEventListener("click", (event) => {
+      if (event.target === detailOverlay) {
+        hideItemDetailUI();
+        finalizeActiveInteraction();
+      }
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && detailOverlay.classList.contains("open")) {
+        hideItemDetailUI();
+        finalizeActiveInteraction();
+      }
+    });
+
+    window.addEventListener("beforeunload", () => {
+      if (!activeInteraction) return;
+      const { itemId } = activeInteraction;
+      activeInteraction = null;
+      sendInteractionEvent(itemId, "end", { useBeacon: true });
     });
 
     // Initial state

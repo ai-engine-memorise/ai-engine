@@ -1,7 +1,6 @@
 from typing import Optional, List
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi_utils.timing import add_timing_middleware
 from loguru import logger
 
 from fastapi.staticfiles import StaticFiles
@@ -11,8 +10,6 @@ from ai_engine.config import COLLECTION_NAME, SEARCH_LIMIT
 from ai_engine.db_interface import DB_Interface
 from ai_engine.global_searcher import GlobalSearch
 from ai_engine.projection_builder import ProjectionBuilder
-
-
 from ai_engine.common import Event, User
 
 app = FastAPI()
