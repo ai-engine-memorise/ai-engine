@@ -39,7 +39,7 @@ def user_to_query_text(user: Dict[Any, str]) -> str:
 
 # -------------------------------------------------------------------------------------------------------------------------------
 
-class VectorSearcher:
+class VectorSearch:
 
     def __init__(self, collection_name: str):
         self.collection_name = collection_name
@@ -90,7 +90,7 @@ class VectorSearcher:
 if __name__ == '__main__':
     from ai_engine.common import User
 
-    neural_searcher = VectorSearcher(collection_name=COLLECTION_NAME)
+    neural_searcher = VectorSearch(collection_name=COLLECTION_NAME)
 
     user = User(
         age = 24,

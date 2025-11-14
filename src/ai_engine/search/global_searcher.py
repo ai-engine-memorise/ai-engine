@@ -1,18 +1,15 @@
 from loguru import logger
 from typing import Optional, List, Dict, Any
-from ai_engine.help_searcher import CommonSearcher
-from ai_engine.vector_searcher import VectorSearcher
-from ai_engine.geo_searcher import GeoSearcher
-from ai_engine.user_searcher import UserRecommender
+from ai_engine.search import CommonSearch, GeoSearch, VectorSearch, UserRecommender
 from ai_engine.common import SearchResult
 
 # Umbrella class for the Qdrant Fetching Logic Text + Vector + Geo
 
 class GlobalSearch:
     def __init__(self, collection_name: str):
-        self.common_searcher = CommonSearcher(collection_name=collection_name)
-        self.geo_searcher = GeoSearcher(collection_name=collection_name)
-        self.vector_searcher = VectorSearcher(collection_name=collection_name)
+        self.common_searcher = CommonSearch(collection_name=collection_name)
+        self.geo_searcher = GeoSearch(collection_name=collection_name)
+        self.vector_searcher = VectorSearch(collection_name=collection_name)
         self.user_recommender = UserRecommender(collection_name=collection_name)
 
     def search(

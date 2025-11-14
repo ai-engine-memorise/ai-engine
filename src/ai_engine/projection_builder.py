@@ -1,16 +1,13 @@
 # %%
 from loguru import logger
-import json
-from dataclasses import dataclass
-from datetime import datetime
 from typing import Optional, List, Dict, Any
 
 import pandas as pd  # assuming you already use it
 
 from ai_engine.db_interface import DB_Interface
-from ai_engine.global_searcher import CommonSearcher
+from ai_engine.search import CommonSearch
 from ai_engine.user_state import UserState
-from ai_engine.common import Event, Item
+from ai_engine.common import Item
 
 ### Projection Builder Class
 ### Given user_events table it creates other projection tables:
@@ -21,7 +18,7 @@ class ProjectionBuilder:
     def __init__(self, collection_name: str):
         self.user_state = UserState()
         self.db_engine = DB_Interface()
-        self.common_searcher = CommonSearcher(collection_name=collection_name)
+        self.common_searcher = CommonSearch(collection_name=collection_name)
 
     ### Public entrypoints
     #############################

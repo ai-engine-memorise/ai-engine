@@ -1,11 +1,11 @@
 
 from loguru import logger
 from typing import Any, Dict, Optional, List, Union
-from ai_engine.config import QDRANT_API_KEY, QDRANT_API_URL, COLLECTION_NAME, SEARCH_LIMIT
+from ai_engine.config import QDRANT_API_KEY, QDRANT_API_URL, COLLECTION_NAME
 from qdrant_client import QdrantClient
 from qdrant_client.models import Filter, FieldCondition, MatchValue, MatchAny, CreateFieldIndex, PayloadSchemaType
 
-class CommonSearcher:
+class CommonSearch:
     def __init__(self, collection_name: str = COLLECTION_NAME):
         self.collection_name = collection_name
         self.client = QdrantClient(

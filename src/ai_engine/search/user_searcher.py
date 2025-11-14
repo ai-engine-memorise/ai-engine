@@ -1,6 +1,5 @@
 from loguru import logger
 from typing import List
-from dataclasses import asdict
 from qdrant_client.models import RecommendStrategy
 
 from ai_engine.projection_builder import ProjectionBuilder

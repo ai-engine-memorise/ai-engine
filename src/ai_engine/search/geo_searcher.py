@@ -16,7 +16,7 @@ from ai_engine.common import SearchResult, hit_to_item
 
 # -------------------------------------------------------------------------------------------------------------------------------
 
-class GeoSearcher:
+class GeoSearch:
     def __init__(self, collection_name: str = COLLECTION_NAME):
         """
         Simple helper class for doing geo-based searches in Qdrant.
@@ -143,7 +143,7 @@ class GeoSearcher:
 
 if __name__ == '__main__':
 
-    geo_searcher = GeoSearcher(
+    geo_searcher = GeoSearch(
         collection_name=COLLECTION_NAME,
     )
     
