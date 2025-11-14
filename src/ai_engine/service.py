@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 
 from ai_engine.config import COLLECTION_NAME, SEARCH_LIMIT
 from ai_engine.db_interface import DB_Interface
-from ai_engine.global_searcher import GlobalSearch
+from ai_engine.search import GlobalSearch
 from ai_engine.projection_builder import ProjectionBuilder
 from ai_engine.common import Event, User
 
