@@ -57,7 +57,7 @@ class UserRecommender:
         ]
 
         return SearchResult(
-            search_type="hybrid",
+            search_type="user",
             query_text=None,
             lat=None,
             lon=None,
