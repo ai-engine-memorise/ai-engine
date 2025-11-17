@@ -10,6 +10,7 @@ from ai_engine.config import COLLECTION_NAME, SEARCH_LIMIT
 from ai_engine.db_interface import DB_Interface
 from ai_engine.search import GlobalSearch
 from ai_engine.projection_builder import ProjectionBuilder
+from ai_engine.narrative import NarrativeGenerator
 from ai_engine.common import Event, User
 
 app = FastAPI()
@@ -97,6 +98,27 @@ async def read_user_search(
 #  - user,
     #  - item,
     #  - item history
+
+### / Narrative
+narrative_generator = NarrativeGenerator()
+
+@app.get("/api/narrative", tags=['Show'])
+async def create_narrative(
+    q: Optional[str] = Query(
+        default=None,
+        description="Search text (optional)",
+        example="Bergen-Belsen",
+    ),
+    # item_set: List[int] = Query(..., example=[1270]),
+):
+    """
+    Turn a set of items into a narrative
+    """
+    result = searcher.search(text=q)
+    narrative = narrative_generator.generate_narrative(result.items)
+    return {
+        "result": narrative.dict()
+    }
 
 ### / Debug
 @app.get("/debug/user_info", tags=["Debug"])

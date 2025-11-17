@@ -49,6 +49,7 @@ class UserRecommender:
             limit=limit,
             strategy=RecommendStrategy.AVERAGE_VECTOR,
         )
+        ## https://qdrant.tech/blog/mmr-diversity-aware-reranking/
 
         items = [
             hit_to_item(hit=hit, source="user", query_text=None)

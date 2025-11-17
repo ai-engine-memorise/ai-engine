@@ -1,7 +1,10 @@
 from loguru import logger
 from typing import Optional, List, Dict, Any
-from ai_engine.search import CommonSearch, GeoSearch, VectorSearch, UserRecommender
 from ai_engine.common import SearchResult
+from .help_searcher import CommonSearch
+from .geo_searcher import GeoSearch
+from .vector_searcher import VectorSearch
+from .user_searcher import UserRecommender
 
 # Umbrella class for the Qdrant Fetching Logic Text + Vector + Geo
 

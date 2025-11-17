@@ -8,6 +8,17 @@ DATA_DIR = os.path.join(ROOT_DIR, 'data')
 load_dotenv()
 
 ##################
+####### LLM  #####
+##################
+
+OPENROUTER_NARRATIVE_MODEL = 'arliai/qwq-32b-arliai-rpr-v1:free'
+OPENROUTER_API_URL = os.environ.get("OPENROUTER_API_URL")
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
+
+OLLAMA_CLUSTER_URL = 'http://consortium-cluster-ip:11434'
+OLLAMA_MODEL = 'mistral' # This MUST be a model pulled on your cluster
+
+##################
 ##### Qdrant #####
 ##################
 

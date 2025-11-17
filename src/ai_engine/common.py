@@ -143,9 +143,37 @@ class SearchResult:
                 "lon": self.lon,
                 "radius_meters": self.radius_meters,
             },
-            "items": self.items,
+            "prepare_llm_itemsitems": self.items,
             "next_offset": self.next_offset,
         }
+
+
+# -------- Narratives ----------
+# ------------------------------
+
+from typing import List, Literal
+from pydantic import BaseModel, Field
+
+class Relationship(BaseModel):
+    # "from" is a Python keyword, so use alias
+    from_: str = Field(alias="from")
+    to: str
+    type: str  # or Literal["chronological", "thematic", "geographical", "causal", "contrast", "other"]
+    explanation: str
+
+class Segment(BaseModel):
+    segment_id: str
+    headline: str
+    summary: str
+    item_ids: List[str]
+    relationships: List[Relationship]
+    transition_to_next: str
+
+class NarrativeResult(BaseModel):
+    narrative_title: str
+    overview: str
+    segments: List[Segment]
+    suggested_start_item_id: str
 
 
 # ------------------------------
