@@ -143,7 +143,7 @@ class SearchResult:
                 "lon": self.lon,
                 "radius_meters": self.radius_meters,
             },
-            "prepare_llm_itemsitems": self.items,
+            "items": self.items,
             "next_offset": self.next_offset,
         }
 

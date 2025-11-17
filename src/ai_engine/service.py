@@ -5,6 +5,7 @@ from loguru import logger
 
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
 from ai_engine.config import COLLECTION_NAME, SEARCH_LIMIT
 from ai_engine.db_interface import DB_Interface
@@ -102,22 +103,17 @@ async def read_user_search(
 ### / Narrative
 narrative_generator = NarrativeGenerator()
 
-@app.get("/api/narrative", tags=['Show'])
-async def create_narrative(
-    q: Optional[str] = Query(
-        default=None,
-        description="Search text (optional)",
-        example="Bergen-Belsen",
-    ),
-    # item_set: List[int] = Query(..., example=[1270]),
-):
+class NarrativeRequest(BaseModel):
+    items: List[dict]
+
+@app.post("/api/narrative", tags=['Show'])
+async def create_narrative(request: NarrativeRequest):
     """
     Turn a set of items into a narrative
     """
-    result = searcher.search(text=q)
-    narrative = narrative_generator.generate_narrative(result.items)
+    narrative = narrative_generator.generate_narrative(request.items)
     return {
-        "result": narrative.dict()
+        "result": narrative
     }
 
 ### / Debug
