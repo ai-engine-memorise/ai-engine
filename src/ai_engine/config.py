@@ -25,7 +25,7 @@ OLLAMA_MODEL = 'mistral' # This MUST be a model pulled on your cluster
 QDRANT_API_URL = os.environ.get("QDRANT_API_URL")
 QDRANT_API_KEY = os.environ.get("QDRANT_API_KEY")
 
-COLLECTION_NAME = "bergen-belsen"
+COLLECTION_NAME = "omeka-items"
 FIELD_NAME_GEO = "locations"
 
 EMBEDDING_MODEL = 'sentence-transformers/all-MiniLM-L6-v2'

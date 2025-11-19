@@ -14,6 +14,16 @@ import pandas as pd
 from ai_engine.config import QDRANT_API_URL, QDRANT_API_KEY, COLLECTION_NAME, EMBEDDING_MODEL
 from ai_engine.common import Item
 
+def to_serializable(obj):
+    # NumPy arrays -> Python lists
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    # NumPy scalar types -> Python scalars
+    if isinstance(obj, np.generic):
+        return obj.item()
+    # You can add more special cases here (datetime, Decimal, etc.)
+    raise TypeError(f"Type {type(obj)} not serializable")
+
 # TODO: Add content medium as metadata (text, image, audio, video, mixed)
 # TODO: Compute item length in words
 
@@ -22,7 +32,7 @@ if __name__ == '__main__':
     ##################
     ####  Omeka  #####
     ##################
-    df = pd.read_parquet("../../data/omeka_data.parquet")
+    df = pd.read_parquet("../../../data/omeka_data.parquet")
 
     # Init Model
     logger.info(f"Initializing embedding model: {EMBEDDING_MODEL}")
@@ -34,11 +44,12 @@ if __name__ == '__main__':
     points = []
     for index, row in df.iterrows():
         item = Item(**row.to_dict())
+        logger.info(f"embedding text for item {item.id}: {item.text_all}")
         embedding = model.encode(item.text_all, show_progress_bar=False).tolist()
         payload = asdict(item)
         payload["image_url"] = item.image_url
         try:
-            payload = json.loads(json.dumps(payload))
+            payload = json.loads(json.dumps(payload, default=to_serializable))
         except TypeError as e:
             # A cleaner error handler if the json module itself fails to serialize a weird type
             logger.error(f"Failed to serialize payload for Item ID: {item.id}. Error: {e}")
