@@ -89,7 +89,7 @@ class DB_Interface():
     def fetch_user(self, user_id: int) -> pd.DataFrame:
             sql_query = """
             SELECT * 
-            FROM user
+            FROM visitor
             WHERE id = :user_id;
             """
             
@@ -110,7 +110,7 @@ class DB_Interface():
 
     def register_user(self, user: User) -> str:
         sql_query = """
-        INSERT INTO user (
+        INSERT INTO visitor (
             id, email, password_hash, age, nationality, personal_connection, payload
         ) VALUES (
             :id, :email, :password_hash, :age, :nationality, :personal_connection, NULL
