@@ -41,6 +41,13 @@ SQL_DB_NAME = "events.db"
 SQL_DB_URL = os.environ.get("SQL_DATABASE_URL")
 SQL_DB_KEY = os.environ.get("SQL_DATABASE_KEY")
 
+DB_NAME = os.environ.get("DB_NAME")
+DB_USER = os.environ.get("DB_USER")
+DB_PASSWORD = os.environ.get("DB_PASSWORD")
+DB_HOST = os.environ.get("DB_HOST")
+DB_PORT = os.getenv("POSTGRES_PORT", "5432")
+DB_DRIVERNAME = os.getenv("DB_DRIVERNAME", "postgresql+psycopg")
+
 TABLE_USERS = "users"
 TABLE_EVENTS = "user_events"
 
