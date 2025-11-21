@@ -5,7 +5,7 @@ from sqlalchemy import create_engine, text, URL
 import pandas as pd
 
 from ai_engine.common import User, Event
-from ai_engine.config import SQL_DB_NAME
+from ai_engine.config import DB_NAME, DB_HOST, DB_USER, DB_PASSWORD, DB_PORT, DB_DRIVERNAME
 
 
 class DB_Interface():
@@ -13,8 +13,12 @@ class DB_Interface():
         # Create engine
         self.engine = create_engine(
             url=URL.create(
-                database=SQL_DB_NAME,
-                drivername='sqlite'),
+                database=DB_NAME,
+                host=DB_HOST,
+                username=DB_USER,
+                password=DB_PASSWORD,
+                port=DB_PORT,
+                drivername=DB_DRIVERNAME),
             pool_pre_ping=True
         )
 

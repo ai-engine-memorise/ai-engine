@@ -1,0 +1,72 @@
+
+name: Publish to PyPI and GitHub Releases
+
+on:
+  push:
+    tags:
+      - "v*.*.*"   # e.g. v1.0.0, v2.3.4
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: poetry install
+
+      - name: Run tests
+        run: poetry run pytest --cov=ai_cdss
+
+      - name: Build package
+        run: poetry build
+
+      # ---- GitHub Release ----
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+
+      - name: Get build artifact paths
+        id: get_paths
+        run: |
+          echo "SDIST_PATH=$(ls dist/*.tar.gz)" >> $GITHUB_ENV
+          echo "WHEEL_PATH=$(ls dist/*.whl)" >> $GITHUB_ENV
+
+      - name: Upload sdist to GitHub Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ env.SDIST_PATH }}
+          asset_name: ai_cdss-${{ github.ref_name }}.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload wheel to GitHub Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ env.WHEEL_PATH }}
+          asset_name: ai_cdss-${{ github.ref_name }}.whl
+          asset_content_type: application/octet-stream

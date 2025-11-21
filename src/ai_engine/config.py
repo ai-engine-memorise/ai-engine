@@ -38,8 +38,8 @@ SEARCH_LIMIT = 5
 ##################
 
 SQL_DB_NAME = "events.db" 
-SQL_DB_URL = os.environ.get("SQL_API_URL")
-SQL_DB_KEY = os.environ.get("SQL_API_KEY")
+SQL_DB_URL = os.environ.get("SQL_DATABASE_URL")
+SQL_DB_KEY = os.environ.get("SQL_DATABASE_KEY")
 
 TABLE_USERS = "users"
 TABLE_EVENTS = "user_events"
