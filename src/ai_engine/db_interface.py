@@ -4,7 +4,14 @@ from sqlalchemy import create_engine, text, URL
 import pandas as pd
 
 from ai_engine.common import User, Event
-from ai_engine.config import DB_NAME, DB_HOST, DB_USER, DB_PASSWORD, DB_PORT, DB_DRIVERNAME
+from ai_engine.config import (
+    DB_NAME, 
+    DB_HOST, 
+    DB_USER, 
+    DB_PASSWORD, 
+    DB_PORT, 
+    DB_DRIVERNAME,
+)
 
 
 class DB_Interface():
@@ -27,7 +34,7 @@ class DB_Interface():
     def fetch_events_raw(self, user_id: int) -> pd.DataFrame:
         sql_query = """
         SELECT *
-        FROM user_events
+        FROM user_event
         WHERE user_id = :user_id;
         """
         
@@ -61,7 +68,7 @@ class DB_Interface():
                     ORDER BY ts
                 ) AS close_ts,
                 event_type
-            FROM user_events
+            FROM user_event
             WHERE user_id = :user_id
         ) AS t
         WHERE event_type = 'start' AND close_ts IS NOT NULL;
@@ -82,8 +89,8 @@ class DB_Interface():
     def fetch_user(self, user_id: int) -> pd.DataFrame:
             sql_query = """
             SELECT * 
-            FROM users
-            WHERE user_id = :user_id;
+            FROM user
+            WHERE id = :user_id;
             """
             
             try:
@@ -103,10 +110,10 @@ class DB_Interface():
 
     def register_user(self, user: User) -> str:
         sql_query = """
-        INSERT INTO users (
-            user_id, age, nationality, personal_connection, payload
+        INSERT INTO user (
+            id, email, password_hash, age, nationality, personal_connection, payload
         ) VALUES (
-            :id, :age, :nationality, :personal_connection, NULL
+            :id, :email, :password_hash, :age, :nationality, :personal_connection, NULL
         )
         """
         new_id = None
@@ -127,10 +134,10 @@ class DB_Interface():
 
     def register_event(self, event: Event) -> str:
         sql_query = """
-        INSERT INTO user_events (
-            user_id, item_id, event_type, ts, payload
+        INSERT INTO user_event (
+            user_id, session_id, item_id, event_type, event_payload, ts, 
         ) VALUES (
-            :user_id, :item_id, :event_type, :ts, NULL
+            :user_id, :session_id, :item_id, :event_type, :event_payload, :ts,
         )
         """
         new_id = None
@@ -163,6 +170,8 @@ class DB_Interface():
 
 if __name__ == "__main__":
     from datetime import datetime
+    import uuid
+
     client_db = DB_Interface()
     
     INSERT = True
@@ -180,10 +189,12 @@ if __name__ == "__main__":
         result = client_db.register_user(test_user)
         print(result)
 
+        session_id = uuid.uuid4()
         # Register Events
         test_event_open = Event(
             id = 1,
             user_id=test_user.id,
+            session_id=session_id,
             item_id=1227,
             event_type='start',
             ts=datetime.now()
@@ -192,6 +203,7 @@ if __name__ == "__main__":
         test_event_close = Event(
             id = 2,
             user_id=test_user.id,
+            session_id=session_id,
             item_id=1227,
             event_type='end',
             ts=datetime.now()
