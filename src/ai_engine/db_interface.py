@@ -143,7 +143,7 @@ class DB_Interface():
                         result = connection.execute(text(sql_query), parameters=params)
                         new_id = result.scalar()
                         transaction.commit()
-                logger.info(f'Successful insert of user {user.id}')
+                logger.info(f'Successful insert of user {new_id}')
                 return {
                     "status": "ok",
                     "id": new_id, 
