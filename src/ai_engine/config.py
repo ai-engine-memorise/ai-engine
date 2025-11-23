@@ -48,8 +48,8 @@ DB_HOST = os.environ.get("DB_HOST")
 DB_PORT = os.getenv("POSTGRES_PORT", "5432")
 DB_DRIVERNAME = os.getenv("DB_DRIVERNAME", "postgresql+psycopg")
 
-TABLE_USERS = "users"
-TABLE_EVENTS = "user_events"
+TABLE_USER = "visitor"
+TABLE_USER_EVENT = "visitor_event"
 
 
 ##################

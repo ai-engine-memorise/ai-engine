@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any, Literal
 import pandas as pd
 import numpy as np
+import json
 
 
 def clean_payload_field(data: Any) -> Any:
@@ -63,11 +64,15 @@ class Item:
 
 @dataclass
 class User:
-    id: int
     age: int
     gender: str
     nationality: str
     personal_connection: bool
+
+    id: Optional[int] = None
+    license_plate: Optional[str] = None
+    email: Optional[str] = None
+    password_hash: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -77,14 +82,20 @@ EventType = Literal['start', 'end']
 
 @dataclass
 class Event:
-    id: int
     user_id: int
     item_id: int
     event_type: EventType
+    event_payload: dict
     ts: datetime
 
+    id: Optional[int] = None
+    session_id: Optional[int] = None
+
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        data = asdict(self)
+        if isinstance(self.event_payload, dict):
+            data['event_payload'] = json.dumps(self.event_payload)
+        return data
     
     # @property
     # def duration(self):
