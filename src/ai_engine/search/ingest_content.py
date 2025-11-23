@@ -1,7 +1,8 @@
 ## We need to embedd content into vector form, being easy to change model
 ## Push the vectors to a Qdrant collection
-from uuid import uuid4
+import os
 import json
+from uuid import uuid4
 from dataclasses import asdict
 from loguru import logger
 
@@ -11,8 +12,16 @@ from qdrant_client.models import VectorParams, Distance, PointStruct, PayloadSch
 from sentence_transformers import SentenceTransformer
 
 import pandas as pd
+import numpy as np
 from ai_engine.config import QDRANT_API_URL, QDRANT_API_KEY, COLLECTION_NAME, EMBEDDING_MODEL
 from ai_engine.common import Item
+
+OMEKA_DATA_PATH = "../../../data/omeka_data.parquet"
+FILTER_ITEMS_PATH = "../../../data/test_items.json"
+
+with open(FILTER_ITEMS_PATH, 'r') as f:
+    filter_ids_dict = json.load(f)
+    filter_ids = set(filter_ids_dict['filter_ids'])
 
 def to_serializable(obj):
     # NumPy arrays -> Python lists
@@ -44,8 +53,28 @@ if __name__ == '__main__':
     points = []
     for index, row in df.iterrows():
         item = Item(**row.to_dict())
-        logger.info(f"embedding text for item {item.id}: {item.text_all}")
-        embedding = model.encode(item.text_all, show_progress_bar=False).tolist()
+
+        # --- Filtering Logic Starts Here ---
+        if item.id in filter_ids:
+            logger.info(f"Skipping index {index} (ID: {row['id']}): Item from test collection.")
+            continue
+        
+        #Skip if < 5 words in text_all
+        # Simple word count by splitting the string by whitespace
+        if (len(item.text_all.split()) < 5) and not item.image_url:
+            logger.info(f"Skipping index {index} (ID: {row['id']}): Less than 5 words in text_all.")
+            continue
+
+        # Fix field 
+        # TODO: fic in the omeka_data already
+        if item.creator == "unbekannt":
+            item.creator = ""
+
+        # --- Filtering Logic Ends Here ---
+
+        # logger.info(f"embedding text for item {item.id}: {item.text_all}")
+        encoding_text = f"{item.text_all} - {item.creator}"
+        embedding = model.encode(encoding_text, show_progress_bar=False).tolist()
         payload = asdict(item)
         payload["image_url"] = item.image_url
         try:
