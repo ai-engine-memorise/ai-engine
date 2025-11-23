@@ -82,6 +82,8 @@ class User:
         data = asdict(self)
         if isinstance(self.payload, dict):
             data['payload'] = json.dumps(self.payload)
+        if self.id is None:
+            del data['id']
         return data
 
 @dataclass
