@@ -4,6 +4,7 @@ from typing import Optional, List, Dict, Any, Literal
 import pandas as pd
 import numpy as np
 import json
+from uuid import UUID
 
 
 def clean_payload_field(data: Any) -> Any:
@@ -61,22 +62,39 @@ class Item:
         data = {k: v for k, v in payload.items() if k in allowed}
         return cls(**data)
 
-
 @dataclass
 class User:
+    # Survey Demographics
     age: int
     gender: str
     nationality: str
     personal_connection: bool
-
+    payload: dict
+    
+    # Auth
     id: Optional[int] = None
     license_plate: Optional[str] = None
     email: Optional[str] = None
     password_hash: Optional[str] = None
+    created_at: Optional[datetime] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        data = asdict(self)
+        if isinstance(self.payload, dict):
+            data['payload'] = json.dumps(self.payload)
+        return data
 
+@dataclass
+class Session:
+    user_id: Optional[int]
+    
+    # Client/Device info
+    device_token: str
+    ip: str
+    user_agent: str
+
+    # Internal usage
+    expires_in_days: int = 14
 
 EventType = Literal['start', 'end']
 
@@ -89,7 +107,7 @@ class Event:
     ts: datetime
 
     id: Optional[int] = None
-    session_id: Optional[int] = None
+    session_id: Optional[UUID] = None
 
     def to_dict(self) -> Dict[str, Any]:
         data = asdict(self)

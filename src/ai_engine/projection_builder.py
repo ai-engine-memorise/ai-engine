@@ -7,7 +7,7 @@ import pandas as pd  # assuming you already use it
 from ai_engine.db_interface import DB_Interface
 from ai_engine.search import CommonSearch
 from ai_engine.user_state import UserState
-from ai_engine.common import Item
+from ai_engine.common import Item, User
 
 ### Projection Builder Class
 ### Given user_events table it creates other projection tables:
@@ -23,7 +23,7 @@ class ProjectionBuilder:
     ### Public entrypoints
     #############################
 
-    def get_user_projection(self, user_id: str) -> pd.DataFrame:
+    def get_user_projection(self, user_id: int) -> pd.DataFrame:
         """
         Compute user projection embedding based on recent events.
         """
@@ -46,6 +46,13 @@ class ProjectionBuilder:
             events_df.at[idx, 'is_successful'] = is_successful
 
         return events_df
+    
+    def get_user_profile_as_text(self, user_id: int) -> str:
+        """
+        Retrieve the user profile as a string
+        """
+        user = self.db_engine.fetch_user(user_id=int(user_id)).to_dict(orient='records')[0]
+        return self._user_to_query_text(User(**user))
 
     ### Derived views
     #############################
@@ -61,6 +68,19 @@ class ProjectionBuilder:
                 "word_count": item.word_count,
             }
         return details
+    
+    @staticmethod
+    def _user_to_query_text(user: User) -> str:
+        """
+        Convert user profile into a short natural-language description
+        that the embedding model can understand.
+        """
+        base = f"{user.age}-year-old {user.gender} from {user.nationality}"
+        tail = (
+                "interested in content related to people from the same nationality and similar age."
+            )
+        return f"{base}, {tail}"
+
 
 
 # %%
@@ -71,12 +91,12 @@ if __name__ == "__main__":
     # Example usage
     pb = ProjectionBuilder(collection_name=COLLECTION_NAME)
 
-    item_id = ["1227"]
-    items = pb.common_searcher.get_item(item_id=item_id)
-    print(items) 
+    # item_id = ["1227"]
+    # items = pb.common_searcher.get_item(item_id=item_id)
+    # print(items)
 
-    user_history = pb.get_user_history(user_id="10")
-    print(user_history)
+    # user_projection = pb.get_user_projection(user_id="10")
+    # print(user_projection)
 
-    user_projection = pb.get_user_projection(user_id="10")
-    print(user_projection)
+    user_query = pb.get_user_profile_as_text(user_id="10")
+    print(user_query)

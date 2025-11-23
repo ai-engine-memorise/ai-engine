@@ -1,12 +1,15 @@
 # %%
+import random
+import secrets
+from datetime import datetime, timedelta
+
 from loguru import logger
 from sqlalchemy import create_engine, text, URL
 from sqlalchemy.exc import IntegrityError
 import pandas as pd
-import random
-import string
 
-from ai_engine.common import User, Event
+
+from ai_engine.common import User, Event, Session
 from ai_engine.config import (
     DB_NAME, 
     DB_HOST, 
@@ -119,9 +122,9 @@ class DB_Interface():
     def register_user(self, user: User) -> dict:
         sql_query = """
         INSERT INTO visitor (
-            id, license_plate, email, password_hash, age, nationality, personal_connection, payload
+            license_plate, email, password_hash, age, gender, nationality, personal_connection, payload
         ) VALUES (
-            :id, :license_plate, :email, :password_hash, :age, :nationality, :personal_connection, NULL
+            :license_plate, :email, :password_hash, :age, :gender, :nationality, :personal_connection, :payload
         ) RETURNING id;
         """
         new_id = None
@@ -157,17 +160,17 @@ class DB_Interface():
                 elif "visitor_email_key" in error_msg:
                     # If email exists (and isn't None), we shouldn't retry with a new plate
                     logger.error(f"Email already exists: {user.email}")
-                    return {"status": "error", "message": "Email already exists"}
+                    return {"status": "failed", "message": "Email already exists"}
                 else:
                     # If it's a NOT NULL violation (like ID), fail immediately so you see it
                     logger.error(f"Database Integrity Error: {error_msg}")
-                    return {"status": "error", "message": error_msg}
+                    return {"status": "failed", "message": error_msg}
                 
             
             except Exception as e:
                 # Catch other syntax/connection errors and fail hard
                 logger.exception(f"Database error: {e}")
-                return {"status": "error", "message": str(e)}
+                return {"status": "failed", "message": str(e)}
             
         return {"status": "failed", "message": "Max retries exceeded"}
 
@@ -199,6 +202,69 @@ class DB_Interface():
                 "status": "failed",
                 "id": None
             }
+
+    def register_session(self, session: Session) -> dict:
+        """
+        Creates a new device row (if needed) and a new session row using the input schema.
+        """
+        new_sess_token = secrets.token_urlsafe(32) 
+        expires_at = datetime.now() + timedelta(days=session.expires_in_days)
+
+        try:
+            with self.engine.begin() as conn: # Transaction start
+                
+                # --- A. Get or Create Device (Logic using data.device_token) ---
+                sql_query = "SELECT id FROM device WHERE device_id_token = :t"
+                dev_id = conn.execute(text(sql_query), {"t": session.device_token}).scalar()
+                
+                if not dev_id:
+                    # Insert new device row
+                    sql_create_dev = """
+                    INSERT INTO device (user_id, device_id_token, user_agent, last_ip)
+                    VALUES (:uid, :token, :ua, :ip) RETURNING id;
+                    """
+                    dev_id = conn.execute(text(sql_create_dev), {
+                        "uid": session.user_id, 
+                        "token": session.device_token, 
+                        "ua": session.user_agent, 
+                        "ip": session.ip
+                    }).scalar()
+                    logger.info(f"Created NEW device with UUID: {dev_id}")
+                else:
+                    # Update last seen info for known device
+                    conn.execute(text("UPDATE device SET last_seen_at = NOW(), last_ip = :ip WHERE id = :id"), 
+                                {"ip": session.ip, "id": dev_id})
+                    logger.info(f"Found EXISTING device with UUID: {dev_id}. Updated last_seen_at.")
+
+                # --- B. Insert Session (Logic using data.user_id, dev_id, etc.) ---
+                sql_session = """
+                INSERT INTO session (user_id, device_id, session_token, ip, user_agent, expires_at)
+                VALUES (:uid, :did, :tok, :ip, :ua, :exp) 
+                RETURNING id;
+                """
+                sess_uuid = conn.execute(text(sql_session), {
+                    "uid": session.user_id, 
+                    "did": dev_id, 
+                    "tok": new_sess_token, 
+                    "ip": session.ip, 
+                    "ua": session.user_agent, 
+                    "exp": expires_at
+                }).scalar()
+
+            logger.info(
+                f"Successful insert of Session. User ID: {session.user_id or 'GUEST'} "
+                f"| Session ID: {sess_uuid} | Expires: {expires_at.strftime('%Y-%m-%d %H:%M')}"
+            )
+
+            return {
+                "status": "ok", 
+                "session_id": sess_uuid,     
+                "session_token": new_sess_token
+            }
+
+        except Exception as e:
+            logger.exception(f"Session creation failed: {e}")
+            return {"status": "error"}
 
     ### Utils
     ######################
@@ -237,21 +303,34 @@ if __name__ == "__main__":
     INSERT = True
     FETCH = True
     user_id = 10
+    known_device_token = "TEST_DESKTOP_001"
 
     if INSERT:
         # Register User
-        user_id = 10
         test_user = User(
             id = user_id,
             age = 24,
             gender = 'male',
             nationality = 'spain',
-            personal_connection = False
+            personal_connection = False,
+            payload = {}
         )
         result = client_db.register_user(test_user)
         test_user_id = result.get('id', None)
         print(result)
         print(test_user_id)
+
+        # Register Session
+        test_session = Session(
+            user_id=user_id,
+            device_token=known_device_token,
+            ip="203.0.113.45",
+        user_agent="TestRunner/AuthPytest"
+        )
+        result = client_db.register_session(test_session)
+        print(result)
+        result2 = client_db.register_session(test_session)
+        print(result2)
 
         session_id = uuid.uuid4()
         # Register Events
@@ -288,4 +367,3 @@ if __name__ == "__main__":
         print(result_fetch_events)
 
     
-
