@@ -15,9 +15,32 @@ OPENROUTER_NARRATIVE_MODEL = 'arliai/qwq-32b-arliai-rpr-v1:free'
 OPENROUTER_API_URL = os.environ.get("OPENROUTER_API_URL")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 
-OLLAMA_CLUSTER_API_URL = 'https://ollama.dev.memorise.sdu.dk/api'
-OLLAMA_CLUSTER_API_KEY = ''
-OLLAMA_MODEL = 'mistral' # This MUST be a model pulled on your cluster
+# Ollama
+OLLAMA_BASE_URL = os.environ.get(
+    "OLLAMA_BASE_URL",
+    "https://ollama.dev.memorise.sdu.dk",  # sensible default for your setup
+)
+OLLAMA_MODEL = 'llama3.3:latest' # This MUST be a model pulled on your cluster
+
+# Keycloak
+KEYCLOAK_BASE_URL = os.environ.get(
+    "KEYCLOAK_BASE_URL",
+    "https://keycloak.dev.memorise.sdu.dk",
+)
+KEYCLOAK_REALM = os.environ.get(
+    "KEYCLOAK_REALM",
+    "oauth2-proxy",
+)
+KEYCLOAK_CLIENT_ID = os.environ.get(
+    "KEYCLOAK_CLIENT_ID",
+    "oauth2-proxy",
+)
+KEYCLOAK_CLIENT_SECRET = os.environ.get("KEYCLOAK_CLIENT_SECRET")
+KEYCLOAK_USERNAME = os.environ.get("KEYCLOAK_USERNAME")
+KEYCLOAK_PASSWORD = os.environ.get("KEYCLOAK_PASSWORD")
+KEYCLOAK_SAFETY_MARGIN_SECONDS = int(
+    os.environ.get("KEYCLOAK_SAFETY_MARGIN_SECONDS", "30")
+)
 
 ##################
 ##### Qdrant #####

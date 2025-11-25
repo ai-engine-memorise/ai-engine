@@ -5,13 +5,25 @@
 ### LLM + Qdrant Usage  --- What LLM framework supported in MEMORISE
 ### Output text with all the references to sources
 
+import time
+import requests
 import json
-from typing import List, Dict, Any
+from typing import Optional, List, Dict, Any
 from loguru import logger
 from openai import OpenAI
 from ai_engine.common import NarrativeResult
-from ai_engine.config import OPENROUTER_API_URL, OPENROUTER_API_KEY, OPENROUTER_NARRATIVE_MODEL
-
+from ai_engine.config import (
+    OPENROUTER_API_URL, OPENROUTER_API_KEY, OPENROUTER_NARRATIVE_MODEL,
+    KEYCLOAK_BASE_URL,
+    KEYCLOAK_REALM,
+    KEYCLOAK_CLIENT_ID,
+    KEYCLOAK_CLIENT_SECRET,
+    KEYCLOAK_USERNAME,
+    KEYCLOAK_PASSWORD,
+    KEYCLOAK_SAFETY_MARGIN_SECONDS,
+    OLLAMA_BASE_URL,
+    OLLAMA_MODEL,
+)
 SYSTEM_PROMPT = """
 You are a narrative designer for a collection browser.
 
@@ -71,13 +83,16 @@ SCHEMA_EXAMPLE = {
 
 class NarrativeGenerator:
 
-    def __init__(self, model: str = OPENROUTER_NARRATIVE_MODEL, prompt: str = SYSTEM_PROMPT):
+    def __init__(self, model: str = OLLAMA_MODEL, prompt: str = SYSTEM_PROMPT):
         # Ollama connection
         self.model = model
-        self.llm_client = OpenRouterAdapter(
-            model=self.model
-        )
+        token_client = KeycloakTokenClient()
+        self.llm_client = OllamaClient(token_client=token_client)
+        # self.llm_client = OpenRouterAdapter(
+        #     model=self.model
+        # )
         self.prompt = prompt
+        logger.info(f"Model: {OLLAMA_MODEL} | {self.llm_client.base_url}")
 
     def generate_narrative(self, items: List[Dict[Any, str]]) -> NarrativeResult:
         
@@ -96,9 +111,10 @@ class NarrativeGenerator:
 
         raw = response["message"]["content"]
 
-        data = json.loads(raw)
-        narrative = NarrativeResult.model_validate(data)  # Pydantic v2
-        return narrative
+        print(raw)
+        # data = json.loads(raw)
+        # narrative = NarrativeResult.model_validate(data)  # Pydantic v2
+        return None
 
     def build_user_prompt(self, items: List[Dict[Any, str]]) -> str:
         return f"""
@@ -158,6 +174,261 @@ class OpenRouterAdapter:
                 "message": {"content": f"ERROR: Could not get a response. {error_message}"}
             }
 
+
+class KeycloakTokenClient:
+    """
+    Fetches and refreshes Keycloak tokens as needed.
+    """
+
+    def __init__(
+        self,
+        base_url: str = KEYCLOAK_BASE_URL,
+        realm: str = KEYCLOAK_REALM,
+        client_id: str = KEYCLOAK_CLIENT_ID,
+        client_secret: str = KEYCLOAK_CLIENT_SECRET,
+        username: str = KEYCLOAK_USERNAME,
+        password: str = KEYCLOAK_PASSWORD,
+        safety_margin_seconds: int = 30,
+    ):
+        """
+        base_url: e.g. "https://keycloak.dev.memorise.sdu.dk"
+        realm:    e.g. "oauth2-proxy"
+        """
+        self.token_url = f"{base_url}/realms/{realm}/protocol/openid-connect/token"
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.username = username
+        self.password = password
+        self.safety_margin_seconds = safety_margin_seconds
+
+        # runtime state
+        self._access_token: Optional[str] = None
+        self._refresh_token: Optional[str] = None
+        self._access_token_expires_at: float = 0.0
+
+    def get_access_token(self) -> str:
+        """
+        Public API:
+        Always returns a valid (or freshly refreshed) access token.
+        """
+        if not self._access_token or self._is_about_to_expire():
+            self._ensure_token()
+        return self._access_token
+
+    # --------------- internal helpers ---------------
+
+    def _is_about_to_expire(self) -> bool:
+        now = time.time()
+        return now >= (self._access_token_expires_at - self.safety_margin_seconds)
+
+    def _ensure_token(self) -> None:
+        """
+        Ensure we have a valid token:
+          - try refresh if we have a refresh_token
+          - otherwise, or if refresh fails, do full login
+        """
+        if self._refresh_token:
+            if self._refresh():
+                return
+
+        # either we have no refresh_token or refresh failed
+        self._login()
+
+    def _login(self) -> None:
+        """
+        Do password grant flow: username + password -> access_token + refresh_token
+        """
+        data = {
+            "grant_type": "password",
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "username": self.username,
+            "password": self.password,
+        }
+
+        resp = requests.post(self.token_url, data=data)
+        resp.raise_for_status()
+        token_data = resp.json()
+        self._store_token_data(token_data)
+
+    def _refresh(self) -> bool:
+        """
+        Try to refresh using refresh_token. Returns True on success.
+        """
+        data = {
+            "grant_type": "refresh_token",
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "refresh_token": self._refresh_token,
+        }
+
+        resp = requests.post(self.token_url, data=data)
+        if not resp.ok:
+            return False
+
+        token_data = resp.json()
+        self._store_token_data(token_data)
+        return True
+
+    def _store_token_data(self, token_data: Dict[str, Any]) -> None:
+        """
+        Store access_token, refresh_token, and compute expiry timestamp.
+        """
+        self._access_token = token_data["access_token"]
+        self._refresh_token = token_data.get("refresh_token")
+        expires_in = token_data.get("expires_in", 300)  # 5 min default if missing
+        self._access_token_expires_at = time.time() + float(expires_in)
+
+
+class OllamaClient:
+    """
+    Simple Ollama client that uses KeycloakTokenClient for auth.
+    Can be used as a backend where you'd otherwise use OpenRouterAdapter.
+    """
+
+    def __init__(self, base_url: str = OLLAMA_BASE_URL, model: str = OLLAMA_MODEL, *, token_client: KeycloakTokenClient):
+        """
+        base_url: e.g. "https://ollama.dev.memorise.sdu.dk"
+        """
+        self.base_url = base_url.rstrip("/")
+        self.token_client = token_client
+        self.session = requests.Session()
+        self.model = model
+        logger.info(f"Using OllamaClient with Keycloak auth (base_url={self.base_url})")
+
+    # -------------------------------
+    # Internal helpers
+    # -------------------------------
+    def _auth_headers(self) -> Dict[str, str]:
+        token = self.token_client.get_access_token()
+        return {"Authorization": f"Bearer {token}"}
+
+    def _request(self, method: str, path: str, **kwargs) -> requests.Response:
+        url = f"{self.base_url}{path}"
+        headers = kwargs.pop("headers", {})
+        headers.update(self._auth_headers())
+        resp = self.session.request(method, url, headers=headers, **kwargs)
+        resp.raise_for_status()
+        return resp
+
+    # -------------------------------
+    # Model management / info
+    # -------------------------------
+    def list_models(self) -> Dict[str, Any]:
+        """
+        GET /api/tags
+        Returns a dict of available models.
+        """
+        resp = self._request("GET", "/api/tags")
+        return resp.json()
+
+    def show_model(self, name: str) -> Dict[str, Any]:
+        """
+        POST /api/show
+        Get detailed info for a model.
+        """
+        resp = self._request("POST", "/api/show", json={"name": name})
+        return resp.json()
+
+    # -------------------------------
+    # Text generation (/api/)
+    # -------------------------------
+    def chat(self, model: str, messages: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Call POST /v1/chat/completions and normalize the result to:
+
+        {
+          "model": model,
+          "created_at": "...",
+          "message": {
+            "role": "assistant",
+            "content": "<string>"
+          },
+          "done": True
+        }
+        """
+        url = f"{self.base_url}/v1/chat/completions"
+
+        payload = {
+            "model": model,
+            "messages": messages,
+            "temperature": 0.7,
+            # ask the model to return a JSON object (for your NarrativeResult)
+            "response_format": {"type": "json_object"},
+        }
+
+        try:
+            resp = self.session.post(
+                url,
+                headers=self._auth_headers(),
+                json=payload,
+                timeout=120,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+            # OpenAI-style response:
+            # {
+            #   "id": "...",
+            #   "object": "chat.completion",
+            #   "created": 1234567890,
+            #   "model": "...",
+            #   "choices": [
+            #       { "index": 0, "message": {"role": "assistant", "content": "..."} }
+            #   ],
+            #   ...
+            # }
+            choice = data["choices"][0]["message"]
+
+            return {
+                "model": data.get("model", model),
+                "created_at": data.get("created", "N/A (on-prem OpenAI style)"),
+                "message": {
+                    "role": choice.get("role", "assistant"),
+                    "content": choice.get("content", ""),
+                },
+                "done": True,
+            }
+
+        except Exception as e:
+            error_message = f"On-prem OpenAI-style API Error: {e}"
+            logger.error(error_message)
+            return {
+                "message": {
+                    "content": f"ERROR: Could not get a response. {error_message}"
+                }
+            }
+    
+    # -------------------------------
+    # Embeddings (/api/embeddings)
+    # -------------------------------
+    def embeddings(
+        self,
+        model: str,
+        input_text: str,
+        extra_params: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Call the Ollama /api/embeddings endpoint.
+
+        Returns whatever Ollama returns, typically:
+        {
+          "embedding": [float, float, ...]
+        }
+        """
+        payload = {
+            "model": model,
+            "prompt": input_text,
+        }
+        if extra_params:
+            payload.update(extra_params)
+
+        resp = self._request(
+            "POST",
+            "/api/embeddings",
+            json=payload,
+        )
+        return resp.json()
 
 
 if __name__ == '__main__':
@@ -423,7 +694,21 @@ if __name__ == '__main__':
             "highlight": ""
         }
     ]
-    narrative_gen = NarrativeGenerator(OPENROUTER_NARRATIVE_MODEL)
-    logger.info(f"Items:\n{[item['id'] for item in items]}")
+    
+    # from loguru import logger
+
+    # logger.info(f"KEYCLOAK_BASE_URL={KEYCLOAK_BASE_URL}")
+    # logger.info(f"KEYCLOAK_REALM={KEYCLOAK_REALM}")
+    # logger.info(f"KEYCLOAK_CLIENT_ID={KEYCLOAK_CLIENT_ID}")
+    # logger.info(f"KEYCLOAK_USERNAME={KEYCLOAK_USERNAME}")
+    # logger.info(f"KEYCLOAK_PASSWORD set? {'YES' if KEYCLOAK_PASSWORD else 'NO'}")
+    # logger.info(f"KEYCLOAK_CLIENT_SECRET set? {'YES' if KEYCLOAK_CLIENT_SECRET else 'NO'}")
+
+    # token_client = KeycloakTokenClient()
+    # llm_client = OllamaClient(token_client=token_client)
+    # print(llm_client.list_models())
+
+    narrative_gen = NarrativeGenerator(OLLAMA_MODEL)
+    logger.info(f"Items: {[item['id'] for item in items]}")
     narrative = narrative_gen.generate_narrative(items = items)
     logger.info(f"Narrative:\n{narrative}")
