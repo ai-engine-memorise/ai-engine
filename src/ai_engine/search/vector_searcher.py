@@ -1,6 +1,6 @@
 
 # Use User info as Query to Qdrant
-from typing import List, Iterable, Dict, Any
+from typing import Optional, List, Iterable, Dict, Any
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import Filter
@@ -49,8 +49,21 @@ class VectorSearch:
             api_key=QDRANT_API_KEY,
         )
 
-    def search(self, text: str, filter_: dict = None) -> SearchResult:
-        vector = next(iter(self.model.embed(text))).tolist()
+    def search(
+        self,
+        *,
+        text: Optional[str] = None,
+        vector: Optional[List[float]] = None,
+        filter_: Optional[dict] = None,
+    ) -> SearchResult:
+        
+        if (text is None and vector is None) or (text is not None and vector is not None):
+            raise ValueError("Provide exactly one of `text` or `vector`")
+
+        if vector is None:
+            # Encode text -> vector
+            vector = next(iter(self.model.embed(text))).tolist()
+
         res = self.client.query_points(
             collection_name=self.collection_name,
             query=vector,

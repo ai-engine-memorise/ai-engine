@@ -12,7 +12,7 @@ DATA_DIR = os.path.join(ROOT_DIR, 'data')
 
 # Load .env only if it exists (for local/dev/docker compose)
 # In Kubernetes, we rely on env vars.
-env_path = ROOT_DIR / ".env"
+env_path = Path(os.path.join(ROOT_DIR, ".env"))
 if env_path.exists():
     load_dotenv(env_path)
 

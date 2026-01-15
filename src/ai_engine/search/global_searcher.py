@@ -5,11 +5,12 @@ from .help_searcher import CommonSearch
 from .geo_searcher import GeoSearch
 from .vector_searcher import VectorSearch
 from .user_searcher import UserRecommender
+from ..config import COLLECTION_NAME
 
 # Umbrella class for the Qdrant Fetching Logic Text + Vector + Geo
 
 class GlobalSearch:
-    def __init__(self, collection_name: str):
+    def __init__(self, collection_name: str = COLLECTION_NAME):
         self.common_searcher = CommonSearch(collection_name=collection_name)
         self.geo_searcher = GeoSearch(collection_name=collection_name)
         self.vector_searcher = VectorSearch(collection_name=collection_name)
@@ -53,3 +54,48 @@ class GlobalSearch:
             lon=lon,
             radius_meters=radius_meters,
         )
+    
+    def similar(
+        self,
+        item_id: int,
+        *,
+        exclude_self: bool = True,
+        vector_name: Optional[str] = None,  # only needed if your collection uses named vectors
+    ) -> SearchResult:
+        """
+        Similar items for a given item_id:
+        - fetch point vector by id
+        - run vector similarity search
+        """
+
+        vectors = self.common_searcher.get_vector(item_id)  # {id: vector}
+        if item_id not in vectors:
+            raise ValueError(f"Item id {item_id} not found")
+
+        query_vector = vectors[item_id]
+
+        # If Qdrant returns named vectors: {"text": [...], ...}
+        if isinstance(query_vector, dict):
+            if not vector_name:
+                raise ValueError(
+                    f"Named vectors detected; pass vector_name. Available: {list(query_vector.keys())}"
+                )
+            query_vector = query_vector[vector_name]
+
+        # This assumes your VectorSearch.search supports vector=...
+        result = self.vector_searcher.search(vector=query_vector)
+
+        if exclude_self and getattr(result, "items", None):
+            result.items = [
+                it for it in result.items
+                if str(getattr(it, "id", "")) != str(item_id)
+            ]
+
+        return result
+
+    def random(self):
+
+        result = self.common_searcher.get_random_item()
+        
+        return result
+        
