@@ -25,20 +25,20 @@ ai_engine/
   contracts/        # pure typed core. NO io imports.
     models.py       # Item/Content, Tag, InteractionEvent, EngagementScore, UserSignals,
                     #   Candidate, ScoredCandidate, Recommendation
-    ports.py        # Protocols: EmbeddingModel, EventSource, ContentStore, Scorer, Ranker
+    ports.py        # Protocols: EventSource, ContentStore, EmbeddingModel  (ONLY these — see Scope)
     enums.py        # ContentType, EndReason, Outcome, SearchType
     config.py       # RecConfig (weights, decay, thresholds) — all tunables typed
   signals/
-    engagement.py   # raw event -> EngagementScore (continuous, not binary)
-    signal_builder.py # list[InteractionEvent] -> UserSignals (recency decay, taste vec, tag affinity)
+    engagement.py   # PURE fn: raw event -> EngagementScore (continuous, not binary)
+    signal_builder.py # PURE fn: list[InteractionEvent] -> UserSignals (recency decay, taste vec, tag affinity)
   candidates/
     semantic.py     # SemanticGenerator (qdrant recommend / taste vector)
     tag.py          # TagGenerator (expert-tag affinity recall)
     geo.py          # GeoGenerator
   ranking/
-    scorers.py      # SemanticScorer, TagScorer, GeoScorer, PopularityScorer (pure, return [0,1])
-    fusion.py       # WeightedFusion + MMR diversity
-  recommender.py    # orchestrator (constructor-injected ports)
+    scorers.py      # PURE fns: score_semantic/score_tag/score_geo/score_popularity -> [0,1]
+    fusion.py       # PURE fns: weighted_fuse + mmr_rerank
+  recommender.py    # orchestrator (constructor-injected EventSource + ContentStore + EmbeddingModel)
   adapters/
     qdrant_store.py       # ContentStore (refactor current CommonSearch/Vector/Geo)
     postgres_events.py    # EventSource (refactor current fetch_events LEAD window)
@@ -61,6 +61,25 @@ raw rudderstack/posthog/pg rows
   -> Scorers                         : list[ScoredCandidate]    (each scorer returns [0,1], breakdown kept)
   -> WeightedFusion + MMR            : Recommendation           (explainable)
 ```
+
+## Scope: pragmatic first pass (not full hexagonal yet)
+
+Port **only what has ≥2 real implementations or needs a deterministic test fake**:
+
+- `EventSource` — Protocol. 3 impls coming (Postgres, RudderStack, PostHog). Pays off now.
+- `ContentStore` — Protocol. Real Qdrant + `FakeContentStore` for offline tests.
+- `EmbeddingModel` — Protocol. Real fastembed + `InMemoryEmbeddingModel` (deterministic) for tests.
+
+Everything else stays **plain pure functions over typed models** — no Protocol wrapper:
+
+- engagement scoring, signal building, the four scorers, fusion + MMR.
+- Already testable (pure, no IO). A Protocol there would add indirection with no second impl.
+
+Typed domain models (`Content`, `Tag`, `InteractionEvent`, `UserSignals`, `Candidate`,
+`ScoredCandidate`, `Recommendation`) used **throughout** regardless.
+
+Full hexagonal end-state (Scorer/Ranker/Generator as plugin Protocols, registry, etc.) and the
+triggers + steps to migrate there: see [`future-hexagonal.md`](./future-hexagonal.md).
 
 ## Decisions (locked)
 
