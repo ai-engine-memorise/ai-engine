@@ -1,0 +1,15 @@
+# Minimal infra for layer-4 integration tests: real Qdrant + Redis.
+#   docker compose -f tests/integration/docker-compose.yml up -d
+#   RUN_INTEGRATION=1 python -m pytest tests/integration -q
+#   docker compose -f tests/integration/docker-compose.yml down -v
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
