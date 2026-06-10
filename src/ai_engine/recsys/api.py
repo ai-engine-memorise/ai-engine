@@ -74,7 +74,16 @@ def make_router(components: Components) -> APIRouter:
 
 
 def create_app(components: Optional[Components] = None) -> FastAPI:
+    from fastapi.middleware.cors import CORSMiddleware
+
     app = FastAPI(title="AI-Engine Recsys")
+    # browser test UIs (ui4testing) call /recsys/* directly; allow cross-origin in dev
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=os.getenv("AI_ENGINE_CORS", "*").split(","),
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     app.include_router(make_router(components or build_components()))
 
     @app.get("/health", tags=["Health"])
