@@ -36,12 +36,14 @@ def score_tag(signals: UserSignals, content: Optional[Content]) -> float:
     """
     if content is None or not signals.tag_affinity:
         return 0.0
-    cand_weights = {t.key: t.weight for t in content.tags}
+    # match case-insensitively: taxonomy casing (e.g. "female", "Photograph") must
+    # line up with constructed keys (e.g. demographic "...:Female").
+    cand_weights = {t.key.lower(): t.weight for t in content.tags}
     total = sum(signals.tag_affinity.values())
     if total <= 0:
         return 0.0
     matched = sum(
-        aff * cand_weights.get(key, 0.0)
+        aff * cand_weights.get(key.lower(), 0.0)
         for key, aff in signals.tag_affinity.items()
     )
     return max(0.0, min(matched / total, 1.0))

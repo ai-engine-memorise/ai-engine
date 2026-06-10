@@ -159,6 +159,13 @@ def build_user_signals(
     if acc is not None and any(acc):
         taste_vector = _normalize_unit(acc)
 
+    # canonicalize keys to lowercase (merge case variants) so content-derived and
+    # demographic-derived affinities line up regardless of taxonomy casing.
+    folded: dict[str, float] = {}
+    for k, v in tag_affinity.items():
+        folded[k.lower()] = folded.get(k.lower(), 0.0) + v
+    tag_affinity = folded
+
     # normalize tag affinity to [0, 1] by max
     if tag_affinity:
         mx = max(tag_affinity.values())

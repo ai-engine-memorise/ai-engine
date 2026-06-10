@@ -23,7 +23,7 @@ def test_deep_engagement_becomes_positive_with_tags_and_taste():
     )
     sig = _build(events)
     assert "A1" in sig.positives and "A2" in sig.positives
-    assert sig.tag_affinity.get("theme_what:Forced Labor", 0) > 0
+    assert sig.tag_affinity.get("theme_what:forced labor", 0) > 0  # keys canonicalized lowercase
     # taste vector points along the Forced-Labor axis (index 0)
     assert sig.taste_vector is not None
     assert sig.taste_vector[0] == max(sig.taste_vector)

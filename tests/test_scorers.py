@@ -30,6 +30,13 @@ def test_tag_overlap_rewards_matching_tags():
     assert 0.0 <= score_tag(sig, match) <= 1.0
 
 
+def test_tag_match_is_case_insensitive():
+    # demographic bridge builds "...:Female"; taxonomy content tag is "female"
+    sig = UserSignals(user_id="u", tag_affinity={"person_who.gender_and_age:Female": 1.0})
+    c = Content(id="x", tags=[Tag(facet="person_who.gender_and_age", label="female", weight=1.0)])
+    assert score_tag(sig, c) > 0.0
+
+
 def test_tag_score_zero_without_affinity():
     sig = UserSignals(user_id="u", tag_affinity={})
     c = Content(id="x", tags=[Tag(facet="theme_what", label="Forced Labor")])
