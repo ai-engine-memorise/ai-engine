@@ -24,6 +24,15 @@ class EventSource(Protocol):
 
 
 @runtime_checkable
+class DemographicsProvider(Protocol):
+    """Supplies a user's survey demographics (age/gender/nationality) for the
+    cold-start tag bridge. Source is pluggable: Postgres visitor table, survey
+    events, or a static map. Returns {} when unknown.
+    """
+    def get_demographics(self, user_id: str) -> dict: ...
+
+
+@runtime_checkable
 class UserModelStore(Protocol):
     """Materialized user model (UserSignals) for online serving.
 

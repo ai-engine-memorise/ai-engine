@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from .contracts.config import RecConfig
-from .contracts.ports import ContentStore, EventSource, UserModelStore
+from .contracts.ports import ContentStore, EventSource, UserModelStore, DemographicsProvider
 from .recommender import Recommender
 from .updater import UserModelUpdater
 
@@ -23,6 +23,7 @@ class Components:
     model_store: UserModelStore
     updater: UserModelUpdater
     recommender: Recommender
+    demographics: DemographicsProvider
 
 
 def _build_content_store() -> ContentStore:
@@ -50,6 +51,14 @@ def _build_stores():
     return FakeEventSource(), InMemoryUserModelStore()
 
 
+def _build_demographics() -> DemographicsProvider:
+    if os.getenv("DB_NAME"):
+        from .adapters.demographics import PostgresDemographicsProvider
+        return PostgresDemographicsProvider()
+    from .adapters.demographics import NullDemographicsProvider
+    return NullDemographicsProvider()
+
+
 def build_components(cfg: Optional[RecConfig] = None) -> Components:
     cfg = cfg or RecConfig()
     content_store = _build_content_store()
@@ -61,4 +70,5 @@ def build_components(cfg: Optional[RecConfig] = None) -> Components:
         model_store=model_store,
         updater=UserModelUpdater(content_store, model_store, cfg),
         recommender=Recommender(content_store, model_store, cfg),
+        demographics=_build_demographics(),
     )

@@ -10,7 +10,9 @@ from .models import (
     ScoredCandidate,
     Recommendation,
 )
-from .ports import EventSource, ContentStore, EmbeddingModel, UserModelStore
+from .ports import (
+    EventSource, ContentStore, EmbeddingModel, UserModelStore, DemographicsProvider,
+)
 
 __all__ = [
     "ContentType", "EndReason", "Outcome",
@@ -18,4 +20,5 @@ __all__ = [
     "Tag", "Content", "InteractionEvent", "EngagementScore", "UserSignals",
     "Candidate", "ScoredCandidate", "Recommendation",
     "EventSource", "ContentStore", "EmbeddingModel", "UserModelStore",
+    "DemographicsProvider",
 ]

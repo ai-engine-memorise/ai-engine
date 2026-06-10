@@ -15,6 +15,9 @@ from ai_engine.recsys.updater import UserModelUpdater
 from ai_engine.recsys.testing.fakes import (
     FakeContentStore, FakeEventSource, InMemoryUserModelStore,
 )
+from ai_engine.recsys.adapters.demographics import (
+    NullDemographicsProvider, StaticDemographicsProvider,
+)
 
 FORCED = Tag(facet="theme_what", label="Forced Labor", weight=1.0)
 FAMILY = Tag(facet="theme_what", label="Family", weight=1.0)
@@ -26,7 +29,7 @@ def _content(cid, tag, axis):
     return Content(id=cid, title=cid, text=cid, word_count=120, tags=[tag]), vec
 
 
-def _client():
+def _client(demographics=None):
     world = dict([
         ("101", _content("101", FORCED, 0)),
         ("102", _content("102", FORCED, 0)),
@@ -44,6 +47,7 @@ def _client():
         cfg=cfg, content_store=store, event_buffer=buf, model_store=models,
         updater=UserModelUpdater(store, models, cfg),
         recommender=Recommender(store, models, cfg),
+        demographics=demographics or NullDemographicsProvider(),
     )
     return TestClient(create_app(components))
 
@@ -94,3 +98,21 @@ def test_recommend_unknown_user_is_cold():
     rec = client.get("/recsys/recommend", params={"user_id": "nobody"}).json()["result"]
     assert rec["strategy"] == "cold"
     assert rec["items"] == []
+
+
+def test_demographics_reach_user_model():
+    demo = StaticDemographicsProvider({"u1": {"age": 20, "gender": "female", "nationality": "dutch"}})
+    client = _client(demographics=demo)
+    ts = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+    client.post("/recsys/ingest", json=[_view("CONTENT_VIEW_STARTED", "101", ts)])
+    um = client.get("/recsys/usermodel", params={"user_id": "u1"}).json()["result"]
+    assert any(k.startswith("person_who") for k in um["tag_affinity"])  # cold-start bridge live
+
+
+def test_ingest_requires_api_key_when_set(monkeypatch):
+    monkeypatch.setenv("INGEST_API_KEY", "secret")
+    client = _client()
+    ts = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+    body = [_view("CONTENT_VIEW_STARTED", "101", ts)]
+    assert client.post("/recsys/ingest", json=body).status_code == 401
+    assert client.post("/recsys/ingest", json=body, headers={"X-API-Key": "secret"}).status_code == 200
