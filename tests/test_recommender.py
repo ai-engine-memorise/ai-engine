@@ -54,6 +54,19 @@ def test_disliked_item_never_recommended():
     assert "C1" not in _ids(rec)
 
 
+def test_tag_recall_works_with_semantic_off():
+    # semantic disabled -> candidates must come purely from tag recall (case-insensitive)
+    cfg = RecConfig()
+    cfg.fusion.semantic = 0.0
+    cfg.fusion.tag = 1.0
+    events = view_events("u1", "A1", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
+    rec = Recommender(_store(), InMemoryUserModelStore(), cfg).recommend_for_signals(_signals(events))
+    ids = _ids(rec)
+    assert {"A2", "A3"} <= set(ids)                    # Forced-Labor siblings recalled by tag
+    assert rec.items[0].content_id in {"A2", "A3"}     # and ranked top (tag-driven)
+    assert rec.items[0].breakdown.get("tag", 0) > 0
+
+
 def test_no_user_model_is_cold_and_empty():
     rec = Recommender(_store(), InMemoryUserModelStore(), CFG).recommend("ghost")
     assert rec.strategy == "cold"

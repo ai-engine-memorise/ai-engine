@@ -36,10 +36,11 @@ class FakeContentStore:
         ]
 
     def search_tags(self, tag_keys: Sequence[str], *, limit: int) -> list[Candidate]:
-        wanted = set(tag_keys)
+        # case-insensitive, mirroring Qdrant's lowercased tag_labels index
+        wanted = {k.lower() for k in tag_keys}
         hits = []
         for cid, content in self._contents.items():
-            overlap = sum(1 for t in content.tags if t.key in wanted)
+            overlap = sum(1 for t in content.tags if t.key.lower() in wanted)
             if overlap > 0:
                 hits.append((cid, float(overlap)))
         hits.sort(key=lambda t: t[1], reverse=True)
