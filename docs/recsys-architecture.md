@@ -149,6 +149,40 @@ select argmax_i [ λ*fused_i - (1-λ)*max_{j in selected} cosine(vec_i, vec_j) ]
 | `CONTENT_LOOKUP.details.query_text / clicked_id`              | `query_text` + click      |
 | `SURVEY_ANSWERED.answers[]`                                   | `survey_answers`          |
 
+## Serving model: online (path B)
+
+User data flows `app → RudderStack → {PostHog (analytics), ai-engine (serving)}`. PostHog stays
+the analytics/eval sink; it is NOT queried at request time. Serving uses **path B (online)**:
+
+```
+RudderStack ─webhook→ ai-engine ─normalize→ EventBuffer(Redis) ─┐
+                                                                 ├─ UserModelUpdater.refresh
+                            UserSignals (the user model) ◄───────┘  (build_user_signals, pure)
+                                    │ save
+                              UserModelStore(Redis)
+                                    │ get   (fast read, no rebuild)
+                              Recommender.recommend ─→ Recommendation
+```
+
+`UserModelStore` is a port: in-memory/recompute fake for tests, Redis for prod — swap without
+touching ranking. Rebuild-from-buffer keeps `build_user_signals` the single brain.
+
+## Build status (implemented)
+
+Pragmatic slice is code + passing tests under `src/ai_engine/recsys/`:
+
+- `contracts/` — models, enums, `RecConfig`, ports (`EventSource`, `ContentStore`, `EmbeddingModel`,
+  `UserModelStore`).
+- `signals/` — pure `engagement.py`, `signal_builder.py` (the user model).
+- `ranking/` — pure `scorers.py` (semantic+tag, [0,1]), `fusion.py` (weighted + MMR).
+- `updater.py` (ingest side) + `recommender.py` (serve side).
+- `adapters/` — pure `rudderstack.py` normalizer; infra-guarded `redis_store.py`, `qdrant_store.py`,
+  `fastembed_model.py`.
+- `testing/` fakes + BB fixtures. `tests/` — 31 passing: engagement, scorers, fusion, signal builder,
+  end-to-end recommender scenarios + invariants, RudderStack normalization.
+
+Not yet wired: the FastAPI webhook endpoint + real Redis/Qdrant config; geo scorer; learned ranker.
+
 ## Open questions
 
 1. **Facet taxonomy** — experts provide closed facet set, or derive seeds from BERTopic `topics.jsonl`?
