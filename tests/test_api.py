@@ -108,11 +108,12 @@ def test_recommend_preview_hand_authored_model():
     assert res2["user_model"]["taste_vector"] is not None
 
 
-def test_recommend_unknown_user_is_cold():
+def test_recommend_unknown_user_cold_start():
     client = _client()
     rec = client.get("/recsys/recommend", params={"user_id": "nobody"}).json()["result"]
     assert rec["strategy"] == "cold"
-    assert rec["items"] == []
+    assert rec["items"]                                    # cold-start fallback, not empty
+    assert rec["diagnostics"].get("cold_start_fallback") is True
 
 
 def test_demographics_reach_user_model():
