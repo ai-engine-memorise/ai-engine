@@ -16,9 +16,54 @@ from datetime import datetime, timezone
 from typing import Any, Optional, Union
 
 from fastapi import APIRouter, FastAPI, Body, Query, Header, HTTPException, Depends
+from pydantic import BaseModel, Field
 
 from .composition import Components, build_components
 from .adapters.rudderstack import normalize_events
+from .contracts.models import UserSignals
+from .survey import survey_affinity
+
+
+class PreviewSpec(BaseModel):
+    """A hand-authored user model for testing recs without going through events."""
+    tag_affinity: dict[str, float] = Field(default_factory=dict)   # {"theme_what:forced labor": 1.0}
+    like_items: list[str] = Field(default_factory=list)            # -> taste vector (centroid) + excluded as seen
+    demographics: dict = Field(default_factory=dict)               # {"age_group":"25_34","gender":"female",...}
+    limit: Optional[int] = None
+
+
+def build_preview_signals(spec: PreviewSpec, content_store) -> UserSignals:
+    taste = None
+    if spec.like_items:
+        vecs = content_store.get_vectors(spec.like_items)
+        acc = None
+        for v in vecs.values():
+            if acc is None:
+                acc = [0.0] * len(v)
+            for i, x in enumerate(v):
+                acc[i] += x
+        if acc and any(acc):
+            n = sum(x * x for x in acc) ** 0.5
+            taste = [x / n for x in acc] if n else acc
+
+    aff = dict(spec.tag_affinity)
+    for k, w in survey_affinity(spec.demographics).items():
+        aff[k] = aff.get(k, 0.0) + w
+    folded: dict[str, float] = {}
+    for k, v in aff.items():
+        folded[k.lower()] = folded.get(k.lower(), 0.0) + v
+    if folded:
+        mx = max(folded.values())
+        if mx > 0:
+            folded = {k: v / mx for k, v in folded.items()}
+
+    return UserSignals(
+        user_id="preview",
+        positives={i: 1.0 for i in spec.like_items},
+        tag_affinity=folded,
+        taste_vector=taste,
+        demographics=spec.demographics,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +114,18 @@ def make_router(components: Components) -> APIRouter:
     def usermodel(user_id: str = Query(..., examples=["u1"])) -> dict:
         sig = c.model_store.get_signals(user_id)
         return {"result": sig.model_dump() if sig else None}
+
+    @router.post("/recommend/preview")
+    def recommend_preview(spec: PreviewSpec) -> dict:
+        """Recommend from a hand-authored user model (no events). For manual /
+        programmatic testing + LLM evaluation."""
+        signals = build_preview_signals(spec, c.content_store)
+        rec = c.recommender.recommend_for_signals(signals)
+        items = rec.items[:spec.limit] if spec.limit else rec.items
+        out = rec.model_dump()
+        out["items"] = [i.model_dump() for i in items]
+        out["user_model"] = signals.model_dump()
+        return {"result": out}
 
     return router
 

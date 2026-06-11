@@ -93,6 +93,21 @@ def test_ingest_webhook_then_recommend():
     assert "101" not in ids and "102" not in ids
 
 
+def test_recommend_preview_hand_authored_model():
+    client = _client()
+    # tag-only model -> forced-labour items surface
+    r = client.post("/recsys/recommend/preview",
+                    json={"tag_affinity": {"theme_what:Forced Labor": 1.0}, "limit": 5})
+    assert r.status_code == 200
+    ids = [i["content_id"] for i in r.json()["result"]["items"]]
+    assert any(i in ids for i in ["101", "102", "103"])
+    # like_items -> taste vector built + those items excluded as seen
+    r2 = client.post("/recsys/recommend/preview", json={"like_items": ["101"]})
+    res2 = r2.json()["result"]
+    assert "101" not in [i["content_id"] for i in res2["items"]]
+    assert res2["user_model"]["taste_vector"] is not None
+
+
 def test_recommend_unknown_user_is_cold():
     client = _client()
     rec = client.get("/recsys/recommend", params={"user_id": "nobody"}).json()["result"]
