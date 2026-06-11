@@ -69,8 +69,11 @@ class UserSignals(BaseModel):
     user_id: str
     positives: dict[str, float] = Field(default_factory=dict)   # content_id -> decayed weight
     negatives: dict[str, float] = Field(default_factory=dict)
+    viewed: list[str] = Field(default_factory=list)             # every content_id viewed (any outcome) -> full dedup
+    recent_views: list[str] = Field(default_factory=list)       # ordered most-recent-first (sequence awareness)
     tag_affinity: dict[str, float] = Field(default_factory=dict)  # "facet:label" -> score
-    taste_vector: Optional[Vector] = None                         # semantic centroid
+    taste_vector: Optional[Vector] = None                         # semantic centroid (whole history)
+    recency_vector: Optional[Vector] = None                       # vector of the most-recent view (sequence signal)
     demographics: dict = Field(default_factory=dict)
 
     @property

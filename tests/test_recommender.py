@@ -67,6 +67,24 @@ def test_tag_recall_works_with_semantic_off():
     assert rec.items[0].breakdown.get("tag", 0) > 0
 
 
+def test_neutral_view_excluded_via_viewed_history():
+    events = (
+        view_events("u1", "A1", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
+        + view_events("u1", "B1", dwell=8, reason="close_button", base_ts=NOW - timedelta(hours=1))
+    )
+    sig = _signals(events)
+    assert "B1" in sig.viewed and "B1" not in sig.positives and "B1" not in sig.negatives  # neutral
+    rec = Recommender(_store(), InMemoryUserModelStore(), RecConfig()).recommend_for_signals(sig)
+    assert "B1" not in _ids(rec)              # viewed -> de-duplicated out
+
+
+def test_recency_contributes_to_score():
+    events = view_events("u1", "A1", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
+    rec = Recommender(_store(), InMemoryUserModelStore(), RecConfig()).recommend_for_signals(_signals(events))
+    recs = [it for it in rec.items if it.kind == "recommendation"]
+    assert recs and all("recency" in it.breakdown for it in recs)
+
+
 def test_no_user_model_is_cold_and_empty():
     rec = Recommender(_store(), InMemoryUserModelStore(), CFG).recommend("ghost")
     assert rec.strategy == "cold"

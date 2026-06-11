@@ -17,6 +17,7 @@ def weighted_fuse(per_scorer: dict[str, float], weights: FusionWeights) -> tuple
     wmap = {
         "semantic": weights.semantic,
         "tag": weights.tag,
+        "recency": weights.recency,
         "geo": weights.geo,
         "popularity": weights.popularity,
     }

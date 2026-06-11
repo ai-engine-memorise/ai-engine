@@ -60,6 +60,17 @@ def test_demographics_seed_person_who_affinity():
     assert any(k.startswith("person_who.gender_and_age") for k in keys)
 
 
+def test_recent_views_ordered_and_recency_vector():
+    events = (
+        view_events("u1", "A1", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=2))
+        + view_events("u1", "A3", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
+    )
+    sig = _build(events)
+    assert sig.recent_views[0] == "A3"          # most-recent first (sequence)
+    assert sig.recency_vector == VECTORS["A3"]
+    assert set(sig.viewed) == {"A1", "A3"}      # full view history
+
+
 def test_aggregate_views_pairs_dwell():
     events = view_events("u1", "A1", dwell=42, reason="next_button", base_ts=NOW)
     aggs = aggregate_views(events)

@@ -28,6 +28,14 @@ def score_semantic(signals: UserSignals, candidate_vector: Optional[Vector]) -> 
     return (cosine(signals.taste_vector, candidate_vector) + 1.0) / 2.0
 
 
+def score_recency(signals: UserSignals, candidate_vector: Optional[Vector]) -> float:
+    """Sequence awareness: closeness to the user's MOST-RECENT view (vs the whole-history
+    taste vector). Boosts 'more like what you just read'. -> [0, 1]."""
+    if signals.recency_vector is None or candidate_vector is None:
+        return 0.0
+    return (cosine(signals.recency_vector, candidate_vector) + 1.0) / 2.0
+
+
 def score_tag(signals: UserSignals, content: Optional[Content]) -> float:
     """Affinity-weighted overlap between the user's tag affinity and the
     candidate's tags. -> [0, 1].

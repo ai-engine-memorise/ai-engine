@@ -14,7 +14,7 @@ from .contracts.models import (
     UserSignals,
 )
 from .contracts.ports import ContentStore, UserModelStore
-from .ranking.scorers import score_semantic, score_tag
+from .ranking.scorers import score_semantic, score_tag, score_recency
 from .ranking.fusion import weighted_fuse, mmr_rerank
 
 
@@ -37,7 +37,8 @@ class Recommender:
         strategy = "warm" if not signals.is_cold else "cold"
 
         # 1) candidate generation: semantic (taste vector) + tag (affinity)
-        seen = set(signals.positives) | set(signals.negatives)
+        # exclude everything already viewed (any outcome) — full view-history dedup
+        seen = set(signals.positives) | set(signals.negatives) | set(signals.viewed)
         pool: dict[str, Candidate] = {}
 
         if signals.taste_vector is not None:
@@ -64,9 +65,11 @@ class Recommender:
         scored: list[ScoredCandidate] = []
         for cid in candidate_ids:
             content = contents.get(cid)
-            sem = score_semantic(signals, vectors.get(cid))
+            vec = vectors.get(cid)
+            sem = score_semantic(signals, vec)
             tag = score_tag(signals, content)
-            fused, breakdown = weighted_fuse({"semantic": sem, "tag": tag}, cfg.fusion)
+            rec = score_recency(signals, vec)   # sequence: closeness to most-recent view
+            fused, breakdown = weighted_fuse({"semantic": sem, "tag": tag, "recency": rec}, cfg.fusion)
             scored.append(ScoredCandidate(
                 content_id=cid, final_score=fused, breakdown=breakdown, content=content,
             ))

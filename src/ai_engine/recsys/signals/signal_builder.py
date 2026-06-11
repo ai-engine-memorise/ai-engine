@@ -182,12 +182,20 @@ def build_user_signals(
         if mx > 0:
             tag_affinity = {k: v / mx for k, v in tag_affinity.items()}
 
+    # sequence: order viewed content by most-recent interaction first
+    ordered = sorted(aggs.items(), key=lambda kv: (kv[1].last_ts or now), reverse=True)
+    recent_views = [cid for cid, _ in ordered]
+    recency_vector = vectors.get(recent_views[0]) if recent_views else None
+
     return UserSignals(
         user_id=user_id,
         positives=positives,
         negatives=negatives,
+        viewed=sorted(aggs.keys()),          # full view history (any outcome) for dedup
+        recent_views=recent_views,           # sequence awareness
         tag_affinity=tag_affinity,
         taste_vector=taste_vector,
+        recency_vector=recency_vector,
         demographics=demographics or {},
     )
 
