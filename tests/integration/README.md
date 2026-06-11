@@ -33,6 +33,6 @@ tests skip, so the default `pytest tests/` stays infra-free.
 
 The above covers everything except the CDP hop. To smoke that once:
 1. Run the API with the recsys router mounted (`ai-engine-api`, port 8000).
-2. In RudderStack/Jitsu add a **Webhook** destination → `POST http://<host>:8000/recsys/ingest`.
+2. In RudderStack/Jitsu add a **Webhook** destination → `POST http://<host>:8000/api/ingest`.
 3. Fire events from the app (`emit.js` → `rudderanalytics.track(...)`).
-4. `GET /recsys/usermodel` then `/recsys/recommend` to confirm they landed.
+4. `GET /api/usermodel` then `/api/recommend` to confirm they landed.

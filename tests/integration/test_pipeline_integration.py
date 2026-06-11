@@ -85,16 +85,16 @@ def test_full_pipeline_real_redis_and_qdrant(client):
         payload.append(_view("CONTENT_VIEW_ENDED", cid, ts, reason="next_button", dwell=120))
 
     # webhook -> Redis buffer -> rebuild user model -> Redis model store
-    r = client.post("/recsys/ingest", json=payload)
+    r = client.post("/api/ingest", json=payload)
     assert r.status_code == 200 and r.json()["ingested"] == 4
 
     # user model materialized in REAL Redis
-    um = client.get("/recsys/usermodel", params={"user_id": "itest_user"}).json()["result"]
+    um = client.get("/api/usermodel", params={"user_id": "itest_user"}).json()["result"]
     assert um and "101" in um["positives"] and "102" in um["positives"]
     assert any(k.startswith("theme_what:Forced Labor") for k in um["tag_affinity"])
 
     # recommend from REAL Qdrant: unseen Forced-Labor sibling surfaces, seen excluded
-    rec = client.get("/recsys/recommend", params={"user_id": "itest_user"}).json()["result"]
+    rec = client.get("/api/recommend", params={"user_id": "itest_user"}).json()["result"]
     ids = [it["content_id"] for it in rec["items"]]
     assert rec["strategy"] == "warm"
     assert "103" in ids

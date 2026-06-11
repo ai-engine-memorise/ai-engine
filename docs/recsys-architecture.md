@@ -169,7 +169,7 @@ touching ranking. Rebuild-from-buffer keeps `build_user_signals` the single brai
 
 ## Build status (implemented)
 
-Pragmatic slice is code + passing tests under `src/ai_engine/recsys/`:
+Pragmatic slice is code + passing tests under `src/ai_engine/api/`:
 
 - `contracts/` — models, enums, `RecConfig`, ports (`EventSource`, `ContentStore`, `EmbeddingModel`,
   `UserModelStore`).

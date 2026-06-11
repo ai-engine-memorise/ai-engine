@@ -39,7 +39,7 @@ Return ONLY a JSON array, one object per story, in order:
 
 def get_recs(api: str, model_spec: dict, k: int) -> list[dict]:
     body = {**model_spec, "limit": k}
-    r = requests.post(f"{api}/recsys/recommend/preview", json=body, timeout=30)
+    r = requests.post(f"{api}/api/recommend/preview", json=body, timeout=30)
     r.raise_for_status()
     return r.json()["result"]["items"]
 

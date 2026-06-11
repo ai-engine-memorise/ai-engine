@@ -1,10 +1,10 @@
 """FastAPI surface for the recommendation engine.
 
-- POST /recsys/ingest   : the ingest WEBHOOK. RudderStack POSTs user events here
+- POST /api/ingest   : the ingest WEBHOOK. RudderStack POSTs user events here
                           (single object or list). Normalize -> buffer -> rebuild
                           the user model.
-- GET  /recsys/recommend: serve recommendations for a user (reads the user model).
-- GET  /recsys/usermodel: debug — inspect the current user model.
+- GET  /api/recommend: serve recommendations for a user (reads the user model).
+- GET  /api/usermodel: debug — inspect the current user model.
 
 Mount `router` into the main service, or run `app` standalone. With no REDIS_URL /
 QDRANT_API_URL set it runs fully in-memory on dev fixtures.
@@ -75,7 +75,7 @@ def _require_api_key(x_api_key: Optional[str] = Header(default=None)) -> None:
     """
     expected = os.getenv("INGEST_API_KEY")
     if not expected:
-        logger.warning("INGEST_API_KEY unset: /recsys/ingest is UNAUTHENTICATED")
+        logger.warning("INGEST_API_KEY unset: /api/ingest is UNAUTHENTICATED")
         return
     if x_api_key != expected:
         raise HTTPException(status_code=401, detail="invalid or missing X-API-Key")
@@ -92,7 +92,7 @@ def _dump_items(items, include_content: bool) -> list:
 
 
 def make_router(components: Components) -> APIRouter:
-    router = APIRouter(prefix="/recsys", tags=["Recsys"])
+    router = APIRouter(prefix="/api", tags=["Recsys"])
     c = components
 
     @router.post("/ingest", dependencies=[Depends(_require_api_key)])
@@ -148,7 +148,7 @@ def create_app(components: Optional[Components] = None) -> FastAPI:
     from fastapi.middleware.cors import CORSMiddleware
 
     app = FastAPI(title="AI-Engine Recsys")
-    # browser test UIs (ui4testing) call /recsys/* directly; allow cross-origin in dev
+    # browser test UIs (ui4testing) call /api/* directly; allow cross-origin in dev
     app.add_middleware(
         CORSMiddleware,
         allow_origins=os.getenv("AI_ENGINE_CORS", "*").split(","),

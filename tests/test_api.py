@@ -74,19 +74,19 @@ def test_ingest_webhook_then_recommend():
         payload.append(_view("CONTENT_VIEW_STARTED", cid, ts))
         payload.append(_view("CONTENT_VIEW_ENDED", cid, ts, reason="next_button", dwell=120))
 
-    r = client.post("/recsys/ingest", json=payload)
+    r = client.post("/api/ingest", json=payload)
     assert r.status_code == 200
     body = r.json()
     assert body["ingested"] == 4
     assert body["users"] == ["u1"]
 
     # user model materialized
-    um = client.get("/recsys/usermodel", params={"user_id": "u1"}).json()["result"]
+    um = client.get("/api/usermodel", params={"user_id": "u1"}).json()["result"]
     assert um is not None
     assert "101" in um["positives"] and "102" in um["positives"]
 
     # recommend surfaces the unseen Forced-Labor story, excludes seen
-    rec = client.get("/recsys/recommend", params={"user_id": "u1"}).json()["result"]
+    rec = client.get("/api/recommend", params={"user_id": "u1"}).json()["result"]
     ids = [it["content_id"] for it in rec["items"]]
     assert rec["strategy"] == "warm"
     assert "103" in ids
@@ -96,13 +96,13 @@ def test_ingest_webhook_then_recommend():
 def test_recommend_preview_hand_authored_model():
     client = _client()
     # tag-only model -> forced-labour items surface
-    r = client.post("/recsys/recommend/preview",
+    r = client.post("/api/recommend/preview",
                     json={"tag_affinity": {"theme_what:Forced Labor": 1.0}, "limit": 5})
     assert r.status_code == 200
     ids = [i["content_id"] for i in r.json()["result"]["items"]]
     assert any(i in ids for i in ["101", "102", "103"])
     # like_items -> taste vector built + those items excluded as seen
-    r2 = client.post("/recsys/recommend/preview", json={"like_items": ["101"]})
+    r2 = client.post("/api/recommend/preview", json={"like_items": ["101"]})
     res2 = r2.json()["result"]
     assert "101" not in [i["content_id"] for i in res2["items"]]
     assert res2["user_model"]["taste_vector"] is not None
@@ -110,9 +110,9 @@ def test_recommend_preview_hand_authored_model():
 
 def test_recommend_compact_omits_content():
     client = _client()
-    r = client.post("/recsys/recommend/preview", json={"tag_affinity": {"theme_what:Forced Labor": 1.0}})
+    r = client.post("/api/recommend/preview", json={"tag_affinity": {"theme_what:Forced Labor": 1.0}})
     full = r.json()["result"]
-    r2 = client.post("/recsys/recommend/preview", params={"include_content": "false"},
+    r2 = client.post("/api/recommend/preview", params={"include_content": "false"},
                      json={"tag_affinity": {"theme_what:Forced Labor": 1.0}})
     compact = r2.json()["result"]
     assert full["items"] and "content" in full["items"][0]
@@ -122,7 +122,7 @@ def test_recommend_compact_omits_content():
 
 def test_recommend_unknown_user_cold_start():
     client = _client()
-    rec = client.get("/recsys/recommend", params={"user_id": "nobody"}).json()["result"]
+    rec = client.get("/api/recommend", params={"user_id": "nobody"}).json()["result"]
     assert rec["strategy"] == "cold"
     assert rec["items"]                                    # cold-start fallback, not empty
     assert rec["diagnostics"].get("cold_start_fallback") is True
@@ -132,8 +132,8 @@ def test_demographics_reach_user_model():
     demo = StaticDemographicsProvider({"u1": {"age": 20, "gender": "female", "nationality": "dutch"}})
     client = _client(demographics=demo)
     ts = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
-    client.post("/recsys/ingest", json=[_view("CONTENT_VIEW_STARTED", "101", ts)])
-    um = client.get("/recsys/usermodel", params={"user_id": "u1"}).json()["result"]
+    client.post("/api/ingest", json=[_view("CONTENT_VIEW_STARTED", "101", ts)])
+    um = client.get("/api/usermodel", params={"user_id": "u1"}).json()["result"]
     assert any(k.startswith("person_who") for k in um["tag_affinity"])  # cold-start bridge live
 
 
@@ -142,5 +142,5 @@ def test_ingest_requires_api_key_when_set(monkeypatch):
     client = _client()
     ts = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
     body = [_view("CONTENT_VIEW_STARTED", "101", ts)]
-    assert client.post("/recsys/ingest", json=body).status_code == 401
-    assert client.post("/recsys/ingest", json=body, headers={"X-API-Key": "secret"}).status_code == 200
+    assert client.post("/api/ingest", json=body).status_code == 401
+    assert client.post("/api/ingest", json=body, headers={"X-API-Key": "secret"}).status_code == 200

@@ -3,7 +3,7 @@
 Phase-0 eval: judge recommendation relevance with an LLM, before real click data exists.
 
 ```
-personas.json → POST /recsys/recommend/preview → top-k recs → Claude judges each (1-5) → report.json
+personas.json → POST /api/recommend/preview → top-k recs → Claude judges each (1-5) → report.json
 ```
 
 ## Run
