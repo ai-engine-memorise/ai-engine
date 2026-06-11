@@ -37,12 +37,21 @@ _PERSONALIZATION = {
 }
 
 
+def _clean(v):
+    """Survey may emit the answer entity id ('a:age:55_64') instead of the value.
+    Strip the 'a:<question>:' prefix -> '55_64'. Leaves plain values untouched."""
+    if isinstance(v, str) and v.startswith("a:") and v.count(":") >= 2:
+        return v.split(":", 2)[2]
+    return v
+
+
 def _vals(answers: dict, *qids: str) -> list:
     """All answer values for the first matching question id (scalar or multi-list)."""
     for qid in qids:
         if qid in answers and answers[qid] is not None:
             v = answers[qid]
-            return v if isinstance(v, list) else [v]
+            vals = v if isinstance(v, list) else [v]
+            return [_clean(x) for x in vals]
     return []
 
 
