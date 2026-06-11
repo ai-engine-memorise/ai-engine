@@ -71,16 +71,63 @@ class Recommender:
                 content_id=cid, final_score=fused, breakdown=breakdown, content=content,
             ))
 
-        # 3) diversity-aware rerank
-        ranked = mmr_rerank(scored, vectors, lambda_=cfg.mmr_lambda, limit=cfg.final_limit)
+        # 3) diversity-aware rerank (reserve one slot for the distractor if enabled)
+        rel_limit = cfg.final_limit - 1 if cfg.distractor_enabled else cfg.final_limit
+        ranked = mmr_rerank(scored, vectors, lambda_=cfg.mmr_lambda, limit=max(rel_limit, 1))
 
-        return Recommendation(
-            user_id=signals.user_id,
-            items=ranked,
-            strategy=strategy,
-            diagnostics={
-                "pool_size": len(pool),
-                "scored": len(scored),
-                "generators": ["semantic", "tag"],
-            },
-        )
+        diagnostics = {"pool_size": len(pool), "scored": len(scored),
+                       "generators": ["semantic", "tag"]}
+
+        # 4) inject a labelled distractor (novelty / exploration) at a fixed slot
+        if cfg.distractor_enabled:
+            exclude = seen | {r.content_id for r in ranked}
+            distractor = self._distractor(signals, exclude)
+            if distractor is not None:
+                slot = min(cfg.distractor_slot, len(ranked))
+                ranked.insert(slot, distractor)
+                diagnostics["distractor"] = {
+                    "content_id": distractor.content_id,
+                    "strategy": cfg.distractor_strategy, "slot": slot,
+                }
+
+        return Recommendation(user_id=signals.user_id, items=ranked, strategy=strategy,
+                              diagnostics=diagnostics)
+
+    # ----- distractor (novelty) ------------------------------------------- #
+
+    def _distractor(self, signals: UserSignals, exclude: set) -> Optional[ScoredCandidate]:
+        cid = self._pick_distractor_id(signals, exclude)
+        if not cid:
+            return None
+        content = self.content_store.get([cid]).get(cid)
+        vec = self.content_store.get_vectors([cid]).get(cid)
+        sem = score_semantic(signals, vec)
+        tag = score_tag(signals, content)
+        fused, breakdown = weighted_fuse({"semantic": sem, "tag": tag}, self.cfg.fusion)
+        return ScoredCandidate(content_id=cid, final_score=fused, breakdown=breakdown,
+                               content=content, kind="distractor")
+
+    def _pick_distractor_id(self, signals: UserSignals, exclude: set) -> Optional[str]:
+        cfg, store = self.cfg, self.content_store
+        strat = cfg.distractor_strategy
+
+        if strat == "max_dissimilar" and signals.taste_vector:
+            neg = [-x for x in signals.taste_vector]  # opposite of the taste
+            for c in store.search_vector(neg, limit=cfg.pool_per_generator):
+                if c.content_id not in exclude:
+                    return c.content_id
+
+        if strat == "unexplored_theme":
+            cands = [c for c in store.sample(limit=20, exclude=tuple(exclude))
+                     if c.content_id not in exclude]
+            if cands:
+                contents = store.get([c.content_id for c in cands])
+                def overlap(cid: str) -> int:
+                    ct = contents.get(cid)
+                    keys = {t.key.lower() for t in ct.tags} if ct else set()
+                    return sum(1 for k in signals.tag_affinity if k in keys)
+                return min(cands, key=lambda c: overlap(c.content_id)).content_id
+
+        # random (also the fallback for cold / empty results)
+        s = store.sample(limit=1, exclude=tuple(exclude))
+        return s[0].content_id if s else None

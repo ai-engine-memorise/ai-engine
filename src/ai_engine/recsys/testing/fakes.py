@@ -49,6 +49,12 @@ class FakeContentStore:
             for cid, s in hits[:limit]
         ]
 
+    def sample(self, *, limit: int, exclude=()) -> list[Candidate]:
+        # deterministic (sorted) for test stability
+        ex = {str(e) for e in exclude}
+        ids = [cid for cid in sorted(self._contents) if cid not in ex]
+        return [Candidate(content_id=cid, generated_by="distractor") for cid in ids[:limit]]
+
 
 class FakeEventSource:
     """EventSource backed by an in-memory per-user buffer (mimics the Redis hot

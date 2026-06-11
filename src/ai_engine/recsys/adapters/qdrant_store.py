@@ -91,3 +91,19 @@ class QdrantContentStore:
             scroll_filter=flt, limit=limit, with_payload=False, with_vectors=False,
         )
         return [Candidate(content_id=str(p.id), generated_by="tag", base_score=0.0) for p in points]
+
+    def sample(self, *, limit: int, exclude=()) -> list[Candidate]:
+        from qdrant_client.models import SampleQuery, Sample
+        ex = {str(e) for e in exclude}
+        res = self.client.query_points(
+            collection_name=self.collection_name,
+            query=SampleQuery(sample=Sample.RANDOM),
+            limit=limit + len(ex), with_payload=False, with_vectors=False,
+        )
+        out = []
+        for p in res.points:
+            if str(p.id) not in ex:
+                out.append(Candidate(content_id=str(p.id), generated_by="distractor"))
+            if len(out) >= limit:
+                break
+        return out

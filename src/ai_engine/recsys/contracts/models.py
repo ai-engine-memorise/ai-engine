@@ -93,6 +93,7 @@ class ScoredCandidate(BaseModel):
     final_score: float
     breakdown: dict[str, float] = Field(default_factory=dict)  # per-scorer contribution
     content: Optional[Content] = None
+    kind: str = "recommendation"   # "recommendation" | "distractor" (novelty/exploration)
 
 
 class Recommendation(BaseModel):

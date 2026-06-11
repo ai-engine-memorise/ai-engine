@@ -40,5 +40,11 @@ class RecConfig(BaseModel):
     final_limit: int = 10
     mmr_lambda: float = 0.7             # relevance(1) vs diversity(0)
 
+    # distractor / novelty injection (exploration): one deliberately off-profile item,
+    # placed in a fixed slot and labelled kind="distractor" so the UI can surface it.
+    distractor_enabled: bool = True
+    distractor_strategy: str = "max_dissimilar"  # max_dissimilar | unexplored_theme | random
+    distractor_slot: int = 3                      # 0-based position in the returned list
+
     # cold/warm routing
     cold_start_min_positives: int = 1
