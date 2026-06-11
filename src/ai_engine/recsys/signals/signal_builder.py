@@ -140,7 +140,17 @@ def build_user_signals(
                 pen = cfg.soft_negative_weight * _decay(e.ts, now, cfg.half_life_days)
                 negatives[imp] = max(negatives.get(imp, 0.0), pen)
 
+    # survey events (event-catalog SURVEY_*) -> demographics + person_who affinity
+    from ..survey import SURVEY_EVENTS, survey_affinity, extract_demographics
+    survey_demo: dict = {}
+    for e in events:
+        if e.event in SURVEY_EVENTS and e.survey_answers:
+            survey_demo.update(extract_demographics(e.survey_answers))
+            for key, w in survey_affinity(e.survey_answers).items():
+                tag_affinity[key] = tag_affinity.get(key, 0.0) + w
+
     # explicit demographic affinity (cold-start seed; person_who facets)
+    demographics = {**survey_demo, **(demographics or {})}
     if demographics:
         for key, w in _demographic_affinity(demographics).items():
             tag_affinity[key] = tag_affinity.get(key, 0.0) + w

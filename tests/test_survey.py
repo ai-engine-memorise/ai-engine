@@ -1,0 +1,58 @@
+from datetime import datetime
+
+from ai_engine.recsys.contracts import RecConfig
+from ai_engine.recsys.contracts.models import InteractionEvent
+from ai_engine.recsys.survey import survey_affinity, extract_demographics
+from ai_engine.recsys.adapters.rudderstack import normalize_event
+from ai_engine.recsys.signals.signal_builder import build_user_signals
+
+NOW = datetime(2026, 6, 11, 12, 0, 0)
+CFG = RecConfig()
+
+
+# --- mapping (real quiz-steps instrument) ---------------------------------- #
+
+def test_survey_affinity_maps_person_who_facets():
+    a = survey_affinity({"age_group": "25_34", "gender": "female", "nationality": "netherlands"})
+    assert "person_who.age_group:age 25-34" in a
+    assert "person_who.gender_and_age:female" in a
+    assert "person_who.city_village_country:From: Netherlands" in a
+
+
+def test_prefer_not_say_gender_dropped():
+    assert not any("gender_and_age" in k for k in survey_affinity({"gender": "prefer_not_say"}))
+
+
+def test_extract_demographics():
+    d = extract_demographics({"age_group": "65_plus", "personal_connection": "yes", "noise": "x"})
+    assert d == {"age_group": "65_plus", "personal_connection": "yes"}
+
+
+# --- normalizer captures every answer by question_id ----------------------- #
+
+def test_normalize_survey_submitted_keeps_all_answers():
+    raw = {
+        "event": "SURVEY_SUBMITTED", "userId": "u1", "timestamp": "2026-06-11T10:00:00Z",
+        "properties": {"answers": [
+            {"question_id": "age_group", "question_type": "choice", "answer_id": "a", "answer_value": "25_34"},
+            {"question_id": "gender", "question_type": "choice", "answer_id": "b", "answer_value": "female"},
+        ]},
+    }
+    ev = normalize_event(raw)
+    assert ev.event == "SURVEY_SUBMITTED"
+    assert ev.survey_answers["age_group"] == "25_34"
+    assert ev.survey_answers["gender"] == "female"
+
+
+# --- survey event folds into the user model -------------------------------- #
+
+def test_survey_event_seeds_user_model():
+    ev = InteractionEvent(
+        user_id="u1", event="SURVEY_SUBMITTED", ts=NOW,
+        survey_answers={"age_group": "25_34", "gender": "female", "nationality": "netherlands"},
+    )
+    sig = build_user_signals(user_id="u1", events=[ev], contents={}, vectors={}, now=NOW, cfg=CFG)
+    keys = sig.tag_affinity.keys()
+    assert any(k.startswith("person_who.age_group") for k in keys)
+    assert any(k.startswith("person_who.gender_and_age") for k in keys)
+    assert sig.demographics.get("age_group") == "25_34"  # stored -> retrievable via /usermodel
