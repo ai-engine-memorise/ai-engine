@@ -25,10 +25,8 @@ class Recommender:
         self.cfg = cfg
 
     def recommend(self, user_id: str) -> Recommendation:
-        signals = self.model_store.get_signals(user_id)
-        if signals is None:
-            return Recommendation(user_id=user_id, items=[], strategy="cold",
-                                  diagnostics={"reason": "no_user_model"})
+        # no stored model -> empty persona -> cold-start diverse fallback (never empty-handed)
+        signals = self.model_store.get_signals(user_id) or UserSignals(user_id=user_id)
         return self.recommend_for_signals(signals)
 
     # exposed for tests / batch use without a store
@@ -54,9 +52,20 @@ class Recommender:
                                                        base_score=c.base_score))
 
         candidate_ids = [cid for cid in pool if cid not in seen]
+
+        # cold-start fallback: no usable signal (no taste vector, no tag match) ->
+        # return a diverse content sample so the user ALWAYS gets recommendations.
+        cold_fallback = False
         if not candidate_ids:
+            for c in self.content_store.sample(limit=cfg.pool_per_generator, exclude=tuple(seen)):
+                pool.setdefault(c.content_id, c)
+            candidate_ids = [cid for cid in pool if cid not in seen]
+            cold_fallback = True
+            strategy = "cold"
+
+        if not candidate_ids:   # catalogue genuinely empty / all seen
             return Recommendation(user_id=signals.user_id, items=[], strategy=strategy,
-                                  diagnostics={"reason": "empty_pool", "pool_size": len(pool)})
+                                  diagnostics={"reason": "no_content", "pool_size": 0})
 
         # 2) fetch content structure for the pool, score each
         contents = self.content_store.get(candidate_ids)
@@ -79,7 +88,7 @@ class Recommender:
         ranked = mmr_rerank(scored, vectors, lambda_=cfg.mmr_lambda, limit=max(rel_limit, 1))
 
         diagnostics = {"pool_size": len(pool), "scored": len(scored),
-                       "generators": ["semantic", "tag"]}
+                       "generators": ["semantic", "tag"], "cold_start_fallback": cold_fallback}
 
         # 4) inject a labelled distractor (novelty / exploration) at a fixed slot
         if cfg.distractor_enabled:

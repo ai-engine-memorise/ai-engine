@@ -85,10 +85,18 @@ def test_recency_contributes_to_score():
     assert recs and all("recency" in it.breakdown for it in recs)
 
 
-def test_no_user_model_is_cold_and_empty():
+def test_no_user_model_cold_start_returns_content():
     rec = Recommender(_store(), InMemoryUserModelStore(), CFG).recommend("ghost")
     assert rec.strategy == "cold"
-    assert rec.items == []
+    assert rec.items                                   # never empty-handed
+    assert rec.diagnostics.get("cold_start_fallback") is True
+
+
+def test_cold_start_fallback_when_signal_matches_nothing():
+    from ai_engine.recsys.contracts.models import UserSignals
+    sig = UserSignals(user_id="u", tag_affinity={"theme_what:NoSuchTheme": 1.0})  # no content match
+    rec = Recommender(_store(), InMemoryUserModelStore(), CFG).recommend_for_signals(sig)
+    assert rec.items and rec.diagnostics.get("cold_start_fallback") is True
 
 
 # --------------------------------------------------------------------------- #
