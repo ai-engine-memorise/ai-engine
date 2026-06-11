@@ -73,7 +73,11 @@ def normalize_event(raw: dict) -> Optional[InteractionEvent]:
     for ans in (props.get("answers") or []):
         qid, val = ans.get("question_id"), ans.get("answer_value")
         if qid is not None and val is not None:
-            survey_answers[qid] = val           # keep every answer by question_id
+            if qid in survey_answers:           # multi-select -> collect into a list
+                ex = survey_answers[qid]
+                survey_answers[qid] = (ex if isinstance(ex, list) else [ex]) + [val]
+            else:
+                survey_answers[qid] = val
         if ans.get("question_type") == "rating" and val is not None:
             try:
                 survey_answers["rating"] = float(val)
