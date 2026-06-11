@@ -108,6 +108,18 @@ def test_recommend_preview_hand_authored_model():
     assert res2["user_model"]["taste_vector"] is not None
 
 
+def test_recommend_compact_omits_content():
+    client = _client()
+    r = client.post("/recsys/recommend/preview", json={"tag_affinity": {"theme_what:Forced Labor": 1.0}})
+    full = r.json()["result"]
+    r2 = client.post("/recsys/recommend/preview", params={"include_content": "false"},
+                     json={"tag_affinity": {"theme_what:Forced Labor": 1.0}})
+    compact = r2.json()["result"]
+    assert full["items"] and "content" in full["items"][0]
+    assert compact["items"] and "content" not in compact["items"][0]
+    assert "content_id" in compact["items"][0] and "final_score" in compact["items"][0]
+
+
 def test_recommend_unknown_user_cold_start():
     client = _client()
     rec = client.get("/recsys/recommend", params={"user_id": "nobody"}).json()["result"]

@@ -81,6 +81,16 @@ def _require_api_key(x_api_key: Optional[str] = Header(default=None)) -> None:
         raise HTTPException(status_code=401, detail="invalid or missing X-API-Key")
 
 
+def _dump_items(items, include_content: bool) -> list:
+    out = []
+    for i in items:
+        d = i.model_dump()
+        if not include_content:
+            d.pop("content", None)   # compact: drop title/text/tags
+        out.append(d)
+    return out
+
+
 def make_router(components: Components) -> APIRouter:
     router = APIRouter(prefix="/recsys", tags=["Recsys"])
     c = components
@@ -103,11 +113,12 @@ def make_router(components: Components) -> APIRouter:
     def recommend(
         user_id: str = Query(..., examples=["u1"]),
         limit: Optional[int] = Query(default=None, ge=1, le=50),
+        include_content: bool = Query(default=True, description="false = compact (ids/scores only)"),
     ) -> dict:
         rec = c.recommender.recommend(user_id)
         items = rec.items[:limit] if limit else rec.items
         out = rec.model_dump()
-        out["items"] = [i.model_dump() for i in items]
+        out["items"] = _dump_items(items, include_content)
         return {"result": out}
 
     @router.get("/usermodel")
@@ -116,14 +127,17 @@ def make_router(components: Components) -> APIRouter:
         return {"result": sig.model_dump() if sig else None}
 
     @router.post("/recommend/preview")
-    def recommend_preview(spec: PreviewSpec) -> dict:
+    def recommend_preview(
+        spec: PreviewSpec,
+        include_content: bool = Query(default=True, description="false = compact (ids/scores only)"),
+    ) -> dict:
         """Recommend from a hand-authored user model (no events). For manual /
         programmatic testing + LLM evaluation."""
         signals = build_preview_signals(spec, c.content_store)
         rec = c.recommender.recommend_for_signals(signals)
         items = rec.items[:spec.limit] if spec.limit else rec.items
         out = rec.model_dump()
-        out["items"] = [i.model_dump() for i in items]
+        out["items"] = _dump_items(items, include_content)
         out["user_model"] = signals.model_dump()
         return {"result": out}
 
