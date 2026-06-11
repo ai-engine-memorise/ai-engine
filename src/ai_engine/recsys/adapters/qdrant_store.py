@@ -107,3 +107,14 @@ class QdrantContentStore:
             if len(out) >= limit:
                 break
         return out
+
+    def search_filter(self, value: str, *, limit: int, exclude=()) -> list[Candidate]:
+        # filter candidates by an exact tag value (e.g. a location tag AiARLocationBarrack3)
+        flt = Filter(must=[FieldCondition(key="tag_values", match=MatchAny(any=[value.lower()]))])
+        points, _ = self.client.scroll(
+            collection_name=self.collection_name,
+            scroll_filter=flt, limit=limit + len(exclude), with_payload=False, with_vectors=False,
+        )
+        ex = {str(e) for e in exclude}
+        return [Candidate(content_id=str(p.id), generated_by="filter")
+                for p in points if str(p.id) not in ex][:limit]

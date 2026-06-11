@@ -55,6 +55,13 @@ class FakeContentStore:
         ids = [cid for cid in sorted(self._contents) if cid not in ex]
         return [Candidate(content_id=cid, generated_by="distractor") for cid in ids[:limit]]
 
+    def search_filter(self, value: str, *, limit: int, exclude=()) -> list[Candidate]:
+        ex = {str(e) for e in exclude}
+        v = value.lower()
+        hits = [cid for cid, c in self._contents.items()
+                if cid not in ex and any(t.label.lower() == v for t in c.tags)]
+        return [Candidate(content_id=cid, generated_by="filter") for cid in sorted(hits)[:limit]]
+
 
 class FakeEventSource:
     """EventSource backed by an in-memory per-user buffer (mimics the Redis hot

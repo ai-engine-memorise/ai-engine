@@ -24,48 +24,55 @@ class Recommender:
         self.model_store = model_store
         self.cfg = cfg
 
-    def recommend(self, user_id: str) -> Recommendation:
+    def recommend(self, user_id: str, *, filter: Optional[str] = None) -> Recommendation:
         # no stored model -> empty persona -> cold-start diverse fallback (never empty-handed)
         signals = self.model_store.get_signals(user_id) or UserSignals(user_id=user_id)
-        return self.recommend_for_signals(signals)
+        return self.recommend_for_signals(signals, filter=filter)
 
     # exposed for tests / batch use without a store
-    def recommend_for_signals(self, signals: UserSignals) -> Recommendation:
+    def recommend_for_signals(self, signals: UserSignals, *, filter: Optional[str] = None) -> Recommendation:
         cfg = self.cfg
         strategy = "warm" if not signals.is_cold else "cold"
 
-        # 1) candidate generation: semantic (taste vector) + tag (affinity)
         # exclude everything already viewed (any outcome) — full view-history dedup
         seen = set(signals.positives) | set(signals.negatives) | set(signals.viewed)
         pool: dict[str, Candidate] = {}
 
-        if signals.taste_vector is not None:
-            for c in self.content_store.search_vector(signals.taste_vector, limit=cfg.pool_per_generator):
+        # 1) candidate generation
+        if filter:
+            # filtered to one tag (e.g. a location): the candidate set IS the filtered content
+            for c in self.content_store.search_filter(filter, limit=cfg.pool_per_generator, exclude=tuple(seen)):
                 pool.setdefault(c.content_id, c)
-
-        top_tag_keys = [
-            k for k, _ in sorted(signals.tag_affinity.items(), key=lambda kv: kv[1], reverse=True)
-        ][:20]
-        if top_tag_keys:
-            for c in self.content_store.search_tags(top_tag_keys, limit=cfg.pool_per_generator):
-                pool.setdefault(c.content_id, Candidate(content_id=c.content_id, generated_by="tag",
-                                                       base_score=c.base_score))
+            generators = ["filter"]
+        else:
+            generators = ["semantic", "tag"]
+            if signals.taste_vector is not None:
+                for c in self.content_store.search_vector(signals.taste_vector, limit=cfg.pool_per_generator):
+                    pool.setdefault(c.content_id, c)
+            top_tag_keys = [
+                k for k, _ in sorted(signals.tag_affinity.items(), key=lambda kv: kv[1], reverse=True)
+            ][:20]
+            if top_tag_keys:
+                for c in self.content_store.search_tags(top_tag_keys, limit=cfg.pool_per_generator):
+                    pool.setdefault(c.content_id, Candidate(content_id=c.content_id, generated_by="tag",
+                                                           base_score=c.base_score))
 
         candidate_ids = [cid for cid in pool if cid not in seen]
 
-        # cold-start fallback: no usable signal (no taste vector, no tag match) ->
-        # return a diverse content sample so the user ALWAYS gets recommendations.
+        # cold-start fallback (no signal) — global diverse sample. NOT for filtered queries
+        # (a filter must never leak content from outside it).
         cold_fallback = False
-        if not candidate_ids:
+        if not candidate_ids and not filter:
             for c in self.content_store.sample(limit=cfg.pool_per_generator, exclude=tuple(seen)):
                 pool.setdefault(c.content_id, c)
             candidate_ids = [cid for cid in pool if cid not in seen]
             cold_fallback = True
             strategy = "cold"
 
-        if not candidate_ids:   # catalogue genuinely empty / all seen
+        if not candidate_ids:   # empty filter / catalogue empty / all seen
             return Recommendation(user_id=signals.user_id, items=[], strategy=strategy,
-                                  diagnostics={"reason": "no_content", "pool_size": 0})
+                                  diagnostics={"reason": "empty_filter" if filter else "no_content",
+                                               "filter": filter, "pool_size": 0})
 
         # 2) fetch content structure for the pool, score each
         contents = self.content_store.get(candidate_ids)
@@ -88,18 +95,26 @@ class Recommender:
         ranked = mmr_rerank(scored, vectors, lambda_=cfg.mmr_lambda, limit=max(rel_limit, 1))
 
         diagnostics = {"pool_size": len(pool), "scored": len(scored),
-                       "generators": ["semantic", "tag"], "cold_start_fallback": cold_fallback}
+                       "generators": generators, "cold_start_fallback": cold_fallback,
+                       "filter": filter}
 
         # 4) inject a labelled distractor (novelty / exploration) at a fixed slot
         if cfg.distractor_enabled:
-            exclude = seen | {r.content_id for r in ranked}
-            distractor = self._distractor(signals, exclude)
+            ranked_ids = {r.content_id for r in ranked}
+            if filter:
+                # within-filter distractor: lowest-relevance item from the SAME filtered set
+                leftover = [s for s in scored if s.content_id not in ranked_ids]
+                distractor = min(leftover, key=lambda s: s.final_score) if leftover else None
+                if distractor is not None:
+                    distractor = distractor.model_copy(update={"kind": "distractor"})
+            else:
+                distractor = self._distractor(signals, seen | ranked_ids)
             if distractor is not None:
                 slot = min(cfg.distractor_slot, len(ranked))
                 ranked.insert(slot, distractor)
                 diagnostics["distractor"] = {
                     "content_id": distractor.content_id,
-                    "strategy": cfg.distractor_strategy, "slot": slot,
+                    "strategy": "within_filter" if filter else cfg.distractor_strategy, "slot": slot,
                 }
 
         return Recommendation(user_id=signals.user_id, items=ranked, strategy=strategy,

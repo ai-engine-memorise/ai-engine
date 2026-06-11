@@ -87,7 +87,7 @@ def test_ingest_webhook_then_recommend():
 
     # recommend surfaces the unseen Forced-Labor story, excludes seen
     rec = client.get("/api/recommend", params={"user_id": "u1"}).json()["result"]
-    ids = [it["content_id"] for it in rec["items"]]
+    ids = [it["id"] for it in rec["items"]]
     assert rec["strategy"] == "warm"
     assert "103" in ids
     assert "101" not in ids and "102" not in ids
@@ -99,12 +99,12 @@ def test_recommend_preview_hand_authored_model():
     r = client.post("/api/recommend/preview",
                     json={"tag_affinity": {"theme_what:Forced Labor": 1.0}, "limit": 5})
     assert r.status_code == 200
-    ids = [i["content_id"] for i in r.json()["result"]["items"]]
+    ids = [i["id"] for i in r.json()["result"]["items"]]
     assert any(i in ids for i in ["101", "102", "103"])
     # like_items -> taste vector built + those items excluded as seen
     r2 = client.post("/api/recommend/preview", json={"like_items": ["101"]})
     res2 = r2.json()["result"]
-    assert "101" not in [i["content_id"] for i in res2["items"]]
+    assert "101" not in [i["id"] for i in res2["items"]]
     assert res2["user_model"]["taste_vector"] is not None
 
 
@@ -117,7 +117,7 @@ def test_recommend_compact_omits_content():
     compact = r2.json()["result"]
     assert full["items"] and "content" in full["items"][0]
     assert compact["items"] and "content" not in compact["items"][0]
-    assert "content_id" in compact["items"][0] and "final_score" in compact["items"][0]
+    assert "id" in compact["items"][0] and "relevance_score" in compact["items"][0]
 
 
 def test_recommend_unknown_user_cold_start():

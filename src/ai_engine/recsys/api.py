@@ -82,12 +82,20 @@ def _require_api_key(x_api_key: Optional[str] = Header(default=None)) -> None:
 
 
 def _dump_items(items, include_content: bool) -> list:
+    """Output contract: id / rank / relevance_score / role (+ breakdown, optional content)."""
     out = []
-    for i in items:
+    for rank, i in enumerate(items, start=1):
         d = i.model_dump()
-        if not include_content:
-            d.pop("content", None)   # compact: drop title/text/tags
-        out.append(d)
+        item = {
+            "id": d["content_id"],
+            "rank": rank,
+            "relevance_score": d["final_score"],
+            "role": "distractor" if d.get("kind") == "distractor" else "target",
+            "breakdown": d.get("breakdown", {}),
+        }
+        if include_content and d.get("content") is not None:
+            item["content"] = d["content"]
+        out.append(item)
     return out
 
 
@@ -113,11 +121,13 @@ def make_router(components: Components) -> APIRouter:
     def recommend(
         user_id: str = Query(..., examples=["u1"]),
         limit: Optional[int] = Query(default=None, ge=1, le=50),
+        filter: Optional[str] = Query(default=None, description="restrict candidates to a tag, e.g. a location: AiARLocationBarrack3"),
         include_content: bool = Query(default=True, description="false = compact (ids/scores only)"),
     ) -> dict:
-        rec = c.recommender.recommend(user_id)
+        rec = c.recommender.recommend(user_id, filter=filter)
         items = rec.items[:limit] if limit else rec.items
         out = rec.model_dump()
+        out["filter"] = filter
         out["items"] = _dump_items(items, include_content)
         return {"result": out}
 
@@ -129,14 +139,16 @@ def make_router(components: Components) -> APIRouter:
     @router.post("/recommend/preview")
     def recommend_preview(
         spec: PreviewSpec,
+        filter: Optional[str] = Query(default=None),
         include_content: bool = Query(default=True, description="false = compact (ids/scores only)"),
     ) -> dict:
         """Recommend from a hand-authored user model (no events). For manual /
         programmatic testing + LLM evaluation."""
         signals = build_preview_signals(spec, c.content_store)
-        rec = c.recommender.recommend_for_signals(signals)
+        rec = c.recommender.recommend_for_signals(signals, filter=filter)
         items = rec.items[:spec.limit] if spec.limit else rec.items
         out = rec.model_dump()
+        out["filter"] = filter
         out["items"] = _dump_items(items, include_content)
         out["user_model"] = signals.model_dump()
         return {"result": out}

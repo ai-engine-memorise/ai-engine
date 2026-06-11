@@ -85,6 +85,24 @@ def test_recency_contributes_to_score():
     assert recs and all("recency" in it.breakdown for it in recs)
 
 
+def test_filter_restricts_candidates_to_tagged_content():
+    from ai_engine.recsys.contracts.models import Content, Tag, UserSignals
+    contents = {
+        "L1": Content(id="L1", title="a", tags=[Tag(facet="location", label="AiARLocationBarrack3"),
+                                                Tag(facet="theme_what", label="Forced Labor")]),
+        "L2": Content(id="L2", title="b", tags=[Tag(facet="location", label="AiARLocationBarrack3")]),
+        "X1": Content(id="X1", title="c", tags=[Tag(facet="theme_what", label="Family")]),
+    }
+    vectors = {k: [1.0, 0.0] for k in contents}
+    store = FakeContentStore(contents, vectors)
+    sig = UserSignals(user_id="u", tag_affinity={"theme_what:Forced Labor": 1.0})
+    rec = Recommender(store, InMemoryUserModelStore(), RecConfig(distractor_enabled=False)) \
+        .recommend_for_signals(sig, filter="AiARLocationBarrack3")
+    ids = [i.content_id for i in rec.items]
+    assert set(ids) <= {"L1", "L2"} and "X1" not in ids       # only the location's content
+    assert rec.diagnostics["filter"] == "AiARLocationBarrack3"
+
+
 def test_no_user_model_cold_start_returns_content():
     rec = Recommender(_store(), InMemoryUserModelStore(), CFG).recommend("ghost")
     assert rec.strategy == "cold"
