@@ -4,6 +4,7 @@ Tags live in the point payload (decided design): a `tags` list of {facet,label,w
 plus a flat `tag_labels` ("facet:label") KEYWORD-indexed field used for tag recall.
 """
 from __future__ import annotations
+import logging
 from typing import Optional, Sequence
 
 from qdrant_client import QdrantClient  # type: ignore
@@ -11,6 +12,8 @@ from qdrant_client.models import Filter, FieldCondition, MatchAny, GeoRadius, Ge
 
 from ..contracts.enums import ContentType
 from ..contracts.models import Content, Tag, Candidate, Vector
+
+logger = logging.getLogger(__name__)
 
 
 def _extract_latlon(payload: dict):
@@ -143,13 +146,19 @@ class QdrantContentStore:
                 for p in points if str(p.id) not in ex][:limit]
 
     def search_geo(self, lat: float, lon: float, radius_m: float, *, limit: int, exclude=()) -> list[Candidate]:
-        # geo radius filter on the GEO-indexed `locations` field — independent of tags
+        # geo radius filter on the GEO-indexed `locations` field — independent of tags.
+        # If the collection has no `locations` geo index (content lacks coordinates),
+        # Qdrant raises -> degrade to an empty result instead of 500ing the request.
         flt = Filter(must=[FieldCondition(
             key="locations", geo_radius=GeoRadius(center=GeoPoint(lat=lat, lon=lon), radius=radius_m))])
-        points, _ = self.client.scroll(
-            collection_name=self.collection_name,
-            scroll_filter=flt, limit=limit + len(exclude), with_payload=False, with_vectors=False,
-        )
+        try:
+            points, _ = self.client.scroll(
+                collection_name=self.collection_name,
+                scroll_filter=flt, limit=limit + len(exclude), with_payload=False, with_vectors=False,
+            )
+        except Exception as exc:  # missing index / unindexed field
+            logger.warning("geo radius search failed (no `locations` geo index?): %s", exc)
+            return []
         ex = {str(e) for e in exclude}
         return [Candidate(content_id=str(p.id), generated_by="geo")
                 for p in points if str(p.id) not in ex][:limit]
