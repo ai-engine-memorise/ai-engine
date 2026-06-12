@@ -69,8 +69,43 @@ def _build_event_log():
     return NullEventLog()
 
 
+def _build_config() -> RecConfig:
+    """RecConfig from defaults, overridden by env so weights/limits are tunable
+    WITHOUT a redeploy (a stop-gap until a learned ranker owns the weights).
+
+        RECSYS_W_{SEMANTIC,AFFINITY,TAG,RECENCY,AVERSION}   fusion weights (float)
+        RECSYS_MMR_LAMBDA                                    relevance<->diversity
+        RECSYS_FINAL_LIMIT                                   items returned (int)
+        RECSYS_DISTRACTOR_PROBABILITY                        0..1
+    """
+    cfg = RecConfig()
+
+    def _f(name: str, cur: float) -> float:
+        v = os.getenv(name)
+        try:
+            return float(v) if v is not None else cur
+        except ValueError:
+            return cur
+
+    f = cfg.fusion
+    f.semantic = _f("RECSYS_W_SEMANTIC", f.semantic)
+    f.affinity = _f("RECSYS_W_AFFINITY", f.affinity)
+    f.tag = _f("RECSYS_W_TAG", f.tag)
+    f.recency = _f("RECSYS_W_RECENCY", f.recency)
+    f.aversion = _f("RECSYS_W_AVERSION", f.aversion)
+    cfg.mmr_lambda = _f("RECSYS_MMR_LAMBDA", cfg.mmr_lambda)
+    cfg.distractor_probability = _f("RECSYS_DISTRACTOR_PROBABILITY", cfg.distractor_probability)
+    fl = os.getenv("RECSYS_FINAL_LIMIT")
+    if fl is not None:
+        try:
+            cfg.final_limit = int(fl)
+        except ValueError:
+            pass
+    return cfg
+
+
 def build_components(cfg: Optional[RecConfig] = None) -> Components:
-    cfg = cfg or RecConfig()
+    cfg = cfg or _build_config()
     content_store = _build_content_store()
     event_buffer, model_store = _build_stores()
     return Components(

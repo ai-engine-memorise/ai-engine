@@ -47,3 +47,18 @@ def test_distractor_can_be_disabled():
 def test_distractor_probability_zero_skips():
     rec = _rec(RecConfig(distractor_probability=0.0, final_limit=6))
     assert all(it.kind == "recommendation" for it in rec.items)
+
+
+def test_distractor_unavailable_is_reported_not_silent():
+    # filtered set with only 2 items + final_limit 6 -> nothing left over for a distractor.
+    from ai_engine.recsys.contracts.models import Content, Tag, UserSignals
+    contents = {
+        "L1": Content(id="L1", title="a", tags=[Tag(facet="location", label="Loc")]),
+        "L2": Content(id="L2", title="b", tags=[Tag(facet="location", label="Loc")]),
+    }
+    store = FakeContentStore(contents, {k: [1.0, 0.0] for k in contents})
+    rec = Recommender(store, InMemoryUserModelStore(), RecConfig(final_limit=6)) \
+        .recommend_for_signals(UserSignals(user_id="u"), filter="Loc")
+    assert all(it.kind == "recommendation" for it in rec.items)        # no distractor placed
+    assert rec.diagnostics["distractor"]["placed"] is False           # but NOT silent
+    assert rec.diagnostics["distractor"]["reason"] == "filtered_set_exhausted"

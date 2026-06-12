@@ -146,3 +146,14 @@ def test_ingest_requires_api_key_when_set(monkeypatch):
     body = [_view("CONTENT_VIEW_STARTED", "101", ts)]
     assert client.post("/api/ingest", json=body).status_code == 401
     assert client.post("/api/ingest", json=body, headers={"X-API-Key": "secret"}).status_code == 200
+
+
+def test_usermodel_guarded_recommend_open_when_key_set(monkeypatch):
+    monkeypatch.setenv("INGEST_API_KEY", "secret")
+    client = _client()
+    # usermodel exposes demographics (PII) -> guarded
+    assert client.get("/api/usermodel", params={"user_id": "u1"}).status_code == 401
+    assert client.get("/api/usermodel", params={"user_id": "u1"},
+                      headers={"X-API-Key": "secret"}).status_code == 200
+    # serving path stays open for the app
+    assert client.get("/api/recommend", params={"user_id": "u1"}).status_code == 200

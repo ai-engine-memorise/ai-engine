@@ -157,8 +157,10 @@ def make_router(components: Components) -> APIRouter:
         c.event_log.log_served(_served_record(request_id, user_id, out["items"], out, filter))
         return {"result": out}
 
-    @router.get("/usermodel")
+    @router.get("/usermodel", dependencies=[Depends(_require_api_key)])
     def usermodel(user_id: str = Query(..., examples=["u1"])) -> dict:
+        # debug/inspection endpoint — exposes demographics (PII), so it is guarded
+        # by the same INGEST_API_KEY. The serving /recommend stays open for the app.
         sig = c.model_store.get_signals(user_id)
         return {"result": sig.model_dump() if sig else None}
 

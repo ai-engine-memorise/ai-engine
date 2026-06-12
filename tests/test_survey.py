@@ -39,6 +39,16 @@ def test_kwb_ids_and_personalization_themes():
     assert "theme_how.type_of_stores:Personal stories" in a
 
 
+def test_personalization_label_aliases_normalize_to_taxonomy():
+    # slug / underscore / British spelling must all reach the canonical content label
+    a = survey_affinity({"q:personalization_theme": ["forced_labour", "deportation"]})
+    assert "theme_what:Forced Labor" in a          # 'forced_labour' -> canonical
+    assert "theme_what:Deportation" in a           # slug -> Title label
+    # already-clean labels pass through unchanged (case preserved)
+    b = survey_affinity({"q:personalization_theme": ["Forced Labor"]})
+    assert "theme_what:Forced Labor" in b
+
+
 def test_normalizer_collects_multiselect():
     raw = {"event": "SURVEY_ANSWERED", "userId": "u", "timestamp": "2026-06-11T10:00:00Z",
            "properties": {"answers": [

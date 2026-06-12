@@ -117,6 +117,7 @@ class Recommender:
             ranked_ids = {r.content_id for r in ranked}
             if filter:
                 # within-filter distractor: lowest-relevance item from the SAME filtered set
+                # (a serendipitous pick from this location the user wouldn't otherwise reach)
                 leftover = [s for s in scored if s.content_id not in ranked_ids]
                 distractor = min(leftover, key=lambda s: s.final_score) if leftover else None
                 if distractor is not None:
@@ -129,6 +130,13 @@ class Recommender:
                 diagnostics["distractor"] = {
                     "content_id": distractor.content_id,
                     "strategy": "within_filter" if filter else cfg.distractor_strategy, "slot": slot,
+                }
+            else:
+                # filtered set fully shown / catalogue exhausted -> no off-profile item exists.
+                # never silent: the caller sees why the 100%-distractor contract couldn't hold.
+                diagnostics["distractor"] = {
+                    "placed": False,
+                    "reason": "filtered_set_exhausted" if filter else "no_candidate",
                 }
 
         return Recommendation(user_id=signals.user_id, items=ranked, strategy=strategy,

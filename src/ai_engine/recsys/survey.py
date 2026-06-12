@@ -36,6 +36,32 @@ _PERSONALIZATION = {
     "q:personalization_area": "place_where.camp_areas",
 }
 
+# Survey answer values must line up with content tag LABELS or the persona silently
+# matches nothing. score_tag already compares case-insensitively, so casing is safe;
+# this map fixes the remaining divergences: separator style (slug/underscore/hyphen)
+# and spelling/synonyms (British vs American). Lookup key is the separator-normalized
+# value lowercased; extend as the survey vocabulary is finalized against the taxonomy.
+_LABEL_ALIASES = {
+    "forced labour": "Forced Labor",
+    "forced labor": "Forced Labor",
+    "liberation": "Liberation",
+    "deportation": "Deportation",
+    "daily life": "Daily Life",
+    "personal stories": "Personal stories",
+    "resistance": "Resistance",
+}
+
+
+def _canonical_label(v) -> str:
+    """Normalize a free survey answer to the content taxonomy label.
+
+    Separators (`_`,`-`) -> spaces, whitespace collapsed, then an explicit alias
+    lookup. Already-clean labels (e.g. 'Forced Labor') pass through unchanged so
+    case is preserved for display; matching downstream is case-insensitive anyway.
+    """
+    s = " ".join(str(v).replace("_", " ").replace("-", " ").split())
+    return _LABEL_ALIASES.get(s.lower(), s)
+
 
 def _clean(v):
     """Survey may emit the answer entity id ('a:age:55_64') instead of the value.
@@ -79,10 +105,11 @@ def survey_affinity(answers: dict) -> dict[str, float]:
     for v in _vals(answers, *_NAT_QIDS):
         out[f"person_who.city_village_country:From: {str(v).replace('_', ' ').title()}"] = 0.4
 
-    # explicit preference questions: value IS the taxonomy label -> strong weight
+    # explicit preference questions: value IS the taxonomy label -> strong weight.
+    # canonicalize the value so slug/underscore/spelling variants still match content.
     for qid, facet in _PERSONALIZATION.items():
         for v in _vals(answers, qid):
             if v:
-                out[f"{facet}:{v}"] = 1.0
+                out[f"{facet}:{_canonical_label(v)}"] = 1.0
 
     return out
