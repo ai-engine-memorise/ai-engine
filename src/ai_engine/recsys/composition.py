@@ -95,6 +95,9 @@ def _build_config() -> RecConfig:
     f.aversion = _f("RECSYS_W_AVERSION", f.aversion)
     cfg.mmr_lambda = _f("RECSYS_MMR_LAMBDA", cfg.mmr_lambda)
     cfg.distractor_probability = _f("RECSYS_DISTRACTOR_PROBABILITY", cfg.distractor_probability)
+    cfg.ranking_mode = os.getenv("RECSYS_RANKING_MODE", cfg.ranking_mode)   # "static" | "bandit"
+    cfg.bandit_alpha = _f("RECSYS_BANDIT_ALPHA", cfg.bandit_alpha)
+    cfg.bandit_ridge = _f("RECSYS_BANDIT_RIDGE", cfg.bandit_ridge)
     fl = os.getenv("RECSYS_FINAL_LIMIT")
     if fl is not None:
         try:
@@ -102,6 +105,22 @@ def _build_config() -> RecConfig:
         except ValueError:
             pass
     return cfg
+
+
+def _build_policy(cfg: RecConfig):
+    """The learned ranking policy (bandit). Only built when ranking_mode == 'bandit'.
+    Loads a trained state from BANDIT_STATE_PATH if present, else starts at the prior
+    (θ0 = the static fusion weights) so day-one behavior matches weighted fusion."""
+    if cfg.ranking_mode != "bandit":
+        return None
+    from .ranking.bandit import LinearBandit, FEATURE_ORDER
+    path = os.getenv("BANDIT_STATE_PATH")
+    if path and os.path.exists(path):
+        import json
+        with open(path, encoding="utf-8") as fh:
+            return LinearBandit.from_dict(json.load(fh))
+    weights = {name: getattr(cfg.fusion, name, 0.0) for name in FEATURE_ORDER}
+    return LinearBandit.with_prior(weights, ridge=cfg.bandit_ridge, alpha=cfg.bandit_alpha)
 
 
 def build_components(cfg: Optional[RecConfig] = None) -> Components:
@@ -114,7 +133,7 @@ def build_components(cfg: Optional[RecConfig] = None) -> Components:
         event_buffer=event_buffer,
         model_store=model_store,
         updater=UserModelUpdater(content_store, model_store, cfg),
-        recommender=Recommender(content_store, model_store, cfg),
+        recommender=Recommender(content_store, model_store, cfg, policy=_build_policy(cfg)),
         demographics=_build_demographics(),
         event_log=_build_event_log(),
     )

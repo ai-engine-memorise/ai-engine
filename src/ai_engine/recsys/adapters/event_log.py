@@ -37,6 +37,7 @@ def _row(e: InteractionEvent) -> dict:
         "event": e.event,
         "ts": e.ts.isoformat() if e.ts else None,
         "session_id": e.session_id,
+        "request_id": e.request_id,      # join key to the served impression (bandit reward)
         "content_id": e.content_id,
         "dwell_seconds": e.dwell_seconds,
         "end_reason": e.end_reason.value if e.end_reason else None,

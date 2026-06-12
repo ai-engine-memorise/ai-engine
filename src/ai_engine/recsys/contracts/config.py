@@ -56,3 +56,11 @@ class RecConfig(BaseModel):
 
     # cold/warm routing
     cold_start_min_positives: int = 1
+
+    # ranking policy: "static" weighted fusion, or a learned linear "bandit" (prior =
+    # the fusion weights). Feature vectors are logged in BOTH modes so the offline
+    # trainer can fit a bandit from data collected while still serving statically.
+    ranking_mode: str = "static"        # "static" | "bandit"
+    bandit_alpha: float = 0.3           # UCB exploration strength (0 = greedy/exploit)
+    bandit_ridge: float = 1.0           # prior strength (how tightly θ0 holds the weights)
+    bandit_explore: bool = True         # add the UCB bonus when serving with the bandit

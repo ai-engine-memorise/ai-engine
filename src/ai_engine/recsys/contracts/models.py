@@ -47,6 +47,7 @@ class InteractionEvent(BaseModel):
     event: str                                   # CONTENT_VIEW_ENDED, CONTENT_LOOKUP, ...
     ts: datetime
     session_id: Optional[str] = None
+    request_id: Optional[str] = None             # echoes the rec response -> joins reward to impression
     content_id: Optional[str] = None
     dwell_seconds: Optional[float] = None
     end_reason: Optional[EndReason] = None
@@ -96,6 +97,7 @@ class ScoredCandidate(BaseModel):
     content_id: str
     final_score: float
     breakdown: dict[str, float] = Field(default_factory=dict)  # per-scorer contribution
+    features: list[float] = Field(default_factory=list)        # ordered context vector (bandit training)
     content: Optional[Content] = None
     kind: str = "recommendation"   # "recommendation" | "distractor" (novelty/exploration)
 

@@ -88,12 +88,22 @@ triggers + steps to migrate there: see [`future-hexagonal.md`](./future-hexagona
 - **Rule-based weighted fusion + MMR.** No learned ranker yet. Hard contract: every `Scorer.score`
   returns `[0,1]` so the weighted sum is valid without rescaling (fused score may go negative via the
   `aversion` penalty — that is intentional, only the per-scorer outputs are bounded).
-- **Durable training substrate (the path to a learned ranker / contextual bandit).** With
-  `EVENT_LOG_DIR` set, two append-only Parquet datasets accumulate: `date=*/` (ingested events =
-  reward) and `served/date=*/` (recommendations served = action + context, keyed by `request_id`
-  echoed back on later CONTENT_VIEW events). Joining them yields `(context, action, reward)` tuples —
-  the substrate a contextual bandit (LinUCB/Thompson) would train on to learn the fusion policy and
-  replace the fixed-slot distractor with principled exploration. Not built yet; data collection is live.
+- **Durable training substrate + learned ranking policy (contextual bandit).** With `EVENT_LOG_DIR`
+  set, two append-only Parquet datasets accumulate: `date=*/` (ingested events = reward) and
+  `served/date=*/` (recommendations served = action + the per-item FEATURE VECTOR, keyed by
+  `request_id` echoed back on later CONTENT_VIEW events). Joining them yields `(context, action,
+  reward)` tuples. A linear contextual bandit (`ranking/bandit.py`, LinUCB-style, pure-Python) learns
+  `E[reward | x] = θ·x` over the SAME per-scorer features, with the static `FusionWeights` as the
+  ridge **prior** (`θ0 = weights`) — so `ranking_mode="bandit"` at the prior is byte-for-byte the
+  static ranking, then learns away from it. Trained OFFLINE (`bandit/train.py`) from the logs; the
+  state JSON is loaded at startup (`BANDIT_STATE_PATH`). Feature vectors are logged in BOTH modes, so
+  a bandit can be fit from traffic served while still static. Online incremental updates: future work.
+
+  ```
+  RECSYS_RANKING_MODE=static   # default; logs features for later training
+  python bandit/train.py --log ./data/eventlog --out ./data/bandit_state.json
+  RECSYS_RANKING_MODE=bandit  BANDIT_STATE_PATH=./data/bandit_state.json   # serve learned θ
+  ```
 - **Engagement is continuous**, not the current binary `dwell >= estimate`.
 - **Dwell pairing moves out of SQL into the EventSource normalizer**, shared across all 3 sources.
   One contract test asserts every adapter emits identical `InteractionEvent` from equivalent raw.

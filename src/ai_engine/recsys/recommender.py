@@ -19,13 +19,17 @@ from .ranking.scorers import (
     score_semantic, score_affinity, score_tag, score_recency, score_aversion, score_geo,
 )
 from .ranking.fusion import weighted_fuse, mmr_rerank
+from .ranking.bandit import LinearBandit, feature_vector
 
 
 class Recommender:
-    def __init__(self, content_store: ContentStore, model_store: UserModelStore, cfg: RecConfig):
+    def __init__(self, content_store: ContentStore, model_store: UserModelStore, cfg: RecConfig,
+                 policy: Optional[LinearBandit] = None):
         self.content_store = content_store
         self.model_store = model_store
         self.cfg = cfg
+        # learned ranking policy; used only when cfg.ranking_mode == "bandit" and set.
+        self.policy = policy
 
     def recommend(self, user_id: str, *, filter: Optional[str] = None,
                   near: Optional[tuple] = None, geo_radius_m: Optional[float] = None) -> Recommendation:
@@ -109,7 +113,9 @@ class Recommender:
             mx = max(signals.positives.values()) or 1.0
             liked = [(signals.positives[cid] / mx, lv[cid]) for cid in signals.positives if cid in lv]
 
+        use_bandit = cfg.ranking_mode == "bandit" and self.policy is not None
         scored: list[ScoredCandidate] = []
+        feats: dict[str, list[float]] = {}
         for cid in candidate_ids:
             content = contents.get(cid)
             vec = vectors.get(cid)
@@ -121,10 +127,20 @@ class Recommender:
             per = {"semantic": sem, "affinity": aff, "tag": tag, "recency": rec, "aversion": av}
             if near is not None:                 # proximity to the request location (independent of tags)
                 per["geo"] = score_geo(content, near, cfg.geo_scale_m)
+            # the context vector is ALWAYS captured (logged at serve) so the offline
+            # trainer can fit a bandit even from statically-served traffic.
+            x = feature_vector(per)
+            feats[cid] = x
             fused, breakdown = weighted_fuse(per, cfg.fusion)
             scored.append(ScoredCandidate(
-                content_id=cid, final_score=fused, breakdown=breakdown, content=content,
+                content_id=cid, final_score=fused, breakdown=breakdown, features=x, content=content,
             ))
+
+        # learned policy overrides the fused score with θ·x (+ UCB exploration bonus)
+        if use_bandit:
+            policy_scores = self.policy.rank_scores(feats, explore=cfg.bandit_explore)
+            for s in scored:
+                s.final_score = policy_scores.get(s.content_id, s.final_score)
 
         # 3) diversity-aware rerank — decide the distractor first (so we size the list right)
         inject = cfg.distractor_enabled and (
@@ -134,7 +150,8 @@ class Recommender:
 
         diagnostics = {"pool_size": len(pool), "scored": len(scored),
                        "generators": generators, "cold_start_fallback": cold_fallback,
-                       "filter": filter, "geo": bool(near)}
+                       "filter": filter, "geo": bool(near),
+                       "ranking": "bandit" if use_bandit else "static"}
 
         # 4) inject a labelled distractor (novelty / exploration) at slot 3 or 4 (random)
         if inject:

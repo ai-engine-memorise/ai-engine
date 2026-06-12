@@ -83,7 +83,7 @@ def _require_api_key(x_api_key: Optional[str] = Header(default=None)) -> None:
 
 
 def _dump_items(items, include_content: bool) -> list:
-    """Output contract: id / rank / relevance_score / role (+ breakdown, optional content).
+    """Output contract: id / rank / relevance_score / role (+ breakdown, features, optional content).
     The distractor is OUTSIDE the rank ordering -> rank=null; only targets are ranked."""
     out = []
     rank = 0
@@ -98,6 +98,7 @@ def _dump_items(items, include_content: bool) -> list:
             "relevance_score": d["final_score"],
             "role": "distractor" if is_distractor else "target",
             "breakdown": d.get("breakdown", {}),
+            "features": d.get("features", []),
         }
         if include_content and d.get("content") is not None:
             item["content"] = d["content"]
@@ -106,8 +107,9 @@ def _dump_items(items, include_content: bool) -> list:
 
 
 def _served_record(request_id: str, user_id: str, items: list, out: dict, filter: Optional[str]) -> dict:
-    """Compact impression row for the durable served log (training join key).
-    Logs ids/ranks/roles only — content is recoverable from the content store."""
+    """Compact impression row for the durable served log (bandit training join key).
+    Logs ids/ranks/roles + the per-item FEATURE VECTOR (the bandit context); content
+    is recoverable from the content store."""
     distractor = next((it["id"] for it in items if it.get("role") == "distractor"), None)
     return {
         "request_id": request_id,
@@ -116,8 +118,10 @@ def _served_record(request_id: str, user_id: str, items: list, out: dict, filter
         "strategy": out.get("strategy"),
         "filter": filter,
         "cold_start": bool((out.get("diagnostics") or {}).get("cold_start_fallback")),
+        "ranking": (out.get("diagnostics") or {}).get("ranking"),
         "distractor_id": distractor,
-        "items": [{"id": it["id"], "rank": it["rank"], "role": it["role"]} for it in items],
+        "items": [{"id": it["id"], "rank": it["rank"], "role": it["role"],
+                   "features": it.get("features", [])} for it in items],
     }
 
 

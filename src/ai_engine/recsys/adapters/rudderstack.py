@@ -98,11 +98,17 @@ def normalize_event(raw: dict) -> Optional[InteractionEvent]:
             except (TypeError, ValueError):
                 pass
 
+    # request_id: the app echoes the rec response's id on the resulting view, so the
+    # bandit trainer can join this reward to the exact impression (its feature vector).
+    request_id = (details.get("request_id") or context.get("request_id")
+                  or props.get("request_id"))
+
     return InteractionEvent(
         user_id=str(user_id),
         event=str(event),
         ts=_parse_ts(raw.get("timestamp") or raw.get("sentAt")),
         session_id=context.get("session_id") or raw.get("sessionId"),
+        request_id=request_id,
         content_id=content_id,
         dwell_seconds=details.get("dwell_seconds"),
         end_reason=_end_reason(details.get("reason")),
