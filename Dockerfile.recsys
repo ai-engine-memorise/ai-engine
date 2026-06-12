@@ -1,0 +1,9 @@
+# ai-engine recsys serving API (testing image — lean, recsys-only deps)
+FROM python:3.12-slim
+WORKDIR /app
+COPY src ./src
+# recsys serving path needs only these (no fastembed/sqlalchemy in the warm path)
+RUN pip install --no-cache-dir fastapi "uvicorn[standard]" qdrant-client redis pydantic pyarrow
+ENV PYTHONPATH=/app/src PYTHONUNBUFFERED=1
+EXPOSE 8000
+CMD ["python", "-m", "uvicorn", "ai_engine.recsys.api:app", "--host", "0.0.0.0", "--port", "8000"]

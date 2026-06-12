@@ -24,6 +24,7 @@ class Components:
     updater: UserModelUpdater
     recommender: Recommender
     demographics: DemographicsProvider
+    event_log: object   # durable append-only log (Parquet) — .append(events)
 
 
 def _build_content_store() -> ContentStore:
@@ -59,6 +60,15 @@ def _build_demographics() -> DemographicsProvider:
     return NullDemographicsProvider()
 
 
+def _build_event_log():
+    d = os.getenv("EVENT_LOG_DIR")
+    if d:
+        from .adapters.event_log import ParquetEventLog
+        return ParquetEventLog(d)
+    from .adapters.event_log import NullEventLog
+    return NullEventLog()
+
+
 def build_components(cfg: Optional[RecConfig] = None) -> Components:
     cfg = cfg or RecConfig()
     content_store = _build_content_store()
@@ -71,4 +81,5 @@ def build_components(cfg: Optional[RecConfig] = None) -> Components:
         updater=UserModelUpdater(content_store, model_store, cfg),
         recommender=Recommender(content_store, model_store, cfg),
         demographics=_build_demographics(),
+        event_log=_build_event_log(),
     )

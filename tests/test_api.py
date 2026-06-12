@@ -43,11 +43,13 @@ def _client(demographics=None):
     store = FakeContentStore(contents, vectors)
     buf = FakeEventSource()
     models = InMemoryUserModelStore()
+    from ai_engine.recsys.adapters.event_log import NullEventLog
     components = Components(
         cfg=cfg, content_store=store, event_buffer=buf, model_store=models,
         updater=UserModelUpdater(store, models, cfg),
         recommender=Recommender(store, models, cfg),
         demographics=demographics or NullDemographicsProvider(),
+        event_log=NullEventLog(),
     )
     return TestClient(create_app(components))
 

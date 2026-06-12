@@ -112,6 +112,7 @@ def make_router(components: Components) -> APIRouter:
     def ingest(payload: Union[dict, list] = Body(...)) -> dict:
         raws = payload if isinstance(payload, list) else [payload]
         events = normalize_events(raws)
+        c.event_log.append(events)    # durable append-only log (Parquet) — training/eval record
         users: set[str] = set()
         for e in events:
             c.event_buffer.append(e)  # type: ignore[attr-defined]
