@@ -30,7 +30,7 @@ def verbalize(exp: PersonaExplanation) -> str:
     """One-paragraph, evidence-grounded persona summary (deterministic)."""
     # truly cold only when there is no behavior at all (no interests, path, or aversions)
     if not exp.interests and not exp.trajectory and not exp.aversions:
-        return ("New visitor — no engagement yet. Recommendations start from any survey "
+        return ("New visitor, no engagement yet. Recommendations start from any survey "
                 "persona or demographics, then adapt as they read.")
 
     parts: list[str] = []
@@ -47,7 +47,7 @@ def verbalize(exp: PersonaExplanation) -> str:
     if exp.aversions:
         parts.append(f"Tends to avoid {', '.join(a.label for a in exp.aversions[:2])}.")
     if exp.trajectory:
-        parts.append("Recent path: " + " → ".join(exp.trajectory) + ".")
+        parts.append("Recent path: " + " then ".join(exp.trajectory) + ".")
     return " ".join(parts)
 
 

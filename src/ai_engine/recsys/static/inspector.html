@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>AI-Engine Inspector — MEMORISE</title>
+<title>AI-Engine Inspector, MEMORISE</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
-/* MEMORISE brand — sober archival greige: warm gray + parchment, muted bronze accent. */
+/* MEMORISE brand, sober archival greige: warm gray + parchment, muted bronze accent. */
 :root[data-theme="light"]{
   --bg:#FAF8F4; --panel:#ffffff; --line:#E6DFD2; --fg:#2A2823; --mut:#8C8475;
   --primary:#6B6457; --primary-dark:#423D34; --accent:#A8895B; --accent-t:rgba(168,137,91,.12);
@@ -108,6 +108,13 @@ button.primary{background:var(--accent);color:#fff;border:1px solid var(--accent
 button.primary:hover{filter:brightness(1.05)}
 .err{color:#9C5B4F} code{background:var(--code);padding:1px 6px;border-radius:5px;font-size:12px}
 .empty{padding:26px;text-align:center;color:var(--mut);border:1px dashed var(--line);border-radius:var(--rad)}
+.userchip{background:var(--code);border:1px solid var(--line);border-radius:7px;padding:3px 9px;font-size:12px;cursor:pointer;color:var(--fg);font-family:inherit;font-variant-numeric:tabular-nums}
+.userchip:hover{border-color:var(--accent);color:var(--accent)}
+details.members{margin-top:11px;border-top:1px solid var(--line);padding-top:9px}
+details.members summary{cursor:pointer;list-style:none;font-size:12px;color:var(--mut);font-weight:600}
+details.members summary::-webkit-details-marker{display:none}
+details.members summary:hover{color:var(--accent)}
+details.members[open] summary{margin-bottom:8px}
 pre{white-space:pre-wrap;word-break:break-word}
 </style>
 </head>
@@ -119,7 +126,7 @@ pre{white-space:pre-wrap;word-break:break-word}
     <span class="lab">user <input id="uid" placeholder="user_id"/></span>
     <input id="base" class="mini" placeholder="base url"/>
     <input id="key" class="mini" placeholder="X-API-Key"/>
-    <span id="conn" class="dot">…</span>
+    <span id="conn" class="dot">...</span>
     <button class="iconbtn" id="theme" title="toggle theme">☾</button>
   </div>
 </header>
@@ -133,9 +140,14 @@ const $=(s,el=document)=>el.querySelector(s);
 const el=(t,a={},...kids)=>{const e=document.createElement(t);for(const k in a){if(k==="class")e.className=a[k];else if(k==="html")e.innerHTML=a[k];else if(k.startsWith("on"))e[k]=a[k];else e.setAttribute(k,a[k]);}for(const k of kids.flat())e.append(k&&k.nodeType?k:document.createTextNode(k??""));return e;};
 const base=()=>($("#base").value||"http://localhost:8010").replace(/\/$/,"");
 const headers=()=>{const h={};const k=$("#key").value.trim();if(k)h["X-API-Key"]=k;return h;};
-async function api(path){const r=await fetch(base()+path,{headers:headers()});if(!r.ok)throw new Error(r.status+" "+r.statusText+" — "+path);return (await r.json()).result;}
+async function api(path){const r=await fetch(base()+path,{headers:headers()});if(!r.ok)throw new Error(r.status+" "+r.statusText+", "+path);return (await r.json()).result;}
 const fmt=x=>(typeof x==="number")?(Math.round(x*1000)/1000):x;
 const mdInline=t=>String(t??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>");
+// one fixed colour per Falk persona, used everywhere the persona appears
+const PERSONA_COLORS={Explorer:"#4F6276",Hobbyist:"#5E7355","Experience-Seeker":"#A8895B",Recharger:"#7A5C6E",Facilitator:"#4E7E78"};
+function personaPill(label,type,extra=""){const c=PERSONA_COLORS[type];
+  if(!c)return el("span",{class:"pill neutral",style:extra},label);
+  return el("span",{class:"pill",style:`background:${c}22;color:${c};border-color:${c}66;${extra}`},label);}
 const head=(v,t)=>v.append(el("div",{class:"eyebrow"},t));
 const cardhead=t=>el("h3",{class:"cardhead"},t);
 
@@ -172,38 +184,51 @@ const ALL=Object.assign({},...GROUPS.map(g=>g.tabs));
 const SCOPE={};GROUPS.forEach(g=>Object.keys(g.tabs).forEach(t=>SCOPE[t]=g.label));
 let current="Cohort";
 function setTab(n){current=n;for(const b of document.querySelectorAll("nav button.tab"))b.classList.toggle("on",b.dataset.t===n);render();}
-function render(){const v=$("#view");v.innerHTML="";head(v,SCOPE[current]+" · "+current);ALL[current](v).catch(e=>v.append(el("div",{class:"card err"},String(e))));}
+function render(){const v=$("#view");v.innerHTML="";head(v,SCOPE[current]+" / "+current);ALL[current](v).catch(e=>v.append(el("div",{class:"card err"},String(e))));}
 
 /* ===== ACROSS USERS ===== */
 async function renderCohort(v){
   const r=await api("/api/clusters").catch(()=>null);
-  if(!r){v.append(el("div",{class:"empty"},"No cluster model yet. Train one — ",el("code",{},"python explain/cluster_train.py --method fcm")," — and set ",el("code",{},"CLUSTER_MODEL_PATH"),"."));return;}
+  if(!r){v.append(el("div",{class:"empty"},"No cluster model yet. Train one, ",el("code",{},"python explain/cluster_train.py --method fcm"),", and set ",el("code",{},"CLUSTER_MODEL_PATH"),"."));return;}
   const total=(r.profiles||[]).reduce((s,p)=>s+p.size,0)||1;
-  v.append(el("div",{class:"row small mut",style:"margin-bottom:12px"},"method ",el("code",{},r.method||"kmeans"),` · ${total} visitors`));
-  const g=el("div",{class:"grid",style:"grid-template-columns:repeat(auto-fill,minmax(240px,1fr))"});
-  for(const p of r.profiles)g.append(el("div",{class:"card lift",style:"margin:0"},
-    el("div",{class:"row",style:"justify-content:space-between"},el("h3",{class:"mont",style:"margin:0;font-size:15px"},"Cluster "+p.cluster),el("span",{class:"pill bandit"},p.falk_hint)),
-    el("div",{class:"barwrap",style:"margin:11px 0 7px"},el("div",{class:"seg",style:`width:${100*p.size/total}%;background:var(--accent)`})),
-    el("div",{class:"small mut",style:"margin-bottom:8px"},`${p.size} visitors · breadth ${fmt(p.breadth)}`),
-    el("div",{},(p.top_tags||[]).map(t=>el("span",{class:"tag"},t.label)))));
+  v.append(el("div",{class:"row small mut",style:"margin-bottom:12px"},"method ",el("code",{},r.method||"kmeans"),` / ${total} visitors`));
+  const g=el("div",{class:"grid",style:"grid-template-columns:repeat(auto-fill,minmax(260px,1fr))"});
+  for(const p of r.profiles){
+    const card=el("div",{class:"card lift",style:"margin:0"},
+      el("div",{class:"row",style:"justify-content:space-between"},el("h3",{class:"mont",style:"margin:0;font-size:15px"},"Cluster "+p.cluster),personaPill(p.falk_hint,Object.keys(PERSONA_COLORS).find(k=>(p.falk_hint||"").startsWith(k)))),
+      el("div",{class:"barwrap",style:"margin:11px 0 7px"},el("div",{class:"seg",style:`width:${100*p.size/total}%;background:var(--accent)`})),
+      el("div",{class:"small mut",style:"margin-bottom:8px"},`${p.size} visitors / breadth ${fmt(p.breadth)}`),
+      el("div",{},(p.top_tags||[]).map(t=>el("span",{class:"tag"},t.label))));
+    const mems=p.members||[];
+    if(mems.length){
+      const det=el("details",{class:"members"});
+      det.append(el("summary",{},`view ${mems.length} user${mems.length>1?"s":""}`));
+      const box=el("div",{class:"row",style:"gap:5px"});
+      for(const u of mems)box.append(el("button",{class:"userchip",title:"open this visitor",onclick:()=>loadUser(u)},u));
+      det.append(box);
+      card.append(det);
+    }
+    g.append(card);
+  }
   v.append(g);
 }
+function loadUser(uid){$("#uid").value=uid;localStorage.setItem("ins_uid",uid);setTab("User model");}
 async function renderPolicy(v){
   const p=await api("/api/policy");
   v.append(el("div",{class:"card"},el("div",{class:"row"},
-    el("span",{class:"pill "+(p.mode==="bandit"?"bandit":"neutral")},"mode · "+p.mode),
-    el("span",{class:"pill "+(p.trained?"warm":"cold")},p.trained?"trained θ":"prior only"),
-    el("span",{class:"mut small"},`α ${p.alpha} · ridge ${p.ridge} · explore ${p.explore}`))));
+    el("span",{class:"pill "+(p.mode==="bandit"?"bandit":"neutral")},"mode: "+p.mode),
+    el("span",{class:"pill "+(p.trained?"warm":"cold")},p.trained?"trained weights":"prior only"),
+    el("span",{class:"mut small"},`alpha ${p.alpha} / ridge ${p.ridge} / explore ${p.explore}`))));
   const mx=Math.max(0.0001,...p.theta.map(Math.abs),...p.prior.map(Math.abs));
   const tbl=el("table");
-  tbl.append(el("tr",{},el("th",{},"feature"),el("th",{},"prior θ₀"),el("th",{},"learned θ"),el("th",{},"shift"),el("th",{style:"width:300px"},"weight (signed)")));
+  tbl.append(el("tr",{},el("th",{},"feature"),el("th",{},"prior weight"),el("th",{},"learned weight"),el("th",{},"shift"),el("th",{style:"width:300px"},"weight (signed)")));
   p.feature_order.forEach((f,i)=>{const a=p.prior[i],b=p.theta[i],dl=b-a;
     tbl.append(el("tr",{},
       el("td",{},el("span",{class:"sw",style:`background:${COLORS[f]||'#999'}`}),f),
       el("td",{class:"num mut"},fmt(a)),el("td",{class:"num"},fmt(b)),
       el("td",{class:"num small",style:`color:${Math.abs(dl)<1e-6?'var(--mut)':(dl>0?'var(--c-affinity)':'var(--c-aversion)')}`},(dl>=0?"+":"")+fmt(dl)),
       el("td",{},diverge(b,mx,COLORS[f]))));});
-  v.append(el("div",{class:"card"},cardhead("Ranking weights — prior vs learned"),tbl,
+  v.append(el("div",{class:"card"},cardhead("Ranking weights: prior vs learned"),tbl,
     el("div",{class:"small mut",style:"margin-top:8px"},"Bars are zero-centered: right = positive weight, left = negative (penalty).")));
 }
 async function renderTraffic(v){
@@ -222,16 +247,16 @@ async function renderTraffic(v){
         el("td",{class:"small mut num"},(r.ts||"").replace("T"," ").slice(0,19)),
         el("td",{},r.user_id),el("td",{},el("span",{class:"pill "+(r.strategy||"warm")},r.strategy||"")),
         el("td",{class:"small mut"},r.ranking||""),el("td",{class:"num"},(r.items||[]).length),
-        el("td",{class:"small mut"},r.distractor_id||"—")));
+        el("td",{class:"small mut"},r.distractor_id||"-")));
       v.append(el("div",{class:"card"},cardhead("Recent served impressions"),tbl));
-    }else v.append(el("div",{class:"empty"},"No served impressions yet — set ",el("code",{},"EVENT_LOG_DIR")," and serve a request."));
+    }else v.append(el("div",{class:"empty"},"No served impressions yet, set ",el("code",{},"EVENT_LOG_DIR")," and serve a request."));
   }catch(e){v.append(el("div",{class:"empty"},"served log: "+e));}
 }
 
 /* ===== WITHIN USER ===== */
 async function renderRequest(v){
   v.append(el("div",{class:"card"},el("div",{class:"row"},
-    el("span",{class:"small mut"},"explaining ranking for"),el("b",{},$("#uid").value||"—"),
+    el("span",{class:"small mut"},"explaining ranking for"),el("b",{},$("#uid").value||"-"),
     el("span",{class:"vsep"}),
     el("input",{id:"f_filter",class:"f",size:"15",placeholder:"filter tag (optional)"}),
     el("input",{id:"f_lat",class:"f",size:"6",placeholder:"lat"}),el("input",{id:"f_lon",class:"f",size:"6",placeholder:"lon"}),
@@ -247,8 +272,8 @@ async function runRecommend(){
     const r=await api(q),d=r.diagnostics||{};
     out.append(el("div",{class:"card"},el("div",{class:"row",style:"margin-bottom:4px"},
       el("span",{class:"pill "+(r.strategy||"warm")},r.strategy),
-      el("span",{class:"pill "+(d.ranking==="bandit"?"bandit":"neutral")},"rank · "+(d.ranking||"static")),
-      el("span",{class:"mut small"},`pool ${d.pool_size} · generators ${(d.generators||[]).join("+")}`),
+      el("span",{class:"pill "+(d.ranking==="bandit"?"bandit":"neutral")},"rank: "+(d.ranking||"static")),
+      el("span",{class:"mut small"},`pool ${d.pool_size} / generators ${(d.generators||[]).join("+")}`),
       d.cold_start_fallback?el("span",{class:"pill cold"},"cold-fallback"):""),legend()));
     const tbl=el("table");
     tbl.append(el("tr",{},el("th",{style:"width:44px"},"rank"),el("th",{},"id"),el("th",{},"score"),el("th",{style:"width:240px"},"breakdown"),el("th",{},"title")));
@@ -266,14 +291,14 @@ async function renderUser(v){
   if(!exp){v.append(el("div",{class:"empty"},"No model for ",el("b",{},$("#uid").value),". Ingest some events for this user first."));return;}
   const vt=exp.visitor_type||{};
   v.append(el("div",{class:"card lift"},
-    el("div",{class:"row"},el("span",{class:"pill bandit"},"Falk · "+(vt.type||"?")),
-      el("span",{class:"pill neutral"},"Pekarik · "+exp.experience_preference),
+    el("div",{class:"row"},personaPill("Falk: "+(vt.type||"?"),vt.type),
+      el("span",{class:"pill neutral"},"Pekarik: "+exp.experience_preference),
       el("span",{class:"pill neutral"},exp.engagement_style),
       exp.is_cold?el("span",{class:"pill cold"},"cold"):el("span",{class:"pill warm"},"warm")),
-    vt.rationale?el("p",{class:"mut small",style:"margin:.6rem 0 0"},"“"+vt.rationale+"” · confidence "+fmt(vt.confidence)):"",
+    vt.rationale?el("p",{class:"mut small",style:"margin:.6rem 0 0"},"“"+vt.rationale+"” / confidence "+fmt(vt.confidence)):"",
     el("p",{style:"margin:.55rem 0 0;line-height:1.6",html:mdInline(exp.summary)})));
-  if(exp.trajectory&&exp.trajectory.length)v.append(el("div",{class:"card"},el("b",{},"Trajectory   "),el("span",{class:"mut"},exp.trajectory.join("   →   "))));
-  if(exp.interests&&exp.interests.length)v.append(el("div",{class:"card"},cardhead("Interests"),valueBars(exp.interests.map(i=>[i.label+(i.evidence&&i.evidence.length?` · ${i.evidence.length} read`:""),i.weight]))));
+  if(exp.trajectory&&exp.trajectory.length)v.append(el("div",{class:"card"},el("b",{},"Trajectory   "),el("span",{class:"mut"},exp.trajectory.join("   then   "))));
+  if(exp.interests&&exp.interests.length)v.append(el("div",{class:"card"},cardhead("Interests"),valueBars(exp.interests.map(i=>[i.label+(i.evidence&&i.evidence.length?` / ${i.evidence.length} read`:""),i.weight]))));
   if(exp.aversions&&exp.aversions.length)v.append(el("div",{class:"card"},cardhead("Aversions"),valueBars(exp.aversions.map(i=>[i.label,i.weight]),{signed:true})));
   if(exp.cluster){const cl=exp.cluster;
     v.append(el("div",{class:"card"},cardhead("Segment"),
@@ -285,76 +310,77 @@ async function renderUser(v){
 async function renderHistory(v){
   let h;try{h=await api(`/api/usermodel/history?user_id=${encodeURIComponent($("#uid").value)}`);}catch(e){v.append(el("div",{class:"card err"},String(e)+"  (set X-API-Key if INGEST_API_KEY is on)"));return;}
   if(!h||!h.event_count){v.append(el("div",{class:"empty"},"No activity for ",el("b",{},$("#uid").value),". Ingest events for this user first."));return;}
-  v.append(el("div",{class:"row small mut",style:"margin-bottom:12px"},`${h.event_count} events · ${h.aggregates.length} content items engaged`));
-  const dwell=d=>d!=null?Math.round(d)+"s":"—";
+  v.append(el("div",{class:"row small mut",style:"margin-bottom:12px"},`${h.event_count} events / ${h.aggregates.length} content items engaged`));
+  const dwell=d=>d!=null?Math.round(d)+"s":"-";
   const at=el("table");
   at.append(el("tr",{},el("th",{},"content"),el("th",{},"visits"),el("th",{},"dwell"),el("th",{},"end reason"),el("th",{},"outcome")));
   for(const a of h.aggregates){const oc=a.outcome==="positive"?"warm":a.outcome==="negative"?"distractor":"neutral";
     at.append(el("tr",{},
       el("td",{},el("div",{},a.title||a.content_id),a.title?el("div",{class:"small mut num"},a.content_id):""),
       el("td",{class:"num"},a.visits),el("td",{class:"num"},dwell(a.dwell_seconds)),
-      el("td",{class:"small mut"},a.end_reason||"—"),el("td",{},el("span",{class:"pill "+oc},a.outcome))));}
+      el("td",{class:"small mut"},a.end_reason||"-"),el("td",{},el("span",{class:"pill "+oc},a.outcome))));}
   v.append(el("div",{class:"card"},cardhead("Engaged content"),at));
   const et=el("table");
   et.append(el("tr",{},el("th",{},"time"),el("th",{},"event"),el("th",{},"content"),el("th",{},"dwell"),el("th",{},"reason")));
   for(const e of h.events)et.append(el("tr",{},
     el("td",{class:"small mut num"},(e.ts||"").replace("T"," ").slice(0,19)),
     el("td",{class:"small"},(e.event||"").replace("CONTENT_","").replace(/_/g," ").toLowerCase()),
-    el("td",{class:"small"},e.title||e.content_id||"—"),
+    el("td",{class:"small"},e.title||e.content_id||"-"),
     el("td",{class:"num small"},e.dwell_seconds!=null?Math.round(e.dwell_seconds)+"s":""),
     el("td",{class:"small mut"},e.end_reason||"")));
   v.append(el("div",{class:"card"},cardhead("Event timeline"),et));
 }
 
 const PERSONAS={
- "Falk — visitor identities":[
-  ["Explorer","Curiosity-driven; ranges broadly across themes with genuine engagement.","broad affinity × engagement depth"],
-  ["Hobbyist","Deep, narrow, repeat engagement with specific themes (Falk's Professional/Hobbyist).","concentrated affinity × depth"],
-  ["Experience-Seeker","After the highlights — samples many stories briefly, rarely finishing.","broad × light / low completion"],
-  ["Recharger","Contemplative; lingers on a few introspective stories at a slow pace.","few × slow × introspective"],
+ "Falk visitor identities":[
+  ["Explorer","Curiosity-driven; ranges broadly across themes with genuine engagement.","broad affinity and engagement depth"],
+  ["Hobbyist","Deep, narrow, repeat engagement with specific themes (Falk's Professional/Hobbyist).","concentrated affinity and depth"],
+  ["Experience-Seeker","After the highlights, samples many stories briefly, rarely finishing.","broad and light / low completion"],
+  ["Recharger","Contemplative; lingers on a few introspective stories at a slow pace.","few and slow and introspective"],
   ["Facilitator","A social / accompanied visit, enabling others' experience.","an explicit social signal"],
  ],
- "Pekarik — experience preference":[
-  ["object","Drawn to the artefacts and media themselves — photographs, objects.","medium facets dominate affinity"],
+ "Pekarik experience preference":[
+  ["object","Drawn to the artefacts and media themselves, photographs, objects.","medium facets dominate affinity"],
   ["cognitive","Wants to understand the history and the facts.","theme / time / place facets"],
   ["introspective","Seeks personal reflection and individual testimony.","personal-story / person facets, personal connection"],
   ["social","Values stories that connect people.","a social demographic signal"],
  ],
- "Engagement style — from behaviour":[
+ "Engagement style":[
   ["deep_reader","Lingers and finishes what they start.","high dwell + completion"],
   ["completionist","Works through many stories to completion.","high completion across many views"],
-  ["skimmer","Samples many stories briefly.","low dwell × many views"],
+  ["skimmer","Samples many stories briefly.","low dwell and many views"],
   ["sampler","Browses at a moderate pace.","mixed / moderate signals"],
-  ["contemplative","Slow, reflective reading of a select few.","high dwell × few × narrow"],
+  ["contemplative","Slow, reflective reading of a select few.","high dwell and few and narrow"],
  ],
 };
 const METHODS={
- "Scoring signals — each normalised to 0…1":[
+ "Scoring signals (each scored 0 to 1)":[
   ["semantic","Cosine similarity to the visitor's taste centroid (their whole history).","semantic"],
-  ["affinity","Item-kNN: max similarity to ANY one liked item — stays sharp for multi-interest visitors where the centroid blurs.","affinity"],
+  ["affinity","Item-kNN: max similarity to ANY one liked item, stays sharp for multi-interest visitors where the centroid blurs.","affinity"],
   ["tag","Affinity-weighted overlap between the visitor's tags and the content's expert tags.","tag"],
-  ["recency","Closeness to the MOST-RECENT view — sequence awareness ('more like what you just read').","recency"],
+  ["recency","Closeness to the MOST-RECENT view, sequence awareness ('more like what you just read').","recency"],
   ["aversion","Penalty (negative weight) for themes of content the visitor abandoned.","aversion"],
-  ["geo","Proximity to the request's GPS location — an independent filter, never folded into tags.","geo"],
+  ["geo","Proximity to the request's GPS location, an independent filter, never folded into tags.","geo"],
  ],
  "Ranking & exploration":[
   ["weighted fusion","The signals are combined by weight into one relevance score (explainable breakdown).",null],
   ["MMR diversity","Greedy re-rank that avoids returning ten near-identical stories.",null],
-  ["distractor","One deliberately off-profile novelty item at slot 3–4 — exploration / serendipity.",null],
+  ["distractor","One deliberately off-profile novelty item at slot 3–4, exploration / serendipity.",null],
   ["contextual bandit","Optional LEARNED policy (LinUCB) that learns the fusion weights from engagement; its prior is exactly the static weights, so it starts safe and adapts.",null],
  ],
  "User model & segments":[
-  ["engagement strength","Dwell vs reading-time estimate + completion + revisits → a continuous like/dislike, not a binary click.",null],
+  ["engagement strength","Dwell vs reading-time estimate + completion + revisits then a continuous like/dislike, not a binary click.",null],
   ["cold-start","Survey persona + demographics seed the model; a diverse fallback means recommendations are never empty.",null],
-  ["clustering","k-means or fuzzy-c-means over tag-affinity → explainable visitor segments (the centroid is a readable tag profile).",null],
+  ["clustering","k-means or fuzzy-c-means over tag-affinity then explainable visitor segments (the centroid is a readable tag profile).",null],
  ],
 };
 async function renderPersonas(v){
-  v.append(el("div",{class:"card small mut"},"How the engine reads a visitor — grounded in museum-visitor research: Falk (2009) visit identities and Pekarik, Doering & Karns (1999) experience preferences. The type comes from breadth of interest × engagement depth × pace; every persona claim carries the evidence that produced it (Tintarev & Masthoff scrutability)."));
+  v.append(el("div",{class:"card small mut"},"How the engine reads a visitor, grounded in museum-visitor research: Falk (2009) visit identities and Pekarik, Doering & Karns (1999) experience preferences. The type comes from breadth of interest, engagement depth, and pace; every persona claim carries the evidence that produced it (Tintarev & Masthoff scrutability)."));
   for(const [title,rows] of Object.entries(PERSONAS)){
+    const isFalk=title.indexOf("Falk")===0;
     const c=el("div",{class:"card"});c.append(cardhead(title));
     rows.forEach(([name,desc,how],i)=>c.append(el("div",{class:"row",style:`align-items:flex-start;gap:14px;padding:10px 0;${i?'border-top:1px solid var(--line)':''}`},
-      el("span",{class:"pill bandit",style:"min-width:128px;text-align:center"},name),
+      isFalk?personaPill(name,name,"min-width:128px;text-align:center"):el("span",{class:"pill bandit",style:"min-width:128px;text-align:center"},name),
       el("div",{style:"flex:1"},el("div",{},desc),el("div",{class:"small mut",style:"margin-top:2px"},"inferred from "+how)))));
     v.append(c);
   }
