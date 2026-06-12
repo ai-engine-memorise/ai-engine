@@ -139,6 +139,30 @@ def test_demographics_reach_user_model():
     assert any(k.startswith("person_who") for k in um["tag_affinity"])  # cold-start bridge live
 
 
+def test_policy_reports_mode_and_prior():
+    client = _client()
+    p = client.get("/api/policy").json()["result"]
+    assert p["mode"] == "static" and p["trained"] is False
+    assert p["feature_order"][0] == "semantic"
+    assert p["prior"] == p["theta"]                  # untrained -> theta == prior weights
+
+
+def test_metrics_counts_serves_and_ingests():
+    client = _client()
+    ts = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+    client.post("/api/ingest", json=[_view("CONTENT_VIEW_STARTED", "101", ts)])
+    client.get("/api/recommend", params={"user_id": "u1"})
+    m = client.get("/api/metrics").json()["result"]
+    assert m["ingests"] >= 1 and m["recommends"] >= 1
+    assert "cold_rate" in m and "avg_pool" in m
+
+
+def test_inspector_page_served():
+    client = _client()
+    r = client.get("/inspector")
+    assert r.status_code == 200 and "AI-Engine Inspector" in r.text
+
+
 def test_ingest_requires_api_key_when_set(monkeypatch):
     monkeypatch.setenv("INGEST_API_KEY", "secret")
     client = _client()

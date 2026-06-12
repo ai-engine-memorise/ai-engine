@@ -141,6 +141,20 @@ def _load_cluster_model() -> Optional[dict]:
 def make_router(components: Components) -> APIRouter:
     router = APIRouter(prefix="/api", tags=["Recsys"])
     c = components
+    # in-process counters for the inspector panel (v1; Prometheus /metrics is the prod upgrade)
+    metrics = {"ingests": 0, "recommends": 0, "cold": 0, "warm": 0,
+               "pool_total": 0, "distractor_requested": 0, "distractor_placed": 0}
+
+    def _record(rec_out: dict) -> None:
+        metrics["recommends"] += 1
+        diag = rec_out.get("diagnostics") or {}
+        metrics["cold" if rec_out.get("strategy") == "cold" else "warm"] += 1
+        metrics["pool_total"] += int(diag.get("pool_size") or 0)
+        d = diag.get("distractor")
+        if isinstance(d, dict):
+            metrics["distractor_requested"] += 1
+            if d.get("content_id"):
+                metrics["distractor_placed"] += 1
 
     @router.post("/ingest", dependencies=[Depends(_require_api_key)])
     def ingest(payload: Union[dict, list] = Body(...)) -> dict:
@@ -155,6 +169,7 @@ def make_router(components: Components) -> APIRouter:
         for u in users:
             demographics = c.demographics.get_demographics(u)
             c.updater.refresh(u, c.event_buffer, now=now, demographics=demographics)
+        metrics["ingests"] += len(events)
         return {"status": "ok", "ingested": len(events), "users": sorted(users)}
 
     @router.get("/recommend")
@@ -176,6 +191,7 @@ def make_router(components: Components) -> APIRouter:
         request_id = uuid4().hex
         out["request_id"] = request_id   # app echoes this on CONTENT_VIEW -> joins impression to outcome
         c.event_log.log_served(_served_record(request_id, user_id, out["items"], out, filter))
+        _record(out)
         return {"result": out}
 
     @router.get("/usermodel", dependencies=[Depends(_require_api_key)])
@@ -218,7 +234,71 @@ def make_router(components: Components) -> APIRouter:
         model = _load_cluster_model()
         if not model:
             return {"result": None, "detail": "CLUSTER_MODEL_PATH not set / file missing"}
-        return {"result": {"profiles": model.get("profiles", [])}}
+        return {"result": {"method": model.get("method", "kmeans"), "profiles": model.get("profiles", [])}}
+
+    @router.get("/policy")
+    def policy() -> dict:
+        """The ranking policy: mode + bandit θ vs its prior (the static fusion weights)."""
+        from .ranking.bandit import LinearBandit, FEATURE_ORDER
+        cfg = c.cfg
+        prior_w = {n: getattr(cfg.fusion, n, 0.0) for n in FEATURE_ORDER}
+        prior = [prior_w[n] for n in FEATURE_ORDER]
+        theta, trained = prior, False
+        path = os.getenv("BANDIT_STATE_PATH")
+        if path and os.path.exists(path):
+            import json
+            try:
+                with open(path, encoding="utf-8") as fh:
+                    theta = LinearBandit.from_dict(json.load(fh)).theta()
+                trained = True
+            except Exception:
+                pass
+        return {"result": {
+            "mode": cfg.ranking_mode, "feature_order": list(FEATURE_ORDER),
+            "prior": prior, "theta": theta, "trained": trained,
+            "alpha": cfg.bandit_alpha, "ridge": cfg.bandit_ridge, "explore": cfg.bandit_explore,
+        }}
+
+    @router.get("/metrics")
+    def metrics_endpoint() -> dict:
+        """In-process serving counters for the inspector (not Prometheus)."""
+        recs = metrics["recommends"] or 1
+        return {"result": {
+            **metrics,
+            "cold_rate": round(metrics["cold"] / recs, 4),
+            "avg_pool": round(metrics["pool_total"] / recs, 2),
+            "distractor_rate": round(metrics["distractor_placed"] / (metrics["distractor_requested"] or 1), 4),
+        }}
+
+    @router.get("/served/recent", dependencies=[Depends(_require_api_key)])
+    def served_recent(n: int = Query(default=50, ge=1, le=500)) -> dict:
+        """Tail of the durable served-impression log (PII -> guarded). Needs EVENT_LOG_DIR."""
+        import glob
+        import json
+        base = os.getenv("EVENT_LOG_DIR")
+        if not base:
+            return {"result": [], "detail": "EVENT_LOG_DIR not set"}
+        try:
+            import pyarrow.parquet as pq
+        except ImportError:
+            return {"result": [], "detail": "pyarrow not installed"}
+        rows: list = []
+        for f in glob.glob(os.path.join(base, "served", "**", "*.parquet"), recursive=True):
+            try:
+                rows.extend(pq.read_table(f).to_pylist())
+            except Exception:
+                continue
+        rows.sort(key=lambda r: r.get("ts") or "", reverse=True)
+        out = []
+        for r in rows[:n]:
+            items = r.get("items")
+            if isinstance(items, str):
+                try:
+                    items = json.loads(items)
+                except Exception:
+                    items = []
+            out.append({**r, "items": items})
+        return {"result": out}
 
     @router.post("/recommend/preview")
     def recommend_preview(
@@ -263,6 +343,15 @@ def create_app(components: Optional[Components] = None) -> FastAPI:
     @app.get("/health", tags=["Health"])
     def health() -> dict:
         return {"status": "ok"}
+
+    @app.get("/inspector", tags=["Inspector"])
+    def inspector():
+        from fastapi.responses import HTMLResponse
+        path = os.path.join(os.path.dirname(__file__), "static", "inspector.html")
+        if not os.path.exists(path):
+            return HTMLResponse("<h1>inspector.html missing</h1>", status_code=404)
+        with open(path, encoding="utf-8") as fh:
+            return HTMLResponse(fh.read())
 
     return app
 
