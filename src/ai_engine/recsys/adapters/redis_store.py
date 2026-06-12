@@ -67,3 +67,15 @@ class RedisUserModelStore:
 
     def save_signals(self, signals: UserSignals) -> None:
         self.client.set(self._key(signals.user_id), signals.model_dump_json(), ex=self.ttl)
+
+    def iter_signals(self) -> list[UserSignals]:
+        """All materialized user models (for cohort-wide content statistics)."""
+        out: list[UserSignals] = []
+        for key in self.client.scan_iter(match=f"{self.prefix}:*"):
+            raw = self.client.get(key)
+            if raw:
+                try:
+                    out.append(UserSignals.model_validate_json(raw))
+                except Exception:
+                    pass
+        return out

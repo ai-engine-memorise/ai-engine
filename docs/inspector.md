@@ -15,7 +15,8 @@ dive, driven by the `user_id` field) — full visibility at both levels.
 **Across users**
 | Tab | Source | Shows |
 |---|---|---|
-| **Cohort** | `GET /api/clusters` | cluster cards: size bar (share of visitors), Falk hint, breadth, top tags (k-means or fcm) |
+| **Cohort** | `GET /api/clusters` | cluster cards: size bar (share of visitors), Falk hint, breadth, top tags (k-means or fcm), expandable member-user list (click a user to open it) |
+| **Content** | `GET /api/content/stats` | content seen across visitors (views / liked / disliked / like-rate), popular themes, and each cluster's content preferences |
 | **Policy** | `GET /api/policy` | bandit **prior θ₀ vs learned θ** per feature + the learned shift; mode, α, ridge |
 | **Traffic** | `GET /api/metrics`, `GET /api/served/recent` | counters (ingests, recommends, cold-rate, avg pool, distractor-rate) + recent served-impression tail |
 

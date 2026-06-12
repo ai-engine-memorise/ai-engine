@@ -114,6 +114,9 @@ class InMemoryUserModelStore:
     def save_signals(self, signals: UserSignals) -> None:
         self._signals[signals.user_id] = signals
 
+    def iter_signals(self) -> list:
+        return list(self._signals.values())
+
 
 class InMemoryEmbeddingModel:
     """Deterministic text -> vector (hash buckets). For cold-start / profile paths

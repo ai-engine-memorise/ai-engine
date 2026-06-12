@@ -176,7 +176,7 @@ function valueBars(pairs,{signed=false,max=null}={}){
 }
 
 const GROUPS=[
-  {label:"Across users",tabs:{Cohort:renderCohort,Policy:renderPolicy,Traffic:renderTraffic}},
+  {label:"Across users",tabs:{Cohort:renderCohort,Content:renderContent,Policy:renderPolicy,Traffic:renderTraffic}},
   {label:"Within user", tabs:{Request:renderRequest,"User model":renderUser,History:renderHistory}},
   {label:"Reference",   tabs:{Personas:renderPersonas}},
 ];
@@ -251,6 +251,33 @@ async function renderTraffic(v){
       v.append(el("div",{class:"card"},cardhead("Recent served impressions"),tbl));
     }else v.append(el("div",{class:"empty"},"No served impressions yet, set ",el("code",{},"EVENT_LOG_DIR")," and serve a request."));
   }catch(e){v.append(el("div",{class:"empty"},"served log: "+e));}
+}
+
+async function renderContent(v){
+  let r;try{r=await api("/api/content/stats");}catch(e){v.append(el("div",{class:"card err"},String(e)+"  (set X-API-Key if INGEST_API_KEY is on)"));return;}
+  if(!r||!r.users){v.append(el("div",{class:"empty"},"No visitor data yet. Ingest some events first."));return;}
+  v.append(el("div",{class:"row small mut",style:"margin-bottom:12px"},`${r.users} visitors / ${r.content.length} content items seen`));
+  const tbl=el("table");
+  tbl.append(el("tr",{},el("th",{},"content"),el("th",{},"views"),el("th",{},"liked"),el("th",{},"disliked"),el("th",{style:"width:200px"},"like rate")));
+  for(const x of r.content)tbl.append(el("tr",{},
+    el("td",{},el("div",{},x.title||x.content_id),x.title?el("div",{class:"small mut num"},x.content_id):""),
+    el("td",{class:"num"},x.views),
+    el("td",{class:"num",style:x.likes?"color:var(--c-affinity);font-weight:600":""},x.likes||""),
+    el("td",{class:"num",style:x.dislikes?"color:var(--c-aversion);font-weight:600":""},x.dislikes||""),
+    el("td",{},el("div",{class:"barwrap",style:"max-width:200px"},el("div",{class:"seg",style:`width:${100*x.like_rate}%;background:var(--c-affinity)`})))));
+  v.append(el("div",{class:"card"},cardhead("Content seen across visitors (most popular first)"),tbl));
+  if(r.themes&&r.themes.length)v.append(el("div",{class:"card"},cardhead("Popular themes across the cohort"),valueBars(r.themes)));
+  if(r.clusters&&r.clusters.length){
+    v.append(el("div",{class:"eyebrow",style:"margin-top:8px"},"Content preferences by cluster"));
+    const g=el("div",{class:"grid",style:"grid-template-columns:repeat(auto-fill,minmax(265px,1fr))"});
+    for(const cl of r.clusters)g.append(el("div",{class:"card",style:"margin:0"},
+      el("h3",{class:"mont",style:"margin:0 0 9px;font-size:15px"},"Cluster "+cl.cluster),
+      el("div",{class:"small mut",style:"margin-bottom:4px"},"top liked content"),
+      el("div",{style:"margin-bottom:9px"},(cl.top_content&&cl.top_content.length)?cl.top_content.map(t=>el("div",{class:"small",style:"padding:1px 0"},(t.title||t.content_id)+" ",el("span",{class:"mut"},`(${t.likes} liked)`))):el("span",{class:"small mut"},"no likes yet")),
+      el("div",{class:"small mut",style:"margin-bottom:4px"},"top themes"),
+      el("div",{},(cl.top_themes||[]).map(t=>el("span",{class:"tag"},t.label)))));
+    v.append(g);
+  }
 }
 
 /* ===== WITHIN USER ===== */

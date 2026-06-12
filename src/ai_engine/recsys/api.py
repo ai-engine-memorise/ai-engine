@@ -309,6 +309,65 @@ def make_router(components: Components) -> APIRouter:
             return {"result": None, "detail": "CLUSTER_MODEL_PATH not set / file missing"}
         return {"result": {"method": model.get("method", "kmeans"), "profiles": model.get("profiles", [])}}
 
+    @router.get("/content/stats", dependencies=[Depends(_require_api_key)])
+    def content_stats(limit: int = Query(default=30, ge=1, le=200)) -> dict:
+        """Cohort-wide content engagement: which items are seen / liked / abandoned across
+        all visitors, popular themes, and each cluster's content preferences. PII-guarded."""
+        sigs = c.model_store.iter_signals() if hasattr(c.model_store, "iter_signals") else []
+        views: dict[str, int] = {}
+        likes: dict[str, int] = {}
+        dislikes: dict[str, int] = {}
+        theme: dict[str, float] = {}
+        for s in sigs:
+            for cid in s.viewed:
+                views[cid] = views.get(cid, 0) + 1
+            for cid in s.positives:
+                likes[cid] = likes.get(cid, 0) + 1
+            for cid in s.negatives:
+                dislikes[cid] = dislikes.get(cid, 0) + 1
+            for k, w in s.tag_affinity.items():
+                theme[k] = theme.get(k, 0.0) + w
+
+        all_cids = list(set(views) | set(likes) | set(dislikes))
+        titles = {k: v.title for k, v in c.content_store.get(all_cids).items()} if all_cids else {}
+        lbl = lambda k: k.split(":", 1)[1] if ":" in k else k
+
+        content = [{
+            "content_id": cid, "title": titles.get(cid, ""),
+            "views": views.get(cid, 0), "likes": likes.get(cid, 0), "dislikes": dislikes.get(cid, 0),
+            "like_rate": round(likes.get(cid, 0) / views[cid], 3) if views.get(cid) else 0.0,
+        } for cid in all_cids]
+        content.sort(key=lambda r: (r["views"], r["likes"]), reverse=True)
+
+        themes = sorted(([lbl(k), round(w, 3)] for k, w in theme.items()),
+                        key=lambda kv: kv[1], reverse=True)[:15]
+
+        clusters = []
+        model = _load_cluster_model()
+        if model:
+            by_user = {s.user_id: s for s in sigs}
+            for p in model.get("profiles", []):
+                cl: dict[str, int] = {}
+                clt: dict[str, float] = {}
+                for u in p.get("members", []):
+                    s = by_user.get(u)
+                    if not s:
+                        continue
+                    for cid in s.positives:
+                        cl[cid] = cl.get(cid, 0) + 1
+                    for k, w in s.tag_affinity.items():
+                        clt[k] = clt.get(k, 0.0) + w
+                clusters.append({
+                    "cluster": p["cluster"], "size": p.get("size"),
+                    "top_content": [{"content_id": cid, "title": titles.get(cid, ""), "likes": n}
+                                    for cid, n in sorted(cl.items(), key=lambda kv: kv[1], reverse=True)[:5]],
+                    "top_themes": [{"label": lbl(k), "weight": round(w, 3)}
+                                   for k, w in sorted(clt.items(), key=lambda kv: kv[1], reverse=True)[:6]],
+                })
+
+        return {"result": {"users": len(sigs), "content": content[:limit],
+                           "themes": themes, "clusters": clusters}}
+
     @router.get("/policy")
     def policy() -> dict:
         """The ranking policy: mode + bandit θ vs its prior (the static fusion weights)."""

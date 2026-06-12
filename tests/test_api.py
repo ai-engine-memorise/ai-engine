@@ -203,6 +203,23 @@ def test_metrics_counts_serves_and_ingests():
     assert "cold_rate" in m and "avg_pool" in m
 
 
+def test_content_stats_aggregates_cohort():
+    client = _client()
+    ts = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+    client.post("/api/ingest", json=[
+        _view("CONTENT_VIEW_STARTED", "101", ts),
+        _view("CONTENT_VIEW_ENDED", "101", ts, reason="next_button", dwell=120),  # liked
+        _view("CONTENT_VIEW_STARTED", "201", ts),
+        _view("CONTENT_VIEW_ENDED", "201", ts, reason="abandon", dwell=1),         # disliked
+    ])
+    r = client.get("/api/content/stats").json()["result"]
+    assert r["users"] >= 1
+    by = {x["content_id"]: x for x in r["content"]}
+    assert by["101"]["views"] >= 1 and by["101"]["likes"] >= 1
+    assert by["201"]["dislikes"] >= 1
+    assert r["themes"]                                    # popular themes surfaced
+
+
 def test_inspector_page_served():
     client = _client()
     r = client.get("/inspector")
