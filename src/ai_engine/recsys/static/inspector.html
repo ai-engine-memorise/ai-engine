@@ -135,6 +135,7 @@ const base=()=>($("#base").value||"http://localhost:8010").replace(/\/$/,"");
 const headers=()=>{const h={};const k=$("#key").value.trim();if(k)h["X-API-Key"]=k;return h;};
 async function api(path){const r=await fetch(base()+path,{headers:headers()});if(!r.ok)throw new Error(r.status+" "+r.statusText+" — "+path);return (await r.json()).result;}
 const fmt=x=>(typeof x==="number")?(Math.round(x*1000)/1000):x;
+const mdInline=t=>String(t??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>");
 const head=(v,t)=>v.append(el("div",{class:"eyebrow"},t));
 const cardhead=t=>el("h3",{class:"cardhead"},t);
 
@@ -269,7 +270,7 @@ async function renderUser(v){
       el("span",{class:"pill neutral"},exp.engagement_style),
       exp.is_cold?el("span",{class:"pill cold"},"cold"):el("span",{class:"pill warm"},"warm")),
     vt.rationale?el("p",{class:"mut small",style:"margin:.6rem 0 0"},"“"+vt.rationale+"” · confidence "+fmt(vt.confidence)):"",
-    el("p",{style:"margin:.55rem 0 0;line-height:1.6"},exp.summary||"")));
+    el("p",{style:"margin:.55rem 0 0;line-height:1.6",html:mdInline(exp.summary)})));
   if(exp.trajectory&&exp.trajectory.length)v.append(el("div",{class:"card"},el("b",{},"Trajectory   "),el("span",{class:"mut"},exp.trajectory.join("   →   "))));
   if(exp.interests&&exp.interests.length)v.append(el("div",{class:"card"},cardhead("Interests"),valueBars(exp.interests.map(i=>[i.label+(i.evidence&&i.evidence.length?` · ${i.evidence.length} read`:""),i.weight]))));
   if(exp.aversions&&exp.aversions.length)v.append(el("div",{class:"card"},cardhead("Aversions"),valueBars(exp.aversions.map(i=>[i.label,i.weight]),{signed:true})));

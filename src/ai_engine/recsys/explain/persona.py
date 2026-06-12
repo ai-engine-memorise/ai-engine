@@ -102,22 +102,25 @@ def _experience_preference(affinity: dict[str, float], demographics: dict) -> st
 
 
 def _visitor_type(breadth: float, b: dict, introspective_share: float,
-                  cognitive_share: float, demographics: dict) -> VisitorType:
+                  cognitive_share: float, demographics: dict, *, warm: bool = False) -> VisitorType:
     dwell = b.get("avg_dwell_ratio", 0.0)
     completion = b.get("completion_rate", 0.0)
     n = b.get("n_views", 0)
-    depth = max(dwell, b.get("depth", 0.0))
+    # engagement depth; a warm user with affinity but no dwell data still counts as engaged
+    # (floor), so the type comes from breadth — NOT from the Facilitator fallback.
+    depth = max(dwell, b.get("depth", 0.0), 0.35 if warm else 0.0)
     few = max(0.0, 1.0 - (max(n - 1, 0) / 6.0))         # 1 at a single view -> 0 by ~7 views
-    many = min(n / 5.0, 1.0)
+    many = min(n / 5.0, 1.0) if n else 0.4
     pc = str(demographics.get("personal_connection", "")).lower()
-    social_hint = 0.6 if pc in {"family", "group", "with_family", "social"} else 0.1
+    social_hint = 0.6 if pc in {"family", "group", "with_family", "social"} else 0.0
 
     scores = {
-        # Falk identity types (interpretable heuristics over breadth × depth × pace)
+        # Falk identity types (interpretable heuristics over breadth × depth × pace).
+        # Facilitator needs an ACTUAL social signal — it is never the default winner.
         "Hobbyist": (1.0 - breadth) * depth * (0.4 + 0.6 * cognitive_share) * (0.4 + 0.6 * many),
         "Explorer": breadth * depth,
-        "Experience-Seeker": breadth * (1.0 - min(dwell, completion)),
-        "Recharger": depth * (1.0 - breadth) * few * (0.5 + 0.5 * introspective_share),
+        "Experience-Seeker": breadth * (1.0 - min(dwell, completion)) * (0.4 + 0.6 * many),
+        "Recharger": depth * (1.0 - breadth) * few * (0.4 + 0.6 * introspective_share),
         "Facilitator": social_hint,
     }
     ranked = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
@@ -192,7 +195,7 @@ def explain_user(signals: UserSignals, contents: Optional[dict[str, Content]] = 
         engagement_style=_engagement_style(signals.behavior, breadth),
         experience_preference=_experience_preference(aff, signals.demographics),
         visitor_type=_visitor_type(breadth, signals.behavior, introspective_share,
-                                   cognitive_share, signals.demographics),
+                                   cognitive_share, signals.demographics, warm=bool(aff)),
         trajectory=trajectory[:6],
         demographics=signals.demographics,
     )
