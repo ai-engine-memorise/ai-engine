@@ -90,9 +90,9 @@ def main() -> None:
             "persona": p["name"], "n": len(recs),
             "mean_relevance": round(mean, 2), "precision_at_k": round(prec, 2),
             "items": [
-                {"content_id": recs[i]["content_id"],
+                {"content_id": recs[i]["id"],
                  "title": (recs[i].get("content") or {}).get("title", ""),
-                 "final_score": round(recs[i]["final_score"], 3),
+                 "relevance_score": round(recs[i]["relevance_score"], 3),
                  **{kk: verdicts[i][kk] for kk in ("score", "reason")}}
                 for i in range(len(verdicts))
             ],

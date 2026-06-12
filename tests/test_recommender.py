@@ -78,6 +78,25 @@ def test_neutral_view_excluded_via_viewed_history():
     assert "B1" not in _ids(rec)              # viewed -> de-duplicated out
 
 
+def test_affinity_surfaces_both_interests_of_a_multi_interest_user():
+    # user likes Forced-Labor (A1) AND Liberation (C1) — two distinct tastes.
+    # item-kNN affinity keeps BOTH siblings (A-axis and C-axis) above unliked Family.
+    events = (
+        view_events("u1", "A1", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=2))
+        + view_events("u1", "C1", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
+    )
+    rec = Recommender(_store(), InMemoryUserModelStore(), CFG).recommend_for_signals(_signals(events))
+    recs = [it for it in rec.items if it.kind == "recommendation"]
+    assert all("affinity" in it.breakdown for it in recs)
+    # compare RELEVANCE (final_score), not MMR position — MMR may interleave a Family
+    # item for diversity, but on relevance both liked-axis siblings beat unliked Family.
+    score = {it.content_id: it.final_score for it in recs}
+    best_family = max(score.get(c, 0.0) for c in ("B1", "B2", "B3"))
+    assert score.get("A3", 0.0) > best_family      # Forced-Labor sibling (near liked A1)
+    assert score.get("C2", 0.0) > best_family      # Liberation sibling (near liked C1)
+    assert score["A3"] > 0 and score["C2"] > 0
+
+
 def test_recency_contributes_to_score():
     events = view_events("u1", "A1", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
     rec = Recommender(_store(), InMemoryUserModelStore(), RecConfig()).recommend_for_signals(_signals(events))

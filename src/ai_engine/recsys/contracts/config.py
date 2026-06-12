@@ -11,9 +11,11 @@ class EngagementWeights(BaseModel):
 
 class FusionWeights(BaseModel):
     """How much each scorer contributes to the final fused score. Each scorer -> [0,1]."""
-    semantic: float = 0.45    # similarity to whole-history taste vector
-    tag: float = 0.3
-    recency: float = 0.15     # sequence awareness: similarity to the MOST-RECENT view
+    semantic: float = 0.30    # similarity to whole-history taste CENTROID (blurred over likes)
+    affinity: float = 0.25    # item-kNN: max similarity to ANY one liked item (sharp)
+    tag: float = 0.25
+    recency: float = 0.10     # sequence awareness: similarity to the MOST-RECENT view
+    aversion: float = -0.25   # PENALTY: overlap with disliked themes (negative weight)
     geo: float = 0.0          # off in this slice
     popularity: float = 0.0   # off by default
 

@@ -36,7 +36,7 @@ ai_engine/
     tag.py          # TagGenerator (expert-tag affinity recall)
     geo.py          # GeoGenerator
   ranking/
-    scorers.py      # PURE fns: score_semantic/score_tag/score_geo/score_popularity -> [0,1]
+    scorers.py      # PURE fns: score_semantic/affinity/tag/recency/aversion -> [0,1]
     fusion.py       # PURE fns: weighted_fuse + mmr_rerank
   recommender.py    # orchestrator (constructor-injected EventSource + ContentStore + EmbeddingModel)
   adapters/
@@ -85,8 +85,15 @@ triggers + steps to migrate there: see [`future-hexagonal.md`](./future-hexagona
 
 - **Tags in Qdrant payload + payload index.** Flat `tag_labels` (`facet:label`, KEYWORD index) for
   recall via `Filter(should=...)`. Graded tag ranking done in pure-Python `TagScorer`, not Qdrant.
-- **Rule-based weighted fusion + MMR.** No learned ranker yet — collect impression/click data first.
-  Hard contract: every `Scorer.score` returns `[0,1]` so the weighted sum is valid without rescaling.
+- **Rule-based weighted fusion + MMR.** No learned ranker yet. Hard contract: every `Scorer.score`
+  returns `[0,1]` so the weighted sum is valid without rescaling (fused score may go negative via the
+  `aversion` penalty — that is intentional, only the per-scorer outputs are bounded).
+- **Durable training substrate (the path to a learned ranker / contextual bandit).** With
+  `EVENT_LOG_DIR` set, two append-only Parquet datasets accumulate: `date=*/` (ingested events =
+  reward) and `served/date=*/` (recommendations served = action + context, keyed by `request_id`
+  echoed back on later CONTENT_VIEW events). Joining them yields `(context, action, reward)` tuples —
+  the substrate a contextual bandit (LinUCB/Thompson) would train on to learn the fusion policy and
+  replace the fixed-slot distractor with principled exploration. Not built yet; data collection is live.
 - **Engagement is continuous**, not the current binary `dwell >= estimate`.
 - **Dwell pairing moves out of SQL into the EventSource normalizer**, shared across all 3 sources.
   One contract test asserts every adapter emits identical `InteractionEvent` from equivalent raw.
@@ -111,11 +118,20 @@ Soft negatives: content in `impressions` but never viewed -> negative @ `soft_ne
 Scorers (all -> [0,1]):
 
 ```
-semantic   = (cosine(taste_vec, cand_vec) + 1) / 2
+semantic   = (cosine(taste_centroid, cand_vec) + 1) / 2        # whole-history centroid (blurred)
+affinity   = max_{liked i} (cosine(cand_vec, vec_i)+1)/2 * w_i # item-kNN: max-sim to ANY one like (sharp)
 tag        = Σ user_affinity[l]*cand_tag_weight[l]  /  Σ user_affinity[l]
-geo        = exp(-distance_m / geo_scale)
+recency    = (cosine(recency_vec, cand_vec) + 1) / 2           # closeness to MOST-RECENT view (sequence)
+aversion   = Σ user_aversion[l]*cand_tag_weight[l]  /  Σ user_aversion[l]   # PENALTY (negative weight)
+geo        = exp(-distance_m / geo_scale)            # off by default
 popularity = log1p(views) / log1p(max_views)        # off by default
 ```
+
+Default fusion weights: `semantic 0.30, affinity 0.25, tag 0.25, recency 0.10, aversion -0.25`.
+`affinity` keeps multi-interest users' distinct tastes sharp (centroid alone averages them
+into mush). `aversion` (negative weight) downranks themes of abandoned content. `affinity`
+needs the liked items' vectors — fetched at serve time (one `get_vectors`), NOT stored in the
+user model, so the model doesn't grow with #likes.
 
 Fusion + MMR:
 

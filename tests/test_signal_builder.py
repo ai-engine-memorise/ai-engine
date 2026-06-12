@@ -34,6 +34,8 @@ def test_quick_abandon_becomes_negative():
     sig = _build(events)
     assert "B1" in sig.negatives
     assert "B1" not in sig.positives
+    # the abandoned content's THEME becomes an aversion (B1 = Family) -> downranks later
+    assert sig.tag_aversion.get("theme_what:family", 0) > 0
 
 
 def test_recency_decays_weight():

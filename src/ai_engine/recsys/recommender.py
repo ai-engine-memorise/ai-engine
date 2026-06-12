@@ -15,7 +15,7 @@ from .contracts.models import (
     UserSignals,
 )
 from .contracts.ports import ContentStore, UserModelStore
-from .ranking.scorers import score_semantic, score_tag, score_recency
+from .ranking.scorers import score_semantic, score_affinity, score_tag, score_recency, score_aversion
 from .ranking.fusion import weighted_fuse, mmr_rerank
 
 
@@ -79,14 +79,25 @@ class Recommender:
         contents = self.content_store.get(candidate_ids)
         vectors = self.content_store.get_vectors(candidate_ids)
 
+        # item-kNN like signal: fetch the liked items' vectors once (relative weights).
+        # kept out of the stored user model so it doesn't grow with #likes — read at serve.
+        liked: list[tuple[float, list[float]]] = []
+        if signals.positives:
+            lv = self.content_store.get_vectors(list(signals.positives))
+            mx = max(signals.positives.values()) or 1.0
+            liked = [(signals.positives[cid] / mx, lv[cid]) for cid in signals.positives if cid in lv]
+
         scored: list[ScoredCandidate] = []
         for cid in candidate_ids:
             content = contents.get(cid)
             vec = vectors.get(cid)
             sem = score_semantic(signals, vec)
+            aff = score_affinity(vec, liked)     # max-sim to any one liked item (sharp)
             tag = score_tag(signals, content)
             rec = score_recency(signals, vec)   # sequence: closeness to most-recent view
-            fused, breakdown = weighted_fuse({"semantic": sem, "tag": tag, "recency": rec}, cfg.fusion)
+            av = score_aversion(signals, content)   # penalty for disliked themes (negative weight)
+            fused, breakdown = weighted_fuse(
+                {"semantic": sem, "affinity": aff, "tag": tag, "recency": rec, "aversion": av}, cfg.fusion)
             scored.append(ScoredCandidate(
                 content_id=cid, final_score=fused, breakdown=breakdown, content=content,
             ))

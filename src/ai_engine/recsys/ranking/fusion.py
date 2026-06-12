@@ -16,8 +16,10 @@ def weighted_fuse(per_scorer: dict[str, float], weights: FusionWeights) -> tuple
     """Return (fused_score, breakdown). breakdown[s] = weight[s] * score[s]."""
     wmap = {
         "semantic": weights.semantic,
+        "affinity": weights.affinity,
         "tag": weights.tag,
         "recency": weights.recency,
+        "aversion": weights.aversion,
         "geo": weights.geo,
         "popularity": weights.popularity,
     }

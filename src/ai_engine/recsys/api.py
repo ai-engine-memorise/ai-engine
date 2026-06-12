@@ -14,6 +14,7 @@ import logging
 import os
 from datetime import datetime, timezone
 from typing import Any, Optional, Union
+from uuid import uuid4
 
 from fastapi import APIRouter, FastAPI, Body, Query, Header, HTTPException, Depends
 from pydantic import BaseModel, Field
@@ -104,6 +105,22 @@ def _dump_items(items, include_content: bool) -> list:
     return out
 
 
+def _served_record(request_id: str, user_id: str, items: list, out: dict, filter: Optional[str]) -> dict:
+    """Compact impression row for the durable served log (training join key).
+    Logs ids/ranks/roles only — content is recoverable from the content store."""
+    distractor = next((it["id"] for it in items if it.get("role") == "distractor"), None)
+    return {
+        "request_id": request_id,
+        "user_id": user_id,
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "strategy": out.get("strategy"),
+        "filter": filter,
+        "cold_start": bool((out.get("diagnostics") or {}).get("cold_start_fallback")),
+        "distractor_id": distractor,
+        "items": [{"id": it["id"], "rank": it["rank"], "role": it["role"]} for it in items],
+    }
+
+
 def make_router(components: Components) -> APIRouter:
     router = APIRouter(prefix="/api", tags=["Recsys"])
     c = components
@@ -135,6 +152,9 @@ def make_router(components: Components) -> APIRouter:
         out = rec.model_dump()
         out["filter"] = filter
         out["items"] = _dump_items(items, include_content)
+        request_id = uuid4().hex
+        out["request_id"] = request_id   # app echoes this on CONTENT_VIEW -> joins impression to outcome
+        c.event_log.log_served(_served_record(request_id, user_id, out["items"], out, filter))
         return {"result": out}
 
     @router.get("/usermodel")
@@ -157,6 +177,9 @@ def make_router(components: Components) -> APIRouter:
         out["filter"] = filter
         out["items"] = _dump_items(items, include_content)
         out["user_model"] = signals.model_dump()
+        request_id = uuid4().hex
+        out["request_id"] = request_id
+        c.event_log.log_served(_served_record(request_id, signals.user_id, out["items"], out, filter))
         return {"result": out}
 
     return router

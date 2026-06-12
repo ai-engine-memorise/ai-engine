@@ -104,6 +104,7 @@ def build_user_signals(
     positives: dict[str, float] = {}
     negatives: dict[str, float] = {}
     tag_affinity: dict[str, float] = {}
+    tag_aversion: dict[str, float] = {}
 
     engaged_ids = set(aggs.keys())
 
@@ -132,6 +133,9 @@ def build_user_signals(
                     tag_affinity[tag.key] = tag_affinity.get(tag.key, 0.0) + positives[cid] * tag.weight
         elif outcome == Outcome.negative:
             negatives[cid] = abs(strength) * decay
+            if content:                       # the THEMES of disliked content -> aversion
+                for tag in content.tags:
+                    tag_aversion[tag.key] = tag_aversion.get(tag.key, 0.0) + negatives[cid] * tag.weight
 
     # soft negatives: shown in an impression set but never engaged
     for e in events:
@@ -182,6 +186,16 @@ def build_user_signals(
         if mx > 0:
             tag_affinity = {k: v / mx for k, v in tag_affinity.items()}
 
+    # same fold + normalize for aversion (negatively-engaged themes)
+    folded_av: dict[str, float] = {}
+    for k, v in tag_aversion.items():
+        folded_av[k.lower()] = folded_av.get(k.lower(), 0.0) + v
+    tag_aversion = folded_av
+    if tag_aversion:
+        mxa = max(tag_aversion.values())
+        if mxa > 0:
+            tag_aversion = {k: v / mxa for k, v in tag_aversion.items()}
+
     # sequence: order viewed content by most-recent interaction first
     ordered = sorted(aggs.items(), key=lambda kv: (kv[1].last_ts or now), reverse=True)
     recent_views = [cid for cid, _ in ordered]
@@ -194,6 +208,7 @@ def build_user_signals(
         viewed=sorted(aggs.keys()),          # full view history (any outcome) for dedup
         recent_views=recent_views,           # sequence awareness
         tag_affinity=tag_affinity,
+        tag_aversion=tag_aversion,
         taste_vector=taste_vector,
         recency_vector=recency_vector,
         demographics=demographics or {},
