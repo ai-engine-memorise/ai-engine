@@ -206,8 +206,9 @@ def make_router(components: Components) -> APIRouter:
         out = exp.model_dump()
         model = _load_cluster_model()
         if model:                                  # place the visitor in a learned segment
-            from .explain.clusters import assign
-            out["cluster"] = assign(sig, model)
+            from .explain.clusters import assign, assign_fuzzy
+            out["cluster"] = (assign_fuzzy(sig, model) if model.get("method") == "fcm"
+                              else assign(sig, model))
         return {"result": out}
 
     @router.get("/clusters", dependencies=[Depends(_require_api_key)])

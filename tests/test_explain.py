@@ -6,7 +6,9 @@ from ai_engine.recsys.signals.signal_builder import build_user_signals
 from ai_engine.recsys.testing.fixtures import make_contents_and_vectors, view_events
 from ai_engine.recsys.explain.persona import explain_user
 from ai_engine.recsys.explain.verbalize import verbalize
-from ai_engine.recsys.explain.clusters import cluster_users, assign
+from ai_engine.recsys.explain.clusters import (
+    cluster_users, assign, cluster_users_fuzzy, assign_fuzzy,
+)
 
 NOW = datetime(2026, 6, 12, 12, 0, 0)
 CFG = RecConfig()
@@ -96,3 +98,44 @@ def test_clusters_separate_narrow_from_broad_with_readable_profiles():
 
 def test_assign_handles_empty_model():
     assert assign(UserSignals(user_id="x"), {"keys": [], "centroids": []})["cluster"] is None
+
+
+# ----- fuzzy c-means: soft membership -------------------------------------- #
+
+def _deep_two_themes(uid):   # deep in BOTH Forced Labor and Family -> spans clusters
+    return _model(uid,
+        view_events(uid, "A1", dwell=140, reason="next_button", base_ts=NOW - timedelta(hours=4))
+        + view_events(uid, "A2", dwell=140, reason="next_button", base_ts=NOW - timedelta(hours=3))
+        + view_events(uid, "B1", dwell=140, reason="next_button", base_ts=NOW - timedelta(hours=2))
+        + view_events(uid, "B2", dwell=140, reason="next_button", base_ts=NOW - timedelta(hours=1)))
+
+
+def test_fuzzy_memberships_sum_to_one():
+    corpus = [_deep_narrow("f1"), _deep_narrow("f2"), _broad_skim("b1")]
+    model = cluster_users_fuzzy(corpus, c=2, seed=1)
+    for mrow in model["memberships"]:
+        assert abs(sum(mrow["membership"].values()) - 1.0) < 1e-6
+    assert model["method"] == "fcm"
+
+
+def test_fuzzy_splits_a_blended_visitor_where_kmeans_cannot():
+    corpus = [
+        _deep_narrow("forced_1"),
+        _model("family_1",
+               view_events("family_1", "B1", dwell=140, reason="next_button", base_ts=NOW - timedelta(hours=2))
+               + view_events("family_1", "B2", dwell=140, reason="next_button", base_ts=NOW - timedelta(hours=1))),
+        _deep_two_themes("blended"),
+    ]
+    fc = cluster_users_fuzzy(corpus, c=2, seed=1)
+    soft = assign_fuzzy(_deep_two_themes("blended2"), fc)
+    assert abs(sum(soft["membership"].values()) - 1.0) < 1e-6
+    # the blended visitor is genuinely split, not crisply in one bucket
+    assert max(soft["membership"].values()) < 0.75
+    # a single-theme visitor IS crisp
+    crisp = assign_fuzzy(_deep_narrow("forced_2"), fc)
+    assert max(crisp["membership"].values()) > 0.85
+
+
+def test_assign_fuzzy_handles_empty_model():
+    out = assign_fuzzy(UserSignals(user_id="x"), {"keys": [], "centroids": []})
+    assert out["dominant"] is None and out["membership"] == {}

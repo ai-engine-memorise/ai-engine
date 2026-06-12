@@ -45,10 +45,19 @@ trajectory still produce a persona (Experience-Seeker / skimmer).
 
 ## Explainable clusters (`explain/clusters.py`)
 
-K-means over the **tag-affinity vectors**. The cluster *is* the explanation: each centroid is a
-tag-weight profile in the taxonomy, so a segment reads as "Forced Labor + Resistance, narrow
-(Hobbyist-like)" rather than an opaque embedding. `assign(signals, model)` places a visitor in the
-nearest cluster and reports the **tags they share with it**. Pure-Python (no sklearn).
+K-means OR fuzzy-c-means over the **tag-affinity vectors**. The cluster *is* the explanation: each
+centroid is a tag-weight profile in the taxonomy, so a segment reads as "Forced Labor + Resistance,
+narrow (Hobbyist-like)" rather than an opaque embedding. Pure-Python (no sklearn).
+
+- **k-means** (`cluster_users` / `assign`) — hard buckets. Simplest.
+- **fuzzy-c-means** (`cluster_users_fuzzy` / `assign_fuzzy`) — **soft membership** (rows sum to 1).
+  Fits Falk's *overlapping* identities: a visitor deep in two themes reads as `c0:0.45 c1:0.55`
+  instead of being forced into one bucket. `m` = fuzziness (2.0 default; →1 approaches k-means).
+
+Compare them on archetypes (incl. a deliberately blended visitor): `python explain/compare_clustering.py`.
+A single-theme visitor is crisp (~0.98) under both; only fuzzy reveals the blended one is split.
+Pick the method at train time (`cluster_train.py --method fcm`); the API assigns with the matching
+function automatically (reads `method` from the saved model).
 
 Offline-trained from the live user models:
 

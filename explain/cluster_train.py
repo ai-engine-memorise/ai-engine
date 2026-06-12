@@ -16,7 +16,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from ai_engine.recsys.contracts.models import UserSignals
-from ai_engine.recsys.explain.clusters import cluster_users
+from ai_engine.recsys.explain.clusters import cluster_users, cluster_users_fuzzy
 
 
 def _gather_from_redis(url: str, prefix: str = "umodel") -> list[UserSignals]:
@@ -36,7 +36,10 @@ def _gather_from_redis(url: str, prefix: str = "umodel") -> list[UserSignals]:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--redis", default=os.getenv("REDIS_URL"))
+    ap.add_argument("--method", choices=("kmeans", "fcm"), default="kmeans",
+                    help="kmeans = hard buckets; fcm = fuzzy soft membership")
     ap.add_argument("--k", type=int, default=4)
+    ap.add_argument("--m", type=float, default=2.0, help="fcm fuzziness")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--out", default=os.getenv("CLUSTER_MODEL_PATH", "./data/clusters.json"))
     args = ap.parse_args()
@@ -47,10 +50,15 @@ def main() -> None:
     if not corpus:
         sys.exit("no user models found in Redis (umodel:*) — serve some traffic first")
 
-    model = cluster_users(corpus, k=args.k, seed=args.seed)
+    if args.method == "fcm":
+        model = cluster_users_fuzzy(corpus, c=args.k, m=args.m, seed=args.seed)
+    else:
+        model = cluster_users(corpus, k=args.k, seed=args.seed)
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
-    # centroids/labels are bulky and not needed by the API; keep the readable profiles + space
-    persisted = {"keys": model["keys"], "centroids": model["centroids"], "profiles": model["profiles"]}
+    # keep what the API needs: profiles + the geometry to assign new visitors + method/m
+    persisted = {"keys": model["keys"], "centroids": model["centroids"],
+                 "profiles": model["profiles"], "method": model.get("method", "kmeans"),
+                 "m": model.get("m", 2.0)}
     with open(args.out, "w", encoding="utf-8") as fh:
         json.dump(persisted, fh, indent=2, ensure_ascii=False)
 
