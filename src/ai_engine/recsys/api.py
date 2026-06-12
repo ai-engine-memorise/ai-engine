@@ -227,6 +227,42 @@ def make_router(components: Components) -> APIRouter:
                               else assign(sig, model))
         return {"result": out}
 
+    @router.get("/usermodel/history", dependencies=[Depends(_require_api_key)])
+    def usermodel_history(
+        user_id: str = Query(..., examples=["u1"]),
+        limit: int = Query(default=200, ge=1, le=2000),
+    ) -> dict:
+        """Raw visitor activity behind the model: the event timeline (views, dwell,
+        end-reason, ts) + a per-content aggregate (visits/dwell/outcome). PII -> guarded."""
+        from .signals.signal_builder import aggregate_views
+        events = sorted(c.event_buffer.fetch_events(user_id), key=lambda e: e.ts)  # type: ignore[attr-defined]
+        sig = c.model_store.get_signals(user_id)
+        pos = set(sig.positives) if sig else set()
+        neg = set(sig.negatives) if sig else set()
+        aggs = aggregate_views(events)
+        titles = {k: v.title for k, v in c.content_store.get(list(aggs.keys())).items()} if aggs else {}
+        outcome = lambda cid: "positive" if cid in pos else ("negative" if cid in neg else "neutral")
+
+        agg_rows = [{
+            "content_id": cid, "title": titles.get(cid, ""), "visits": a.visits,
+            "dwell_seconds": a.dwell_seconds,
+            "end_reason": a.end_reason.value if a.end_reason else None,
+            "last_ts": a.last_ts.isoformat() if a.last_ts else None,
+            "outcome": outcome(cid),
+        } for cid, a in aggs.items()]
+        agg_rows.sort(key=lambda r: r["last_ts"] or "", reverse=True)
+
+        ev_rows = [{
+            "ts": e.ts.isoformat() if e.ts else None, "event": e.event,
+            "content_id": e.content_id, "title": titles.get(e.content_id, ""),
+            "dwell_seconds": e.dwell_seconds,
+            "end_reason": e.end_reason.value if e.end_reason else None,
+            "request_id": e.request_id, "session_id": e.session_id,
+        } for e in sorted(events, key=lambda e: e.ts, reverse=True)[:limit]]
+
+        return {"result": {"user_id": user_id, "event_count": len(events),
+                           "aggregates": agg_rows, "events": ev_rows}}
+
     @router.get("/clusters", dependencies=[Depends(_require_api_key)])
     def clusters() -> dict:
         """The explainable visitor segments (offline-trained). Each cluster is described

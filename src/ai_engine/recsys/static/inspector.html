@@ -165,7 +165,8 @@ function valueBars(pairs,{signed=false,max=null}={}){
 
 const GROUPS=[
   {label:"Across users",tabs:{Cohort:renderCohort,Policy:renderPolicy,Traffic:renderTraffic}},
-  {label:"Within user", tabs:{Request:renderRequest,"User model":renderUser}},
+  {label:"Within user", tabs:{Request:renderRequest,"User model":renderUser,History:renderHistory}},
+  {label:"Reference",   tabs:{Personas:renderPersonas}},
 ];
 const ALL=Object.assign({},...GROUPS.map(g=>g.tabs));
 const SCOPE={};GROUPS.forEach(g=>Object.keys(g.tabs).forEach(t=>SCOPE[t]=g.label));
@@ -279,6 +280,93 @@ async function renderUser(v){
       el("div",{class:"small"},"dominant cluster "+(cl.dominant??cl.cluster)),
       cl.membership?valueBars(Object.entries(cl.membership).map(([k,p])=>["cluster "+k,p]),{max:1}):"",
       el("div",{class:"small mut",style:"margin-top:6px"},"shares: "+(cl.shared_tags||[]).map(t=>t.label).join(", "))));}
+}
+
+async function renderHistory(v){
+  let h;try{h=await api(`/api/usermodel/history?user_id=${encodeURIComponent($("#uid").value)}`);}catch(e){v.append(el("div",{class:"card err"},String(e)+"  (set X-API-Key if INGEST_API_KEY is on)"));return;}
+  if(!h||!h.event_count){v.append(el("div",{class:"empty"},"No activity for ",el("b",{},$("#uid").value),". Ingest events for this user first."));return;}
+  v.append(el("div",{class:"row small mut",style:"margin-bottom:12px"},`${h.event_count} events · ${h.aggregates.length} content items engaged`));
+  const dwell=d=>d!=null?Math.round(d)+"s":"—";
+  const at=el("table");
+  at.append(el("tr",{},el("th",{},"content"),el("th",{},"visits"),el("th",{},"dwell"),el("th",{},"end reason"),el("th",{},"outcome")));
+  for(const a of h.aggregates){const oc=a.outcome==="positive"?"warm":a.outcome==="negative"?"distractor":"neutral";
+    at.append(el("tr",{},
+      el("td",{},el("div",{},a.title||a.content_id),a.title?el("div",{class:"small mut num"},a.content_id):""),
+      el("td",{class:"num"},a.visits),el("td",{class:"num"},dwell(a.dwell_seconds)),
+      el("td",{class:"small mut"},a.end_reason||"—"),el("td",{},el("span",{class:"pill "+oc},a.outcome))));}
+  v.append(el("div",{class:"card"},cardhead("Engaged content"),at));
+  const et=el("table");
+  et.append(el("tr",{},el("th",{},"time"),el("th",{},"event"),el("th",{},"content"),el("th",{},"dwell"),el("th",{},"reason")));
+  for(const e of h.events)et.append(el("tr",{},
+    el("td",{class:"small mut num"},(e.ts||"").replace("T"," ").slice(0,19)),
+    el("td",{class:"small"},(e.event||"").replace("CONTENT_","").replace(/_/g," ").toLowerCase()),
+    el("td",{class:"small"},e.title||e.content_id||"—"),
+    el("td",{class:"num small"},e.dwell_seconds!=null?Math.round(e.dwell_seconds)+"s":""),
+    el("td",{class:"small mut"},e.end_reason||"")));
+  v.append(el("div",{class:"card"},cardhead("Event timeline"),et));
+}
+
+const PERSONAS={
+ "Falk — visitor identities":[
+  ["Explorer","Curiosity-driven; ranges broadly across themes with genuine engagement.","broad affinity × engagement depth"],
+  ["Hobbyist","Deep, narrow, repeat engagement with specific themes (Falk's Professional/Hobbyist).","concentrated affinity × depth"],
+  ["Experience-Seeker","After the highlights — samples many stories briefly, rarely finishing.","broad × light / low completion"],
+  ["Recharger","Contemplative; lingers on a few introspective stories at a slow pace.","few × slow × introspective"],
+  ["Facilitator","A social / accompanied visit, enabling others' experience.","an explicit social signal"],
+ ],
+ "Pekarik — experience preference":[
+  ["object","Drawn to the artefacts and media themselves — photographs, objects.","medium facets dominate affinity"],
+  ["cognitive","Wants to understand the history and the facts.","theme / time / place facets"],
+  ["introspective","Seeks personal reflection and individual testimony.","personal-story / person facets, personal connection"],
+  ["social","Values stories that connect people.","a social demographic signal"],
+ ],
+ "Engagement style — from behaviour":[
+  ["deep_reader","Lingers and finishes what they start.","high dwell + completion"],
+  ["completionist","Works through many stories to completion.","high completion across many views"],
+  ["skimmer","Samples many stories briefly.","low dwell × many views"],
+  ["sampler","Browses at a moderate pace.","mixed / moderate signals"],
+  ["contemplative","Slow, reflective reading of a select few.","high dwell × few × narrow"],
+ ],
+};
+const METHODS={
+ "Scoring signals — each normalised to 0…1":[
+  ["semantic","Cosine similarity to the visitor's taste centroid (their whole history).","semantic"],
+  ["affinity","Item-kNN: max similarity to ANY one liked item — stays sharp for multi-interest visitors where the centroid blurs.","affinity"],
+  ["tag","Affinity-weighted overlap between the visitor's tags and the content's expert tags.","tag"],
+  ["recency","Closeness to the MOST-RECENT view — sequence awareness ('more like what you just read').","recency"],
+  ["aversion","Penalty (negative weight) for themes of content the visitor abandoned.","aversion"],
+  ["geo","Proximity to the request's GPS location — an independent filter, never folded into tags.","geo"],
+ ],
+ "Ranking & exploration":[
+  ["weighted fusion","The signals are combined by weight into one relevance score (explainable breakdown).",null],
+  ["MMR diversity","Greedy re-rank that avoids returning ten near-identical stories.",null],
+  ["distractor","One deliberately off-profile novelty item at slot 3–4 — exploration / serendipity.",null],
+  ["contextual bandit","Optional LEARNED policy (LinUCB) that learns the fusion weights from engagement; its prior is exactly the static weights, so it starts safe and adapts.",null],
+ ],
+ "User model & segments":[
+  ["engagement strength","Dwell vs reading-time estimate + completion + revisits → a continuous like/dislike, not a binary click.",null],
+  ["cold-start","Survey persona + demographics seed the model; a diverse fallback means recommendations are never empty.",null],
+  ["clustering","k-means or fuzzy-c-means over tag-affinity → explainable visitor segments (the centroid is a readable tag profile).",null],
+ ],
+};
+async function renderPersonas(v){
+  v.append(el("div",{class:"card small mut"},"How the engine reads a visitor — grounded in museum-visitor research: Falk (2009) visit identities and Pekarik, Doering & Karns (1999) experience preferences. The type comes from breadth of interest × engagement depth × pace; every persona claim carries the evidence that produced it (Tintarev & Masthoff scrutability)."));
+  for(const [title,rows] of Object.entries(PERSONAS)){
+    const c=el("div",{class:"card"});c.append(cardhead(title));
+    rows.forEach(([name,desc,how],i)=>c.append(el("div",{class:"row",style:`align-items:flex-start;gap:14px;padding:10px 0;${i?'border-top:1px solid var(--line)':''}`},
+      el("span",{class:"pill bandit",style:"min-width:128px;text-align:center"},name),
+      el("div",{style:"flex:1"},el("div",{},desc),el("div",{class:"small mut",style:"margin-top:2px"},"inferred from "+how)))));
+    v.append(c);
+  }
+  v.append(el("div",{class:"eyebrow",style:"margin-top:6px"},"Methods"));
+  for(const [title,rows] of Object.entries(METHODS)){
+    const c=el("div",{class:"card"});c.append(cardhead(title));
+    rows.forEach(([name,desc,key],i)=>c.append(el("div",{class:"row",style:`align-items:flex-start;gap:13px;padding:10px 0;${i?'border-top:1px solid var(--line)':''}`},
+      key?el("span",{class:"sw",style:`background:${COLORS[key]};margin-top:5px`}):el("span",{style:"width:10px"}),
+      el("span",{class:"pill "+(key?"neutral":"bandit"),style:"min-width:132px;text-align:center"},name),
+      el("div",{style:"flex:1"},desc))));
+    v.append(c);
+  }
 }
 
 /* boot */

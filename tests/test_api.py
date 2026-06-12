@@ -139,6 +139,21 @@ def test_demographics_reach_user_model():
     assert any(k.startswith("person_who") for k in um["tag_affinity"])  # cold-start bridge live
 
 
+def test_usermodel_history_returns_events_and_aggregates():
+    client = _client()
+    ts = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+    client.post("/api/ingest", json=[
+        _view("CONTENT_VIEW_STARTED", "101", ts),
+        _view("CONTENT_VIEW_ENDED", "101", ts, reason="next_button", dwell=120),
+    ])
+    h = client.get("/api/usermodel/history", params={"user_id": "u1"}).json()["result"]
+    assert h["event_count"] == 2
+    assert h["events"] and h["events"][0]["content_id"] == "101"
+    agg = h["aggregates"][0]
+    assert agg["content_id"] == "101" and agg["dwell_seconds"] == 120
+    assert agg["end_reason"] == "next_button" and agg["outcome"] == "positive"
+
+
 def test_policy_reports_mode_and_prior():
     client = _client()
     p = client.get("/api/policy").json()["result"]
