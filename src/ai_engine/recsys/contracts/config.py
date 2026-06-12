@@ -16,7 +16,7 @@ class FusionWeights(BaseModel):
     tag: float = 0.25
     recency: float = 0.10     # sequence awareness: similarity to the MOST-RECENT view
     aversion: float = -0.25   # PENALTY: overlap with disliked themes (negative weight)
-    geo: float = 0.0          # off in this slice
+    geo: float = 0.20         # proximity to the request's location (only scored when one is given)
     popularity: float = 0.0   # off by default
 
 
@@ -42,6 +42,10 @@ class RecConfig(BaseModel):
     pool_per_generator: int = 30
     final_limit: int = 10
     mmr_lambda: float = 0.7             # relevance(1) vs diversity(0)
+
+    # geo (independent of the tag filter): proximity scoring + optional radius filter
+    geo_scale_m: float = 300.0          # exp(-distance/scale); ~camp-sized falloff
+    geo_radius_m: float = 1000.0        # default radius when a geo filter is requested
 
     # distractor / novelty injection (exploration): one deliberately off-profile item,
     # placed in a fixed slot and labelled kind="distractor" so the UI can surface it.

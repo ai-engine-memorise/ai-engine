@@ -89,6 +89,25 @@ def test_survey_event_seeds_user_model():
     assert sig.demographics.get("age") == "25_34"  # stored -> retrievable via /usermodel
 
 
+def test_identify_payload_normalizes_to_demographic_event():
+    raw = {"type": "identify", "userId": "u9", "timestamp": "2026-06-11T10:00:00Z",
+           "traits": {"age": 30, "gender": "female", "country": "netherlands"}}
+    ev = normalize_event(raw)
+    assert ev.event == "IDENTIFY"
+    assert ev.survey_answers["gender"] == "female" and ev.survey_answers["age"] == 30
+
+
+def test_identify_event_seeds_user_model_demographics():
+    # the app sends identify AFTER the survey -> traits seed the model like a survey
+    ev = InteractionEvent(user_id="u9", event="IDENTIFY", ts=NOW,
+                          survey_answers={"age": 30, "gender": "female", "country": "netherlands"})
+    sig = build_user_signals(user_id="u9", events=[ev], contents={}, vectors={}, now=NOW, cfg=CFG)
+    assert sig.demographics.get("age") == 30
+    # numeric age bucketed into a person_who facet (cold-start bridge)
+    assert any(k.startswith("person_who.age_group") for k in sig.tag_affinity)
+    assert any(k.startswith("person_who.gender_and_age") for k in sig.tag_affinity)
+
+
 def test_kwb_personalization_theme_drives_affinity():
     ev = InteractionEvent(user_id="u1", event="SURVEY_SUBMITTED", ts=NOW,
                           survey_answers={"q:personalization_theme": ["Forced Labor"], "q:age": "25_34"})

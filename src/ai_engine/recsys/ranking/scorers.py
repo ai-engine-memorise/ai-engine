@@ -42,6 +42,28 @@ def score_affinity(candidate_vector: Optional[Vector], liked: list[tuple[float, 
     return best
 
 
+def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance between two lat/lon points, in metres."""
+    r = 6371000.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dlambda / 2) ** 2
+    return 2 * r * math.asin(min(1.0, math.sqrt(a)))
+
+
+def score_geo(content: Optional[Content], ref: Optional[tuple], scale_m: float) -> float:
+    """Proximity of the candidate to a reference point (the user's CURRENT location,
+    a per-request signal — NOT part of the stored user model). exp(-distance/scale).
+    -> [0,1]; 0 if either side lacks coordinates. Independent of the tag system."""
+    if content is None or ref is None or scale_m <= 0:
+        return 0.0
+    if content.lat is None or content.lon is None:
+        return 0.0
+    d = haversine_m(ref[0], ref[1], content.lat, content.lon)
+    return math.exp(-d / scale_m)
+
+
 def score_recency(signals: UserSignals, candidate_vector: Optional[Vector]) -> float:
     """Sequence awareness: closeness to the user's MOST-RECENT view (vs the whole-history
     taste vector). Boosts 'more like what you just read'. -> [0, 1]."""

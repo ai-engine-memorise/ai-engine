@@ -12,6 +12,9 @@ from __future__ import annotations
 from typing import Optional
 
 SURVEY_EVENTS = ("SURVEY_SUBMITTED", "SURVEY_ANSWERED")
+# events whose answers/traits seed demographics + persona affinity. IDENTIFY is the
+# RudderStack identify call the app sends AFTER the survey (traits = persona).
+DEMOGRAPHIC_EVENTS = SURVEY_EVENTS + ("IDENTIFY",)
 
 # age answer value -> person_who.age_group taxonomy label (kwb + quiz buckets)
 _AGE = {
@@ -23,10 +26,10 @@ _AGE = {
 }
 _GENDER = {"female": "female", "male": "Male", "non_binary": "non-binary"}
 
-# question_id -> (answer keys it may use)  for demographics
-_AGE_QIDS = ("q:age", "age_group")
+# question_id / trait key -> demographics (covers survey qids AND identify traits)
+_AGE_QIDS = ("q:age", "age_group", "age")
 _GENDER_QIDS = ("q:gender", "gender")
-_NAT_QIDS = ("q:nationality", "nationality")
+_NAT_QIDS = ("q:nationality", "nationality", "country")
 _CONN_QIDS = ("q:ww2_connection", "personal_connection")
 
 # personalization questions: answer value = canonical taxonomy label -> facet

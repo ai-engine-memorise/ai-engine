@@ -8,7 +8,7 @@ import hashlib
 from typing import Optional, Sequence
 
 from ..contracts.models import Content, InteractionEvent, UserSignals, Candidate, Vector
-from ..ranking.scorers import cosine
+from ..ranking.scorers import cosine, haversine_m
 
 
 class FakeContentStore:
@@ -61,6 +61,18 @@ class FakeContentStore:
         hits = [cid for cid, c in self._contents.items()
                 if cid not in ex and any(t.label.lower() == v for t in c.tags)]
         return [Candidate(content_id=cid, generated_by="filter") for cid in sorted(hits)[:limit]]
+
+    def search_geo(self, lat: float, lon: float, radius_m: float, *, limit: int, exclude=()) -> list[Candidate]:
+        ex = {str(e) for e in exclude}
+        hits = []
+        for cid, c in self._contents.items():
+            if cid in ex or c.lat is None or c.lon is None:
+                continue
+            d = haversine_m(lat, lon, c.lat, c.lon)
+            if d <= radius_m:
+                hits.append((cid, d))
+        hits.sort(key=lambda t: t[1])   # nearest first
+        return [Candidate(content_id=cid, generated_by="geo", base_score=-d) for cid, d in hits[:limit]]
 
 
 class FakeEventSource:

@@ -15,7 +15,9 @@ from .contracts.models import (
     UserSignals,
 )
 from .contracts.ports import ContentStore, UserModelStore
-from .ranking.scorers import score_semantic, score_affinity, score_tag, score_recency, score_aversion
+from .ranking.scorers import (
+    score_semantic, score_affinity, score_tag, score_recency, score_aversion, score_geo,
+)
 from .ranking.fusion import weighted_fuse, mmr_rerank
 
 
@@ -25,26 +27,46 @@ class Recommender:
         self.model_store = model_store
         self.cfg = cfg
 
-    def recommend(self, user_id: str, *, filter: Optional[str] = None) -> Recommendation:
+    def recommend(self, user_id: str, *, filter: Optional[str] = None,
+                  near: Optional[tuple] = None, geo_radius_m: Optional[float] = None) -> Recommendation:
         # no stored model -> empty persona -> cold-start diverse fallback (never empty-handed)
         signals = self.model_store.get_signals(user_id) or UserSignals(user_id=user_id)
-        return self.recommend_for_signals(signals, filter=filter)
+        return self.recommend_for_signals(signals, filter=filter, near=near, geo_radius_m=geo_radius_m)
 
     # exposed for tests / batch use without a store
-    def recommend_for_signals(self, signals: UserSignals, *, filter: Optional[str] = None) -> Recommendation:
+    def recommend_for_signals(self, signals: UserSignals, *, filter: Optional[str] = None,
+                              near: Optional[tuple] = None,
+                              geo_radius_m: Optional[float] = None) -> Recommendation:
         cfg = self.cfg
         strategy = "warm" if not signals.is_cold else "cold"
+
+        # tag filter and geo filter are INDEPENDENT restrictions: either may be used
+        # alone, and when both are given they compose by intersection (AND).
+        geo_active = near is not None and geo_radius_m is not None
+        constrained = bool(filter) or geo_active
 
         # exclude everything already viewed (any outcome) — full view-history dedup
         seen = set(signals.positives) | set(signals.negatives) | set(signals.viewed)
         pool: dict[str, Candidate] = {}
 
         # 1) candidate generation
-        if filter:
-            # filtered to one tag (e.g. a location): the candidate set IS the filtered content
-            for c in self.content_store.search_filter(filter, limit=cfg.pool_per_generator, exclude=tuple(seen)):
-                pool.setdefault(c.content_id, c)
-            generators = ["filter"]
+        if constrained:
+            generators = []
+            id_sets = []
+            if filter:
+                tag_ids = {c.content_id for c in
+                           self.content_store.search_filter(filter, limit=cfg.pool_per_generator, exclude=tuple(seen))}
+                id_sets.append(tag_ids)
+                generators.append("filter")
+            if geo_active:
+                geo_ids = {c.content_id for c in
+                           self.content_store.search_geo(near[0], near[1], geo_radius_m,
+                                                          limit=cfg.pool_per_generator, exclude=tuple(seen))}
+                id_sets.append(geo_ids)
+                generators.append("geo")
+            keep = set.intersection(*id_sets) if len(id_sets) > 1 else id_sets[0]
+            for cid in keep:
+                pool.setdefault(cid, Candidate(content_id=cid, generated_by="+".join(generators)))
         else:
             generators = ["semantic", "tag"]
             if signals.taste_vector is not None:
@@ -60,10 +82,10 @@ class Recommender:
 
         candidate_ids = [cid for cid in pool if cid not in seen]
 
-        # cold-start fallback (no signal) — global diverse sample. NOT for filtered queries
-        # (a filter must never leak content from outside it).
+        # cold-start fallback (no signal) — global diverse sample. NOT for constrained
+        # queries (a tag/geo filter must never leak content from outside it).
         cold_fallback = False
-        if not candidate_ids and not filter:
+        if not candidate_ids and not constrained:
             for c in self.content_store.sample(limit=cfg.pool_per_generator, exclude=tuple(seen)):
                 pool.setdefault(c.content_id, c)
             candidate_ids = [cid for cid in pool if cid not in seen]
@@ -72,8 +94,8 @@ class Recommender:
 
         if not candidate_ids:   # empty filter / catalogue empty / all seen
             return Recommendation(user_id=signals.user_id, items=[], strategy=strategy,
-                                  diagnostics={"reason": "empty_filter" if filter else "no_content",
-                                               "filter": filter, "pool_size": 0})
+                                  diagnostics={"reason": "empty_filter" if constrained else "no_content",
+                                               "filter": filter, "generators": generators, "pool_size": 0})
 
         # 2) fetch content structure for the pool, score each
         contents = self.content_store.get(candidate_ids)
@@ -96,8 +118,10 @@ class Recommender:
             tag = score_tag(signals, content)
             rec = score_recency(signals, vec)   # sequence: closeness to most-recent view
             av = score_aversion(signals, content)   # penalty for disliked themes (negative weight)
-            fused, breakdown = weighted_fuse(
-                {"semantic": sem, "affinity": aff, "tag": tag, "recency": rec, "aversion": av}, cfg.fusion)
+            per = {"semantic": sem, "affinity": aff, "tag": tag, "recency": rec, "aversion": av}
+            if near is not None:                 # proximity to the request location (independent of tags)
+                per["geo"] = score_geo(content, near, cfg.geo_scale_m)
+            fused, breakdown = weighted_fuse(per, cfg.fusion)
             scored.append(ScoredCandidate(
                 content_id=cid, final_score=fused, breakdown=breakdown, content=content,
             ))
@@ -110,14 +134,14 @@ class Recommender:
 
         diagnostics = {"pool_size": len(pool), "scored": len(scored),
                        "generators": generators, "cold_start_fallback": cold_fallback,
-                       "filter": filter}
+                       "filter": filter, "geo": bool(near)}
 
         # 4) inject a labelled distractor (novelty / exploration) at slot 3 or 4 (random)
         if inject:
             ranked_ids = {r.content_id for r in ranked}
-            if filter:
-                # within-filter distractor: lowest-relevance item from the SAME filtered set
-                # (a serendipitous pick from this location the user wouldn't otherwise reach)
+            if constrained:
+                # within-constraint distractor: lowest-relevance item from the SAME restricted
+                # set (a serendipitous pick the user wouldn't otherwise reach), never leaking out
                 leftover = [s for s in scored if s.content_id not in ranked_ids]
                 distractor = min(leftover, key=lambda s: s.final_score) if leftover else None
                 if distractor is not None:
@@ -129,14 +153,14 @@ class Recommender:
                 ranked.insert(slot, distractor)
                 diagnostics["distractor"] = {
                     "content_id": distractor.content_id,
-                    "strategy": "within_filter" if filter else cfg.distractor_strategy, "slot": slot,
+                    "strategy": "within_constraint" if constrained else cfg.distractor_strategy, "slot": slot,
                 }
             else:
-                # filtered set fully shown / catalogue exhausted -> no off-profile item exists.
+                # restricted set fully shown / catalogue exhausted -> no off-profile item exists.
                 # never silent: the caller sees why the 100%-distractor contract couldn't hold.
                 diagnostics["distractor"] = {
                     "placed": False,
-                    "reason": "filtered_set_exhausted" if filter else "no_candidate",
+                    "reason": "filtered_set_exhausted" if constrained else "no_candidate",
                 }
 
         return Recommendation(user_id=signals.user_id, items=ranked, strategy=strategy,

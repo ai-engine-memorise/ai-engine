@@ -7,10 +7,30 @@ from __future__ import annotations
 from typing import Optional, Sequence
 
 from qdrant_client import QdrantClient  # type: ignore
-from qdrant_client.models import Filter, FieldCondition, MatchAny  # type: ignore
+from qdrant_client.models import Filter, FieldCondition, MatchAny, GeoRadius, GeoPoint  # type: ignore
 
 from ..contracts.enums import ContentType
 from ..contracts.models import Content, Tag, Candidate, Vector
+
+
+def _extract_latlon(payload: dict):
+    """Pull (lat, lon) from the payload. Accepts a `locations` geo object/list
+    ({lat,lon}) — the content-engine GEO-indexed field — or flat lat/lon keys."""
+    loc = payload.get("locations") or payload.get("location")
+    if isinstance(loc, list) and loc:
+        loc = loc[0]
+    if isinstance(loc, dict) and loc.get("lat") is not None and loc.get("lon") is not None:
+        try:
+            return float(loc["lat"]), float(loc["lon"])
+        except (TypeError, ValueError):
+            pass
+    lat, lon = payload.get("lat"), payload.get("lon")
+    if lat is not None and lon is not None:
+        try:
+            return float(lat), float(lon)
+        except (TypeError, ValueError):
+            pass
+    return None, None
 
 
 def _payload_to_content(point_id, payload: dict) -> Content:
@@ -26,6 +46,7 @@ def _payload_to_content(point_id, payload: dict) -> Content:
         ctype = ContentType(ctype)
     except ValueError:
         ctype = ContentType.text_item
+    lat, lon = _extract_latlon(payload)
     return Content(
         id=str(point_id),
         content_type=ctype,
@@ -34,6 +55,8 @@ def _payload_to_content(point_id, payload: dict) -> Content:
         tags=tags,
         word_count=int(payload.get("text_length_words") or payload.get("word_count") or 0),
         has_image=has_image,
+        lat=lat,
+        lon=lon,
     )
 
 
@@ -117,4 +140,16 @@ class QdrantContentStore:
         )
         ex = {str(e) for e in exclude}
         return [Candidate(content_id=str(p.id), generated_by="filter")
+                for p in points if str(p.id) not in ex][:limit]
+
+    def search_geo(self, lat: float, lon: float, radius_m: float, *, limit: int, exclude=()) -> list[Candidate]:
+        # geo radius filter on the GEO-indexed `locations` field — independent of tags
+        flt = Filter(must=[FieldCondition(
+            key="locations", geo_radius=GeoRadius(center=GeoPoint(lat=lat, lon=lon), radius=radius_m))])
+        points, _ = self.client.scroll(
+            collection_name=self.collection_name,
+            scroll_filter=flt, limit=limit + len(exclude), with_payload=False, with_vectors=False,
+        )
+        ex = {str(e) for e in exclude}
+        return [Candidate(content_id=str(p.id), generated_by="geo")
                 for p in points if str(p.id) not in ex][:limit]

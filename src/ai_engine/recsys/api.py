@@ -145,9 +145,13 @@ def make_router(components: Components) -> APIRouter:
         user_id: str = Query(..., examples=["u1"]),
         limit: Optional[int] = Query(default=None, ge=1, le=50),
         filter: Optional[str] = Query(default=None, description="restrict candidates to a tag, e.g. a location: AiARLocationBarrack3"),
+        near_lat: Optional[float] = Query(default=None, description="user's current latitude (geo proximity, independent of tag filter)"),
+        near_lon: Optional[float] = Query(default=None, description="user's current longitude"),
+        geo_radius_m: Optional[float] = Query(default=None, ge=0, description="also restrict to this radius (metres) around near_lat/lon"),
         include_content: bool = Query(default=True, description="false = compact (ids/scores only)"),
     ) -> dict:
-        rec = c.recommender.recommend(user_id, filter=filter)
+        near = (near_lat, near_lon) if near_lat is not None and near_lon is not None else None
+        rec = c.recommender.recommend(user_id, filter=filter, near=near, geo_radius_m=geo_radius_m)
         items = rec.items[:limit] if limit else rec.items
         out = rec.model_dump()
         out["filter"] = filter
@@ -168,12 +172,16 @@ def make_router(components: Components) -> APIRouter:
     def recommend_preview(
         spec: PreviewSpec,
         filter: Optional[str] = Query(default=None),
+        near_lat: Optional[float] = Query(default=None),
+        near_lon: Optional[float] = Query(default=None),
+        geo_radius_m: Optional[float] = Query(default=None, ge=0),
         include_content: bool = Query(default=True, description="false = compact (ids/scores only)"),
     ) -> dict:
         """Recommend from a hand-authored user model (no events). For manual /
         programmatic testing + LLM evaluation."""
         signals = build_preview_signals(spec, c.content_store)
-        rec = c.recommender.recommend_for_signals(signals, filter=filter)
+        near = (near_lat, near_lon) if near_lat is not None and near_lon is not None else None
+        rec = c.recommender.recommend_for_signals(signals, filter=filter, near=near, geo_radius_m=geo_radius_m)
         items = rec.items[:spec.limit] if spec.limit else rec.items
         out = rec.model_dump()
         out["filter"] = filter

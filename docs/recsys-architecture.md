@@ -123,9 +123,18 @@ affinity   = max_{liked i} (cosine(cand_vec, vec_i)+1)/2 * w_i # item-kNN: max-s
 tag        = Σ user_affinity[l]*cand_tag_weight[l]  /  Σ user_affinity[l]
 recency    = (cosine(recency_vec, cand_vec) + 1) / 2           # closeness to MOST-RECENT view (sequence)
 aversion   = Σ user_aversion[l]*cand_tag_weight[l]  /  Σ user_aversion[l]   # PENALTY (negative weight)
-geo        = exp(-distance_m / geo_scale)            # off by default
+geo        = exp(-distance_m / geo_scale_m)          # proximity to the REQUEST location (per-request)
 popularity = log1p(views) / log1p(max_views)        # off by default
 ```
+
+**Geo and the tag filter are independent.** Geo is never a tag. Two orthogonal mechanisms:
+- `filter=<tag>` restricts candidates to a tag value (e.g. `AiARLocationBarrack3`) — discrete place.
+- `near_lat/near_lon` (+ optional `geo_radius_m`) — the user's CURRENT GPS location (a per-request
+  signal, NOT stored in the user model). Without a radius it only re-ranks by proximity (`geo` scorer,
+  weight 0.20); with a radius it also restricts candidates via the Qdrant `locations` GEO index.
+
+Either may be used alone; given together they compose by **intersection (AND)**. `geo_scale_m`
+(default 300m) sets the proximity falloff; `geo_radius_m` the optional hard cutoff.
 
 Default fusion weights: `semantic 0.30, affinity 0.25, tag 0.25, recency 0.10, aversion -0.25`.
 `affinity` keeps multi-interest users' distinct tastes sharp (centroid alone averages them
