@@ -35,6 +35,23 @@ class RedisEventBuffer:
         return [InteractionEvent.model_validate_json(r) for r in raw]
 
 
+class RedisImpressionStore:
+    """request_id -> {content_id: feature_vector} (JSON), TTL'd. Feeds online bandit updates."""
+    def __init__(self, client: "redis.Redis", *, ttl_seconds: int = 24 * 3600, key_prefix: str = "imp"):
+        self.client = client
+        self.ttl = ttl_seconds
+        self.prefix = key_prefix
+
+    def put(self, request_id: str, features: dict) -> None:
+        if not request_id or not features:
+            return
+        self.client.set(f"{self.prefix}:{request_id}", json.dumps(features), ex=self.ttl)
+
+    def get(self, request_id: str) -> dict:
+        raw = self.client.get(f"{self.prefix}:{request_id}")
+        return json.loads(raw) if raw else {}
+
+
 class RedisUserModelStore:
     def __init__(self, client: "redis.Redis", *, ttl_seconds: int = 7 * 24 * 3600, key_prefix: str = "umodel"):
         self.client = client

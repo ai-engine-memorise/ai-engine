@@ -138,6 +138,39 @@ def _load_cluster_model() -> Optional[dict]:
         return None
 
 
+def _online_bandit_update(c: Components, events) -> int:
+    """Online LinUCB: for each reward event echoing a request_id, look up the served
+    feature vector and nudge theta by the realized engagement. Persists to BANDIT_STATE_PATH.
+    No-op unless ranking_mode=bandit AND bandit_online. Good for the low-data regime."""
+    cfg = c.cfg
+    policy = getattr(c.recommender, "policy", None)
+    if not (cfg.bandit_online and cfg.ranking_mode == "bandit" and policy is not None):
+        return 0
+    from .signals.engagement import estimate_reading_time, engagement_strength
+    updated = 0
+    for e in events:
+        if e.event != "CONTENT_VIEW_ENDED" or not e.request_id or not e.content_id:
+            continue
+        x = c.impressions.get(e.request_id).get(e.content_id)
+        if not x:
+            continue
+        content = c.content_store.get([e.content_id]).get(e.content_id)
+        est = estimate_reading_time(content.word_count, content.has_image, cfg) if content else 0.0
+        reward = engagement_strength(dwell_seconds=e.dwell_seconds, est_reading_time=est,
+                                     end_reason=e.end_reason, visits=1, survey_rating=None, cfg=cfg)
+        policy.update(x, reward)
+        updated += 1
+    if updated:
+        path = os.getenv("BANDIT_STATE_PATH")
+        if path:
+            import json
+            tmp = path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as fh:
+                json.dump(policy.to_dict(), fh)
+            os.replace(tmp, path)
+    return updated
+
+
 def make_router(components: Components) -> APIRouter:
     router = APIRouter(prefix="/api", tags=["Recsys"])
     c = components
@@ -170,7 +203,9 @@ def make_router(components: Components) -> APIRouter:
             demographics = c.demographics.get_demographics(u)
             c.updater.refresh(u, c.event_buffer, now=now, demographics=demographics)
         metrics["ingests"] += len(events)
-        return {"status": "ok", "ingested": len(events), "users": sorted(users)}
+        bandit_updates = _online_bandit_update(c, events)
+        return {"status": "ok", "ingested": len(events), "users": sorted(users),
+                "bandit_updates": bandit_updates}
 
     @router.get("/recommend")
     def recommend(
@@ -191,6 +226,8 @@ def make_router(components: Components) -> APIRouter:
         request_id = uuid4().hex
         out["request_id"] = request_id   # app echoes this on CONTENT_VIEW -> joins impression to outcome
         c.event_log.log_served(_served_record(request_id, user_id, out["items"], out, filter))
+        # stash served feature vectors so a later reward event can update the bandit online
+        c.impressions.put(request_id, {it["id"]: it["features"] for it in out["items"] if it.get("features")})
         _record(out)
         return {"result": out}
 

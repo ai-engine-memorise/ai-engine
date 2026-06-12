@@ -89,6 +89,19 @@ class FakeEventSource:
         return list(self._events.get(user_id, []))
 
 
+class InMemoryImpressionStore:
+    """ImpressionStore backed by a dict (no TTL needed for tests)."""
+    def __init__(self) -> None:
+        self._d: dict[str, dict] = {}
+
+    def put(self, request_id: str, features: dict) -> None:
+        if request_id and features:
+            self._d[request_id] = dict(features)
+
+    def get(self, request_id: str) -> dict:
+        return dict(self._d.get(request_id, {}))
+
+
 class InMemoryUserModelStore:
     """UserModelStore backed by a dict (recompute-backed equivalent of Redis)."""
 

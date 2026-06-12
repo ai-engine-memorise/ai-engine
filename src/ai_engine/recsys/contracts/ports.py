@@ -45,6 +45,15 @@ class UserModelStore(Protocol):
 
 
 @runtime_checkable
+class ImpressionStore(Protocol):
+    """Short-lived store of the FEATURE VECTORS we served, keyed by request_id, so a
+    later reward event (CONTENT_VIEW echoing that request_id) can be joined back to the
+    exact context for an ONLINE bandit update. TTL'd; not durable (the Parquet log is)."""
+    def put(self, request_id: str, features: dict) -> None: ...      # {content_id: vector}
+    def get(self, request_id: str) -> dict: ...
+
+
+@runtime_checkable
 class ContentStore(Protocol):
     """Content structure + vectors (Qdrant). Test fake = in-memory."""
     def get(self, ids: Sequence[str]) -> dict[str, Content]: ...

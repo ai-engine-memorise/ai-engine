@@ -25,6 +25,7 @@ class Components:
     recommender: Recommender
     demographics: DemographicsProvider
     event_log: object   # durable append-only log (Parquet) — .append(events)
+    impressions: object   # short-lived served-feature store (request_id -> features) for online bandit
 
 
 def _build_content_store() -> ContentStore:
@@ -45,11 +46,11 @@ def _build_stores():
     url = os.getenv("REDIS_URL")
     if url:
         import redis
-        from .adapters.redis_store import RedisEventBuffer, RedisUserModelStore
+        from .adapters.redis_store import RedisEventBuffer, RedisUserModelStore, RedisImpressionStore
         client = redis.from_url(url, decode_responses=True)
-        return RedisEventBuffer(client), RedisUserModelStore(client)
-    from .testing.fakes import FakeEventSource, InMemoryUserModelStore
-    return FakeEventSource(), InMemoryUserModelStore()
+        return RedisEventBuffer(client), RedisUserModelStore(client), RedisImpressionStore(client)
+    from .testing.fakes import FakeEventSource, InMemoryUserModelStore, InMemoryImpressionStore
+    return FakeEventSource(), InMemoryUserModelStore(), InMemoryImpressionStore()
 
 
 def _build_demographics() -> DemographicsProvider:
@@ -98,6 +99,7 @@ def _build_config() -> RecConfig:
     cfg.ranking_mode = os.getenv("RECSYS_RANKING_MODE", cfg.ranking_mode)   # "static" | "bandit"
     cfg.bandit_alpha = _f("RECSYS_BANDIT_ALPHA", cfg.bandit_alpha)
     cfg.bandit_ridge = _f("RECSYS_BANDIT_RIDGE", cfg.bandit_ridge)
+    cfg.bandit_online = os.getenv("RECSYS_BANDIT_ONLINE", "").lower() in {"1", "true", "yes"} or cfg.bandit_online
     fl = os.getenv("RECSYS_FINAL_LIMIT")
     if fl is not None:
         try:
@@ -126,7 +128,7 @@ def _build_policy(cfg: RecConfig):
 def build_components(cfg: Optional[RecConfig] = None) -> Components:
     cfg = cfg or _build_config()
     content_store = _build_content_store()
-    event_buffer, model_store = _build_stores()
+    event_buffer, model_store, impressions = _build_stores()
     return Components(
         cfg=cfg,
         content_store=content_store,
@@ -136,4 +138,5 @@ def build_components(cfg: Optional[RecConfig] = None) -> Components:
         recommender=Recommender(content_store, model_store, cfg, policy=_build_policy(cfg)),
         demographics=_build_demographics(),
         event_log=_build_event_log(),
+        impressions=impressions,
     )

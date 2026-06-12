@@ -62,5 +62,6 @@ class RecConfig(BaseModel):
     # trainer can fit a bandit from data collected while still serving statically.
     ranking_mode: str = "static"        # "static" | "bandit"
     bandit_alpha: float = 0.3           # UCB exploration strength (0 = greedy/exploit)
-    bandit_ridge: float = 1.0           # prior strength (how tightly θ0 holds the weights)
+    bandit_ridge: float = 1.0           # prior strength (how tightly theta0 holds the weights)
     bandit_explore: bool = True         # add the UCB bonus when serving with the bandit
+    bandit_online: bool = False         # update theta live as reward events arrive (vs offline batch)

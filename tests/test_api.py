@@ -13,7 +13,7 @@ from ai_engine.recsys.contracts.models import Content, Tag
 from ai_engine.recsys.recommender import Recommender
 from ai_engine.recsys.updater import UserModelUpdater
 from ai_engine.recsys.testing.fakes import (
-    FakeContentStore, FakeEventSource, InMemoryUserModelStore,
+    FakeContentStore, FakeEventSource, InMemoryUserModelStore, InMemoryImpressionStore,
 )
 from ai_engine.recsys.adapters.demographics import (
     NullDemographicsProvider, StaticDemographicsProvider,
@@ -29,7 +29,7 @@ def _content(cid, tag, axis):
     return Content(id=cid, title=cid, text=cid, word_count=120, tags=[tag]), vec
 
 
-def _client(demographics=None):
+def _client(demographics=None, cfg=None, policy=None):
     world = dict([
         ("101", _content("101", FORCED, 0)),
         ("102", _content("102", FORCED, 0)),
@@ -39,7 +39,7 @@ def _client(demographics=None):
     ])
     contents = {k: v[0] for k, v in world.items()}
     vectors = {k: v[1] for k, v in world.items()}
-    cfg = RecConfig()
+    cfg = cfg or RecConfig()
     store = FakeContentStore(contents, vectors)
     buf = FakeEventSource()
     models = InMemoryUserModelStore()
@@ -47,9 +47,10 @@ def _client(demographics=None):
     components = Components(
         cfg=cfg, content_store=store, event_buffer=buf, model_store=models,
         updater=UserModelUpdater(store, models, cfg),
-        recommender=Recommender(store, models, cfg),
+        recommender=Recommender(store, models, cfg, policy=policy),
         demographics=demographics or NullDemographicsProvider(),
         event_log=NullEventLog(),
+        impressions=InMemoryImpressionStore(),
     )
     return TestClient(create_app(components))
 
@@ -152,6 +153,36 @@ def test_usermodel_history_returns_events_and_aggregates():
     agg = h["aggregates"][0]
     assert agg["content_id"] == "101" and agg["dwell_seconds"] == 120
     assert agg["end_reason"] == "next_button" and agg["outcome"] == "positive"
+
+
+def test_online_bandit_updates_theta_on_reward():
+    from ai_engine.recsys.ranking.bandit import LinearBandit, FEATURE_ORDER
+    cfg = RecConfig(ranking_mode="bandit", bandit_online=True, bandit_explore=False)
+    weights = {n: getattr(cfg.fusion, n, 0.0) for n in FEATURE_ORDER}
+    policy = LinearBandit.with_prior(weights, ridge=cfg.bandit_ridge)
+    client = _client(cfg=cfg, policy=policy)
+    before = policy.theta()
+    ts = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+
+    # warm up u1 on Forced-Labor content so served items carry a NONZERO context
+    warm = []
+    for cid in ("101", "102"):
+        warm.append(_view("CONTENT_VIEW_STARTED", cid, ts))
+        warm.append(_view("CONTENT_VIEW_ENDED", cid, ts, reason="next_button", dwell=120))
+    client.post("/api/ingest", json=warm)
+
+    rec = client.get("/api/recommend", params={"user_id": "u1"}).json()["result"]
+    rid = rec["request_id"]
+    target = next(it for it in rec["items"] if it["role"] == "target")
+    assert any(target["features"])                       # warm -> the served context is non-zero
+
+    # reward event echoing request_id -> online update joins reward to the served context
+    start = _view("CONTENT_VIEW_STARTED", target["id"], ts)
+    end = _view("CONTENT_VIEW_ENDED", target["id"], ts, reason="next_button", dwell=120)
+    end["properties"]["details"]["request_id"] = rid
+    r = client.post("/api/ingest", json=[start, end]).json()
+    assert r["bandit_updates"] >= 1
+    assert policy.theta() != before                      # theta moved live
 
 
 def test_policy_reports_mode_and_prior():
