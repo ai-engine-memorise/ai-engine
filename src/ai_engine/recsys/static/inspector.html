@@ -215,21 +215,32 @@ async function renderCohort(v){
 function loadUser(uid){$("#uid").value=uid;localStorage.setItem("ins_uid",uid);setTab("User model");}
 async function renderPolicy(v){
   const p=await api("/api/policy");
+  const h=p.health;
   v.append(el("div",{class:"card"},el("div",{class:"row"},
     el("span",{class:"pill "+(p.mode==="bandit"?"bandit":"neutral")},"mode: "+p.mode),
     el("span",{class:"pill "+(p.trained?"warm":"cold")},p.trained?"trained weights":"prior only"),
     el("span",{class:"mut small"},`alpha ${p.alpha} / ridge ${p.ridge} / explore ${p.explore}`))));
+  // training health banner
+  if(h){
+    const vc={cold:"cold",learning:"bandit",converged:"warm"}[h.verdict]||"neutral";
+    const msg=h.verdict==="cold"?"needs more data":h.verdict==="learning"?"learning, keep collecting":"weights have stabilised";
+    v.append(el("div",{class:"card"},el("div",{class:"row"},
+      el("span",{class:"pill "+vc},"training: "+h.verdict),
+      el("span",{class:"mut small"},`${h.n_updates} rewarded updates / mean confidence ${(h.mean_confidence*100).toFixed(0)}% / ${msg}`)),
+      h.no_data&&h.no_data.length?el("div",{class:"small mut",style:"margin-top:7px"},"no data yet (still at prior): ",...h.no_data.map(f=>el("span",{class:"tag"},f))):""));
+  }
   const mx=Math.max(0.0001,...p.theta.map(Math.abs),...p.prior.map(Math.abs));
   const tbl=el("table");
-  tbl.append(el("tr",{},el("th",{},"feature"),el("th",{},"prior weight"),el("th",{},"learned weight"),el("th",{},"shift"),el("th",{style:"width:300px"},"weight (signed)")));
-  p.feature_order.forEach((f,i)=>{const a=p.prior[i],b=p.theta[i],dl=b-a;
+  tbl.append(el("tr",{},el("th",{},"feature"),el("th",{},"prior"),el("th",{},"learned"),el("th",{},"shift"),el("th",{style:"width:210px"},"weight (signed)"),el("th",{style:"width:130px"},"confidence")));
+  p.feature_order.forEach((f,i)=>{const a=p.prior[i],b=p.theta[i],dl=b-a;const cf=h?h.confidence[i]:null;
     tbl.append(el("tr",{},
       el("td",{},el("span",{class:"sw",style:`background:${COLORS[f]||'#999'}`}),f),
       el("td",{class:"num mut"},fmt(a)),el("td",{class:"num"},fmt(b)),
       el("td",{class:"num small",style:`color:${Math.abs(dl)<1e-6?'var(--mut)':(dl>0?'var(--c-affinity)':'var(--c-aversion)')}`},(dl>=0?"+":"")+fmt(dl)),
-      el("td",{},diverge(b,mx,COLORS[f]))));});
+      el("td",{},diverge(b,mx,COLORS[f])),
+      el("td",{},cf==null?el("span",{class:"mut small"},"-"):el("div",{class:"barwrap",style:"max-width:120px"},el("div",{class:"seg",style:`width:${100*cf}%;background:${cf<0.34?'var(--c-aversion)':cf<0.67?'var(--c-tag)':'var(--c-affinity)'}`})))));});
   v.append(el("div",{class:"card"},cardhead("Ranking weights: prior vs learned"),tbl,
-    el("div",{class:"small mut",style:"margin-top:8px"},"Bars are zero-centered: right = positive weight, left = negative (penalty).")));
+    el("div",{class:"small mut",style:"margin-top:8px"},"Weight bars are zero-centered (right = positive, left = penalty). Confidence rises as a weight sees more data; a flat/empty bar means that signal has not fired yet, so its weight is still the prior.")));
 }
 async function renderTraffic(v){
   const m=await api("/api/metrics");

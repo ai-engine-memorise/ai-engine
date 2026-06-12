@@ -370,26 +370,44 @@ def make_router(components: Components) -> APIRouter:
 
     @router.get("/policy")
     def policy() -> dict:
-        """The ranking policy: mode + bandit θ vs its prior (the static fusion weights)."""
+        """The ranking policy: mode + bandit theta vs its prior + TRAINING HEALTH
+        (per-weight confidence from the posterior, which weights still lack data, verdict)."""
+        import math
         from .ranking.bandit import LinearBandit, FEATURE_ORDER
         cfg = c.cfg
         prior_w = {n: getattr(cfg.fusion, n, 0.0) for n in FEATURE_ORDER}
         prior = [prior_w[n] for n in FEATURE_ORDER]
-        theta, trained = prior, False
-        path = os.getenv("BANDIT_STATE_PATH")
-        if path and os.path.exists(path):
-            import json
-            try:
-                with open(path, encoding="utf-8") as fh:
-                    theta = LinearBandit.from_dict(json.load(fh)).theta()
-                trained = True
-            except Exception:
-                pass
-        return {"result": {
+        pol = getattr(c.recommender, "policy", None)
+        if pol is None:                                   # static mode: still load a trained file to inspect
+            path = os.getenv("BANDIT_STATE_PATH")
+            if path and os.path.exists(path):
+                import json
+                try:
+                    with open(path, encoding="utf-8") as fh:
+                        pol = LinearBandit.from_dict(json.load(fh))
+                except Exception:
+                    pol = None
+        theta = pol.theta() if pol else prior
+        out = {
             "mode": cfg.ranking_mode, "feature_order": list(FEATURE_ORDER),
-            "prior": prior, "theta": theta, "trained": trained,
+            "prior": prior, "theta": theta, "trained": bool(pol and pol.n_updates > 0),
             "alpha": cfg.bandit_alpha, "ridge": cfg.bandit_ridge, "explore": cfg.bandit_explore,
-        }}
+        }
+        if pol:
+            h = pol.health()
+            ridge = h["ridge"] or 1.0
+            prior_std = 1.0 / math.sqrt(ridge) if ridge > 0 else 1.0
+            conf = [max(0.0, min(1.0, 1.0 - s / prior_std)) for s in h["std"]]   # 0 at prior -> 1 confident
+            active = [i for i, d in enumerate(h["data"]) if d > 1e-6]
+            no_data = [h["feature_order"][i] for i, d in enumerate(h["data"]) if d <= 1e-6]
+            mean_conf = sum(conf[i] for i in active) / len(active) if active else 0.0
+            n = h["n_updates"]
+            verdict = "cold" if n < 20 else ("learning" if mean_conf < 0.5 else "converged")
+            out["health"] = {
+                "n_updates": n, "confidence": conf, "data": h["data"], "no_data": no_data,
+                "mean_confidence": round(mean_conf, 3), "verdict": verdict,
+            }
+        return {"result": out}
 
     @router.get("/metrics")
     def metrics_endpoint() -> dict:

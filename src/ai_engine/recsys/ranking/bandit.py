@@ -60,35 +60,52 @@ def _dot(a: list[float], b: list[float]) -> float:
 
 class LinearBandit:
     def __init__(self, A: list[list[float]], b: list[float], *,
-                 alpha: float = 0.3, feature_order: Sequence[str] = FEATURE_ORDER):
+                 alpha: float = 0.3, feature_order: Sequence[str] = FEATURE_ORDER,
+                 ridge: float = 1.0, n_updates: int = 0):
         self.A = A
         self.b = b
         self.alpha = alpha
         self.feature_order = tuple(feature_order)
         self.d = len(feature_order)
+        self.ridge = ridge          # prior strength (A0 = ridge*I); lets health() report data gain
+        self.n_updates = n_updates  # rewarded impressions folded in so far
 
     @classmethod
     def with_prior(cls, weights: dict, *, ridge: float = 1.0, alpha: float = 0.3,
                    feature_order: Sequence[str] = FEATURE_ORDER) -> "LinearBandit":
-        """Ridge prior centred on the static fusion weights: A0 = ridge·I, b0 = ridge·w
-        => θ0 = A0⁻¹ b0 = w. Starts identical to weighted fusion, then learns."""
+        """Ridge prior centred on the static fusion weights: A0 = ridge*I, b0 = ridge*w
+        => theta0 = A0^-1 b0 = w. Starts identical to weighted fusion, then learns."""
         order = tuple(feature_order)
         d = len(order)
         A = [[ridge if i == j else 0.0 for j in range(d)] for i in range(d)]
         b = [ridge * float(weights.get(name, 0.0)) for name in order]
-        return cls(A, b, alpha=alpha, feature_order=order)
+        return cls(A, b, alpha=alpha, feature_order=order, ridge=ridge)
 
     def features(self, per: dict) -> list[float]:
         return feature_vector(per, self.feature_order)
 
     def update(self, x: list[float], reward: float, *, weight: float = 1.0) -> None:
-        """Online LinUCB update: A += w·x xᵀ ; b += w·reward·x. `weight` < 1 down-weights
+        """Online LinUCB update: A += w*x xT ; b += w*reward*x. `weight` < 1 down-weights
         a sample (e.g. bootstrap data from another study, so live data dominates later)."""
         for i in range(self.d):
             self.b[i] += weight * reward * x[i]
             xi, row = weight * x[i], self.A[i]
             for j in range(self.d):
                 row[j] += xi * x[j]
+        self.n_updates += 1
+
+    def health(self) -> dict:
+        """Training diagnostics: how much data each weight has seen and how confident it is.
+        std[i] = posterior std of theta_i (sqrt of A^-1 diagonal) -> shrinks with data.
+        data[i] = A_ii - ridge = total x_i^2 mass observed -> 0 means that feature never fired."""
+        A_inv = _mat_inverse(self.A)
+        return {
+            "n_updates": self.n_updates,
+            "ridge": self.ridge,
+            "feature_order": list(self.feature_order),
+            "std": [max(A_inv[i][i], 0.0) ** 0.5 for i in range(self.d)],
+            "data": [self.A[i][i] - self.ridge for i in range(self.d)],
+        }
 
     def theta(self) -> list[float]:
         return _matvec(_mat_inverse(self.A), self.b)
@@ -109,9 +126,11 @@ class LinearBandit:
 
     def to_dict(self) -> dict:
         return {"A": self.A, "b": self.b, "alpha": self.alpha,
-                "feature_order": list(self.feature_order)}
+                "feature_order": list(self.feature_order),
+                "ridge": self.ridge, "n_updates": self.n_updates}
 
     @classmethod
     def from_dict(cls, d: dict) -> "LinearBandit":
         return cls(d["A"], d["b"], alpha=d.get("alpha", 0.3),
-                   feature_order=d.get("feature_order", FEATURE_ORDER))
+                   feature_order=d.get("feature_order", FEATURE_ORDER),
+                   ridge=d.get("ridge", 1.0), n_updates=d.get("n_updates", 0))

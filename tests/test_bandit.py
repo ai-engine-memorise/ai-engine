@@ -63,6 +63,22 @@ def test_exploration_bonus_is_nonnegative_and_optional():
     assert ucb >= greedy                        # UCB only adds an exploration bonus
 
 
+def test_health_tracks_updates_data_and_uncertainty():
+    b = LinearBandit.with_prior({n: 0.2 for n in FEATURE_ORDER}, ridge=1.0)
+    h0 = b.health()
+    assert h0["n_updates"] == 0 and all(d == 0 for d in h0["data"])
+    ti, gi = FEATURE_ORDER.index("tag"), FEATURE_ORDER.index("geo")
+    x = [0.0] * len(FEATURE_ORDER); x[ti] = 1.0
+    for _ in range(5):
+        b.update(x, 1.0)
+    h = b.health()
+    assert h["n_updates"] == 5
+    assert h["data"][ti] > 0                 # tag fired -> has data
+    assert h["data"][gi] == 0                # geo never fired -> still at prior, no data
+    assert h["std"][ti] < h0["std"][ti]      # posterior uncertainty shrank where data arrived
+    assert h["std"][gi] == h0["std"][gi]     # unchanged where none did
+
+
 def test_to_from_dict_roundtrip():
     b = LinearBandit.with_prior({n: 0.1 for n in FEATURE_ORDER}, ridge=2.0, alpha=0.4)
     b.update([1.0] * len(FEATURE_ORDER), 0.7)
