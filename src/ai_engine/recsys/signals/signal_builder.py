@@ -13,7 +13,7 @@ from typing import Optional, Sequence
 from ..contracts.enums import EndReason, Outcome
 from ..contracts.config import RecConfig
 from ..contracts.models import Content, InteractionEvent, UserSignals, Vector
-from .engagement import estimate_reading_time, engagement_strength, classify_outcome
+from .engagement import estimate_reading_time, engagement_strength, classify_outcome, _dwell_ratio
 
 _VIEW_START = "CONTENT_VIEW_STARTED"
 _VIEW_END = "CONTENT_VIEW_ENDED"
@@ -107,6 +107,8 @@ def build_user_signals(
     tag_aversion: dict[str, float] = {}
 
     engaged_ids = set(aggs.keys())
+    dwell_ratios: list[float] = []
+    completions = revisits = 0
 
     for cid, agg in aggs.items():
         content = contents.get(cid)
@@ -125,6 +127,12 @@ def build_user_signals(
         )
         outcome = classify_outcome(strength, cfg)
         decay = _decay(agg.last_ts, now, cfg.half_life_days)
+
+        dwell_ratios.append(_dwell_ratio(agg.dwell_seconds, est, cfg))
+        if agg.end_reason == EndReason.next_button:
+            completions += 1
+        if agg.visits > 1:
+            revisits += 1
 
         if outcome == Outcome.positive:
             positives[cid] = max(strength, 0.0) * decay
@@ -201,6 +209,18 @@ def build_user_signals(
     recent_views = [cid for cid, _ in ordered]
     recency_vector = vectors.get(recent_views[0]) if recent_views else None
 
+    # engagement summary (depth / completion / pace) — evidence for persona explanations
+    n_views = len(aggs)
+    behavior = {
+        "n_views": n_views,
+        "n_positive": len(positives),
+        "n_negative": len(negatives),
+        "avg_dwell_ratio": round(sum(dwell_ratios) / n_views, 4) if n_views else 0.0,
+        "completion_rate": round(completions / n_views, 4) if n_views else 0.0,
+        "revisit_rate": round(revisits / n_views, 4) if n_views else 0.0,
+        "depth": round(len(positives) / n_views, 4) if n_views else 0.0,
+    }
+
     return UserSignals(
         user_id=user_id,
         positives=positives,
@@ -211,6 +231,7 @@ def build_user_signals(
         tag_aversion=tag_aversion,
         taste_vector=taste_vector,
         recency_vector=recency_vector,
+        behavior=behavior,
         demographics=demographics or {},
     )
 

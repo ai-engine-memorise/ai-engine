@@ -148,6 +148,25 @@ def test_ingest_requires_api_key_when_set(monkeypatch):
     assert client.post("/api/ingest", json=body, headers={"X-API-Key": "secret"}).status_code == 200
 
 
+def test_usermodel_explain_returns_persona():
+    client = _client()
+    now = datetime.now(timezone.utc) - timedelta(minutes=1)
+    ts = now.isoformat()
+    # deeply read two Forced-Labor stories -> warm, explainable
+    payload = []
+    for cid in ("101", "102"):
+        payload.append(_view("CONTENT_VIEW_STARTED", cid, ts))
+        payload.append(_view("CONTENT_VIEW_ENDED", cid, ts, reason="next_button", dwell=120))
+    client.post("/api/ingest", json=payload)
+
+    exp = client.get("/api/usermodel/explain", params={"user_id": "u1"}).json()["result"]
+    assert exp is not None
+    assert exp["visitor_type"]["type"]                      # a Falk type was assigned
+    assert exp["interests"] and exp["interests"][0]["label"]
+    assert isinstance(exp["summary"], str) and exp["summary"]
+    assert exp["engagement_style"] != "unknown"
+
+
 def test_usermodel_guarded_recommend_open_when_key_set(monkeypatch):
     monkeypatch.setenv("INGEST_API_KEY", "secret")
     client = _client()

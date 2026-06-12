@@ -125,6 +125,19 @@ def _served_record(request_id: str, user_id: str, items: list, out: dict, filter
     }
 
 
+def _load_cluster_model() -> Optional[dict]:
+    """Lazily load the offline-trained cluster model from CLUSTER_MODEL_PATH (or None)."""
+    import json
+    path = os.getenv("CLUSTER_MODEL_PATH")
+    if not path or not os.path.exists(path):
+        return None
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception:
+        return None
+
+
 def make_router(components: Components) -> APIRouter:
     router = APIRouter(prefix="/api", tags=["Recsys"])
     c = components
@@ -171,6 +184,40 @@ def make_router(components: Components) -> APIRouter:
         # by the same INGEST_API_KEY. The serving /recommend stays open for the app.
         sig = c.model_store.get_signals(user_id)
         return {"result": sig.model_dump() if sig else None}
+
+    @router.get("/usermodel/explain", dependencies=[Depends(_require_api_key)])
+    def usermodel_explain(
+        user_id: str = Query(..., examples=["u1"]),
+        verbalize: bool = Query(default=True, description="include a prose summary"),
+    ) -> dict:
+        """Glass-box persona: Falk visitor type + Pekarik preference + interests/aversions
+        (with evidence) + engagement style + thematic trajectory, derived from the model."""
+        from .explain.persona import explain_user
+        from .explain.verbalize import verbalize as _verbalize
+        sig = c.model_store.get_signals(user_id)
+        if sig is None:
+            return {"result": None}
+        # pull tags for the user's touched content -> interest evidence + trajectory
+        ids = list(dict.fromkeys(list(sig.positives) + list(sig.negatives) + sig.recent_views))
+        contents = c.content_store.get(ids) if ids else {}
+        exp = explain_user(sig, contents)
+        if verbalize:
+            exp.summary = _verbalize(exp)
+        out = exp.model_dump()
+        model = _load_cluster_model()
+        if model:                                  # place the visitor in a learned segment
+            from .explain.clusters import assign
+            out["cluster"] = assign(sig, model)
+        return {"result": out}
+
+    @router.get("/clusters", dependencies=[Depends(_require_api_key)])
+    def clusters() -> dict:
+        """The explainable visitor segments (offline-trained). Each cluster is described
+        by its top taxonomy tags + a Falk breadth hint. CLUSTER_MODEL_PATH must be set."""
+        model = _load_cluster_model()
+        if not model:
+            return {"result": None, "detail": "CLUSTER_MODEL_PATH not set / file missing"}
+        return {"result": {"profiles": model.get("profiles", [])}}
 
     @router.post("/recommend/preview")
     def recommend_preview(

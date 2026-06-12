@@ -76,6 +76,7 @@ class UserSignals(BaseModel):
     tag_aversion: dict[str, float] = Field(default_factory=dict)  # themes of negatively-engaged content -> penalty
     taste_vector: Optional[Vector] = None                         # semantic centroid (whole history)
     recency_vector: Optional[Vector] = None                       # vector of the most-recent view (sequence signal)
+    behavior: dict = Field(default_factory=dict)                  # engagement summary (depth/completion/pace) -> explanations
     demographics: dict = Field(default_factory=dict)
 
     @property
@@ -107,3 +108,38 @@ class Recommendation(BaseModel):
     items: list[ScoredCandidate]
     strategy: str = "warm"
     diagnostics: dict = Field(default_factory=dict)
+
+
+# --------------------------------------------------------------------------- #
+# Explainability: a glass-box reading of the user model, grounded in museum-
+# visitor theory (Falk identity types + Pekarik experience preferences).
+# --------------------------------------------------------------------------- #
+
+class Interest(BaseModel):
+    facet: str
+    label: str
+    weight: float                                    # affinity (or aversion) strength
+    evidence: list[str] = Field(default_factory=list)  # content ids that drove it
+
+
+class VisitorType(BaseModel):
+    """Falk (2009) visit-identity classification of the visitor."""
+    type: str                                        # Explorer | Hobbyist | Recharger | Experience-Seeker | Facilitator
+    confidence: float                                # margin between top two candidate scores
+    rationale: str
+    scores: dict[str, float] = Field(default_factory=dict)
+
+
+class PersonaExplanation(BaseModel):
+    """Structured, evidence-backed explanation derived purely from UserSignals +
+    content taxonomy. Deterministic; `summary` is the optional verbalized prose."""
+    user_id: str
+    is_cold: bool
+    interests: list[Interest] = Field(default_factory=list)
+    aversions: list[Interest] = Field(default_factory=list)
+    engagement_style: str = "unknown"                # deep_reader|completionist|skimmer|sampler|contemplative
+    experience_preference: str = "unknown"           # Pekarik: object|cognitive|introspective|social
+    visitor_type: Optional[VisitorType] = None       # Falk
+    trajectory: list[str] = Field(default_factory=list)  # recent thematic arc (labels, most-recent first)
+    demographics: dict = Field(default_factory=dict)
+    summary: Optional[str] = None
