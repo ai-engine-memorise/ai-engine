@@ -5,17 +5,28 @@ so the panel is mostly a **viewer over existing `/api/*`** plus three thin read 
 
 Open it at **`http://<host>:<port>/inspector`** (served by the recsys app itself).
 
-## Tabs
+Styled to the MEMORISE docs aesthetic (archival greige + bronze, Montserrat headings, light/dark).
 
+## Two scopes
+
+The tabs split into **Across users** (cohort / global state) and **Within user** (single-visitor deep
+dive, driven by the `user_id` field) — full visibility at both levels.
+
+**Across users**
+| Tab | Source | Shows |
+|---|---|---|
+| **Cohort** | `GET /api/clusters` | cluster cards: size bar (share of visitors), Falk hint, breadth, top tags (k-means or fcm) |
+| **Policy** | `GET /api/policy` | bandit **prior θ₀ vs learned θ** per feature + the learned shift; mode, α, ridge |
+| **Traffic** | `GET /api/metrics`, `GET /api/served/recent` | counters (ingests, recommends, cold-rate, avg pool, distractor-rate) + recent served-impression tail |
+
+**Within user**
 | Tab | Source | Shows |
 |---|---|---|
 | **Request** | `GET /api/recommend` | each rec as a **stacked breakdown bar** (semantic/affinity/tag/recency/aversion/geo), distractor flag, strategy, ranking mode, generators, pool size |
 | **User model** | `GET /api/usermodel/explain` | Falk type + Pekarik pref + engagement style, prose summary, interest/aversion bars (with evidence counts), trajectory, soft cluster membership |
-| **Segments** | `GET /api/clusters` | cluster cards: top tags, Falk hint, size, breadth (k-means or fcm) |
-| **Policy** | `GET /api/policy` | bandit **prior θ0 vs learned θ** per feature + the learned shift; mode, α, ridge |
-| **Traffic** | `GET /api/metrics`, `GET /api/served/recent` | counters (ingests, recommends, cold-rate, avg pool, distractor-rate) + recent served-impression tail |
 
-Header has: base URL, `X-API-Key` (for the PII-guarded tabs), and `user_id`. Settings persist in localStorage.
+Header: base URL, `X-API-Key` (PII-guarded tabs), `user_id`, theme toggle. Settings persist in localStorage.
+The `/inspector` route reads the file fresh per request, so HTML edits need only a browser refresh.
 
 ## New endpoints (all thin reads)
 
