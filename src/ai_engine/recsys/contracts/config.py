@@ -44,8 +44,9 @@ class RecConfig(BaseModel):
     # distractor / novelty injection (exploration): one deliberately off-profile item,
     # placed in a fixed slot and labelled kind="distractor" so the UI can surface it.
     distractor_enabled: bool = True
-    distractor_strategy: str = "max_dissimilar"  # max_dissimilar | unexplored_theme | random
-    distractor_slot: int = 3                      # 0-based position in the returned list
+    distractor_strategy: str = "max_dissimilar"   # max_dissimilar | unexplored_theme | random
+    distractor_probability: float = 1.0           # 1.0 = always inject a distractor
+    distractor_slots: list[int] = [3, 4]          # placed at one of these positions (random)
 
     # cold/warm routing
     cold_start_min_positives: int = 1

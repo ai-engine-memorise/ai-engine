@@ -4,6 +4,7 @@ Reads the materialized UserSignals from the UserModelStore (path B), so a reques
 a fast read + candidate scoring, not a rebuild.
 """
 from __future__ import annotations
+import random
 from typing import Optional
 
 from .contracts.config import RecConfig
@@ -90,16 +91,18 @@ class Recommender:
                 content_id=cid, final_score=fused, breakdown=breakdown, content=content,
             ))
 
-        # 3) diversity-aware rerank (reserve one slot for the distractor if enabled)
-        rel_limit = cfg.final_limit - 1 if cfg.distractor_enabled else cfg.final_limit
+        # 3) diversity-aware rerank — decide the distractor first (so we size the list right)
+        inject = cfg.distractor_enabled and (
+            cfg.distractor_probability >= 1.0 or random.random() < cfg.distractor_probability)
+        rel_limit = cfg.final_limit - (1 if inject else 0)
         ranked = mmr_rerank(scored, vectors, lambda_=cfg.mmr_lambda, limit=max(rel_limit, 1))
 
         diagnostics = {"pool_size": len(pool), "scored": len(scored),
                        "generators": generators, "cold_start_fallback": cold_fallback,
                        "filter": filter}
 
-        # 4) inject a labelled distractor (novelty / exploration) at a fixed slot
-        if cfg.distractor_enabled:
+        # 4) inject a labelled distractor (novelty / exploration) at slot 3 or 4 (random)
+        if inject:
             ranked_ids = {r.content_id for r in ranked}
             if filter:
                 # within-filter distractor: lowest-relevance item from the SAME filtered set
@@ -110,7 +113,7 @@ class Recommender:
             else:
                 distractor = self._distractor(signals, seen | ranked_ids)
             if distractor is not None:
-                slot = min(cfg.distractor_slot, len(ranked))
+                slot = min(random.choice(cfg.distractor_slots), len(ranked))
                 ranked.insert(slot, distractor)
                 diagnostics["distractor"] = {
                     "content_id": distractor.content_id,
