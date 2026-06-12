@@ -22,6 +22,22 @@ from .ranking.fusion import weighted_fuse, mmr_rerank
 from .ranking.bandit import LinearBandit, feature_vector
 
 
+def score_features(signals: UserSignals, content, vec, liked: list, cfg: RecConfig,
+                   near: Optional[tuple] = None) -> dict:
+    """The per-scorer feature dict for one candidate — the SINGLE source of truth for
+    the context vector, shared by serving (Recommender) and offline replay/bootstrap."""
+    per = {
+        "semantic": score_semantic(signals, vec),
+        "affinity": score_affinity(vec, liked),
+        "tag": score_tag(signals, content),
+        "recency": score_recency(signals, vec),
+        "aversion": score_aversion(signals, content),
+    }
+    if near is not None:
+        per["geo"] = score_geo(content, near, cfg.geo_scale_m)
+    return per
+
+
 class Recommender:
     def __init__(self, content_store: ContentStore, model_store: UserModelStore, cfg: RecConfig,
                  policy: Optional[LinearBandit] = None):
@@ -119,14 +135,7 @@ class Recommender:
         for cid in candidate_ids:
             content = contents.get(cid)
             vec = vectors.get(cid)
-            sem = score_semantic(signals, vec)
-            aff = score_affinity(vec, liked)     # max-sim to any one liked item (sharp)
-            tag = score_tag(signals, content)
-            rec = score_recency(signals, vec)   # sequence: closeness to most-recent view
-            av = score_aversion(signals, content)   # penalty for disliked themes (negative weight)
-            per = {"semantic": sem, "affinity": aff, "tag": tag, "recency": rec, "aversion": av}
-            if near is not None:                 # proximity to the request location (independent of tags)
-                per["geo"] = score_geo(content, near, cfg.geo_scale_m)
+            per = score_features(signals, content, vec, liked, cfg, near)
             # the context vector is ALWAYS captured (logged at serve) so the offline
             # trainer can fit a bandit even from statically-served traffic.
             x = feature_vector(per)

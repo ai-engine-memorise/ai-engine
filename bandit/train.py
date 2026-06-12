@@ -92,24 +92,33 @@ def main() -> None:
     ap.add_argument("--log", default=os.getenv("EVENT_LOG_DIR", "./data/eventlog"),
                     help="EVENT_LOG_DIR base (holds date=*/ events and served/date=*/ impressions)")
     ap.add_argument("--out", default=os.getenv("BANDIT_STATE_PATH", "./data/bandit_state.json"))
+    ap.add_argument("--samples", help="bypass the parquet join: JSONL of {\"features\":[...],\"reward\":r}")
+    ap.add_argument("--weight", type=float, default=1.0, help="per-sample weight")
     ap.add_argument("--ridge", type=float, default=1.0)
     ap.add_argument("--alpha", type=float, default=0.3)
     args = ap.parse_args()
 
     cfg = RecConfig()
-    served = _read_parquet_dir(os.path.join(args.log, "served", "**", "*.parquet"))
-    events = _read_parquet_dir(os.path.join(args.log, "date=*", "*.parquet"))
-    if not served:
-        sys.exit(f"no served impressions under {args.log}/served — serve some traffic first")
-
-    rewards = _rewards_by_impression(events, cfg)
-    samples = _samples(served, rewards)
+    if args.samples:
+        samples = []
+        with open(args.samples, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if line:
+                    d = json.loads(line)
+                    samples.append(([float(x) for x in d["features"]], float(d["reward"])))
+    else:
+        served = _read_parquet_dir(os.path.join(args.log, "served", "**", "*.parquet"))
+        events = _read_parquet_dir(os.path.join(args.log, "date=*", "*.parquet"))
+        if not served:
+            sys.exit(f"no served impressions under {args.log}/served — serve some traffic first")
+        samples = _samples(served, _rewards_by_impression(events, cfg))
 
     weights = {name: getattr(cfg.fusion, name, 0.0) for name in FEATURE_ORDER}
     bandit = LinearBandit.with_prior(weights, ridge=args.ridge, alpha=args.alpha)
     theta0 = bandit.theta()
     for x, r in samples:
-        bandit.update(x, r)
+        bandit.update(x, r, weight=args.weight)
     theta1 = bandit.theta()
 
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
@@ -117,7 +126,7 @@ def main() -> None:
         json.dump(bandit.to_dict(), fh, indent=2)
 
     pos = sum(1 for _, r in samples if r > 0)
-    print(f"impressions={len(served)}  samples={len(samples)}  rewarded(+)={pos}")
+    print(f"samples={len(samples)}  rewarded(+)={pos}")
     print("feature      prior_theta  trained_theta")
     for name, a, b in zip(FEATURE_ORDER, theta0, theta1):
         print(f"  {name:<10} {a:+.3f}       {b:+.3f}")

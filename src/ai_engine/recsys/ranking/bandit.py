@@ -81,11 +81,12 @@ class LinearBandit:
     def features(self, per: dict) -> list[float]:
         return feature_vector(per, self.feature_order)
 
-    def update(self, x: list[float], reward: float) -> None:
-        """Single online LinUCB update: A += x xᵀ ; b += reward·x."""
+    def update(self, x: list[float], reward: float, *, weight: float = 1.0) -> None:
+        """Online LinUCB update: A += w·x xᵀ ; b += w·reward·x. `weight` < 1 down-weights
+        a sample (e.g. bootstrap data from another study, so live data dominates later)."""
         for i in range(self.d):
-            self.b[i] += reward * x[i]
-            xi, row = x[i], self.A[i]
+            self.b[i] += weight * reward * x[i]
+            xi, row = weight * x[i], self.A[i]
             for j in range(self.d):
                 row[j] += xi * x[j]
 
