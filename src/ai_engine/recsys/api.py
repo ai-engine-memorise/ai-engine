@@ -191,7 +191,14 @@ def _online_bandit_update(c: Components, events) -> int:
 
 
 def make_router(components: Components) -> APIRouter:
-    router = APIRouter(prefix="/api", tags=["Recsys"])
+    # Grouped by concern under one /api prefix. Guarded groups carry a single
+    # router-level auth dependency instead of repeating it on every route.
+    router = APIRouter(prefix="/api")
+    serving = APIRouter(tags=["serving"])                                            # public, app-facing
+    write = APIRouter(tags=["write"], dependencies=[Depends(_require_api_key)])       # ingest + preview
+    usermodel_routes = APIRouter(tags=["usermodel"], dependencies=[Depends(_require_api_key)])
+    ops = APIRouter(tags=["ops"], dependencies=[Depends(_require_api_key)])           # policy/metrics/served/stats/clusters
+    admin = APIRouter(tags=["admin"], dependencies=[Depends(_require_api_key)])       # runtime config
     c = components
     # in-process counters for the inspector panel (v1; Prometheus /metrics is the prod upgrade)
     metrics = {"ingests": 0, "recommends": 0, "cold": 0, "warm": 0,
@@ -208,7 +215,7 @@ def make_router(components: Components) -> APIRouter:
             if d.get("content_id"):
                 metrics["distractor_placed"] += 1
 
-    @router.post("/ingest", dependencies=[Depends(_require_api_key)])
+    @write.post("/ingest")
     def ingest(payload: Union[dict, list] = Body(...)) -> dict:
         raws = payload if isinstance(payload, list) else [payload]
         events = normalize_events(raws)
@@ -226,7 +233,7 @@ def make_router(components: Components) -> APIRouter:
         return {"status": "ok", "ingested": len(events), "users": sorted(users),
                 "bandit_updates": bandit_updates}
 
-    @router.get("/recommend")
+    @serving.get("/recommend")
     def recommend(
         user_id: str = Query(..., examples=["u1"]),
         limit: Optional[int] = Query(default=None, ge=1, le=50),
@@ -250,14 +257,14 @@ def make_router(components: Components) -> APIRouter:
         _record(out)
         return {"result": out}
 
-    @router.get("/usermodel", dependencies=[Depends(_require_api_key)])
+    @usermodel_routes.get("/usermodel")
     def usermodel(user_id: str = Query(..., examples=["u1"])) -> dict:
         # debug/inspection endpoint — exposes demographics (PII), so it is guarded
         # by the same INGEST_API_KEY. The serving /recommend stays open for the app.
         sig = c.model_store.get_signals(user_id)
         return {"result": sig.model_dump() if sig else None}
 
-    @router.get("/usermodel/explain", dependencies=[Depends(_require_api_key)])
+    @usermodel_routes.get("/usermodel/explain")
     def usermodel_explain(
         user_id: str = Query(..., examples=["u1"]),
         verbalize: bool = Query(default=True, description="include a prose summary"),
@@ -283,7 +290,7 @@ def make_router(components: Components) -> APIRouter:
                               else assign(sig, model))
         return {"result": out}
 
-    @router.get("/usermodel/history", dependencies=[Depends(_require_api_key)])
+    @usermodel_routes.get("/usermodel/history")
     def usermodel_history(
         user_id: str = Query(..., examples=["u1"]),
         limit: int = Query(default=200, ge=1, le=2000),
@@ -319,7 +326,7 @@ def make_router(components: Components) -> APIRouter:
         return {"result": {"user_id": user_id, "event_count": len(events),
                            "aggregates": agg_rows, "events": ev_rows}}
 
-    @router.get("/clusters", dependencies=[Depends(_require_api_key)])
+    @ops.get("/clusters")
     def clusters() -> dict:
         """The explainable visitor segments (offline-trained). Each cluster is described
         by its top taxonomy tags + a Falk breadth hint. CLUSTER_MODEL_PATH must be set."""
@@ -328,7 +335,7 @@ def make_router(components: Components) -> APIRouter:
             return {"result": None, "detail": "CLUSTER_MODEL_PATH not set / file missing"}
         return {"result": {"method": model.get("method", "kmeans"), "profiles": model.get("profiles", [])}}
 
-    @router.get("/content/stats", dependencies=[Depends(_require_api_key)])
+    @ops.get("/content/stats")
     def content_stats(limit: int = Query(default=30, ge=1, le=200)) -> dict:
         """Cohort-wide content engagement: which items are seen / liked / abandoned across
         all visitors, popular themes, and each cluster's content preferences. PII-guarded."""
@@ -387,7 +394,7 @@ def make_router(components: Components) -> APIRouter:
         return {"result": {"users": len(sigs), "content": content[:limit],
                            "themes": themes, "clusters": clusters}}
 
-    @router.get("/policy", dependencies=[Depends(_require_api_key)])
+    @ops.get("/policy")
     def policy() -> dict:
         """The ranking policy: mode + bandit theta vs its prior + TRAINING HEALTH
         (per-weight confidence from the posterior, which weights still lack data, verdict)."""
@@ -428,7 +435,7 @@ def make_router(components: Components) -> APIRouter:
             }
         return {"result": out}
 
-    @router.get("/metrics", dependencies=[Depends(_require_api_key)])
+    @ops.get("/metrics")
     def metrics_endpoint() -> dict:
         """In-process serving counters for the inspector (not Prometheus)."""
         recs = metrics["recommends"] or 1
@@ -439,7 +446,7 @@ def make_router(components: Components) -> APIRouter:
             "distractor_rate": round(metrics["distractor_placed"] / (metrics["distractor_requested"] or 1), 4),
         }}
 
-    @router.get("/served/recent", dependencies=[Depends(_require_api_key)])
+    @ops.get("/served/recent")
     def served_recent(n: int = Query(default=50, ge=1, le=500)) -> dict:
         """Tail of the durable served-impression log (PII -> guarded). Needs EVENT_LOG_DIR."""
         import glob
@@ -469,7 +476,7 @@ def make_router(components: Components) -> APIRouter:
             out.append({**r, "items": items})
         return {"result": out}
 
-    @router.post("/recommend/preview", dependencies=[Depends(_require_api_key)])
+    @write.post("/recommend/preview")
     def recommend_preview(
         spec: PreviewSpec,
         filter: Optional[str] = Query(default=None),
@@ -504,12 +511,12 @@ def make_router(components: Components) -> APIRouter:
             setattr(c.cfg, name, getattr(new_cfg, name))
         c.recommender.policy = _build_policy(c.cfg)
 
-    @router.get("/config", dependencies=[Depends(_require_api_key)])
+    @admin.get("/config")
     def get_config() -> dict:
         """Current effective RecConfig (baseline + any runtime override)."""
         return {"result": c.cfg.model_dump()}
 
-    @router.put("/config", dependencies=[Depends(_require_api_key)])
+    @admin.put("/config")
     def put_config(patch: dict = Body(...)) -> dict:
         """Apply a (partial) RecConfig patch: validate -> apply live -> persist to
         the override store. Survives until the override store is cleared/flushed."""
@@ -524,7 +531,7 @@ def make_router(components: Components) -> APIRouter:
         c.config_store.set(c.cfg.model_dump())
         return {"result": c.cfg.model_dump(), "status": "applied"}
 
-    @router.post("/config/reset", dependencies=[Depends(_require_api_key)])
+    @admin.post("/config/reset")
     def reset_config() -> dict:
         """Drop the runtime override -> revert to the env/default baseline."""
         from .composition import _build_config
@@ -532,21 +539,17 @@ def make_router(components: Components) -> APIRouter:
         _apply_cfg(_build_config())
         return {"result": c.cfg.model_dump(), "status": "reset_to_baseline"}
 
+    for sub in (serving, write, usermodel_routes, ops, admin):
+        router.include_router(sub)
     return router
 
 
 def create_app(components: Optional[Components] = None) -> FastAPI:
     from fastapi.middleware.cors import CORSMiddleware
 
-    # OpenAPI docs are dev-only: they expose the full API map, so disable in prod
-    # unless AI_ENGINE_DEV=1.
-    _dev = os.getenv("AI_ENGINE_DEV") == "1"
-    app = FastAPI(
-        title="AI-Engine Recsys",
-        docs_url="/docs" if _dev else None,
-        redoc_url="/redoc" if _dev else None,
-        openapi_url="/openapi.json" if _dev else None,
-    )
+    # Swagger docs left on in prod (operator request). Note: /docs + /openapi.json
+    # expose the full API map publicly until the ingress is fronted with auth.
+    app = FastAPI(title="AI-Engine Recsys")
     # browser test UIs (ui4testing) call /api/* directly; allow cross-origin in dev
     app.add_middleware(
         CORSMiddleware,
