@@ -491,6 +491,16 @@ def create_app(components: Optional[Components] = None) -> FastAPI:
     )
     app.include_router(make_router(components or build_components()))
 
+    # Qdrant search surface (ported from legacy ai-engine-api service.py).
+    # Guarded so the recsys API still boots if the search stack (embedding model
+    # download / Qdrant connectivity) fails at startup.
+    try:
+        from ai_engine.search.api import make_search_router
+        app.include_router(make_search_router())
+        logger.info("Search router mounted (/api/search*)")
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"Search router NOT mounted: {e}")
+
     @app.get("/health", tags=["Health"])
     def health() -> dict:
         return {"status": "ok"}

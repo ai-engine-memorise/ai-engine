@@ -6,8 +6,12 @@ COPY src ./src
 # sqlalchemy+psycopg+pandas because DB_NAME is set in the cluster configmap, which
 # routes demographics through PostgresDemographicsProvider (db_interface.DB_Interface).
 # Drop the three db pkgs only if DB_NAME is removed from the api env (Null provider).
+# fastembed + loguru + python-dotenv: the Qdrant search surface (ai_engine.search,
+# mounted at /api/search*) embeds queries with fastembed (EMBEDDING_MODEL, downloaded
+# at boot) and the lib modules import loguru / dotenv.
 RUN pip install --no-cache-dir fastapi "uvicorn[standard]" qdrant-client redis pydantic pyarrow \
-    "sqlalchemy>=2.0,<3" "psycopg[binary]>=3.2,<4" "pandas>=2.3,<3"
+    "sqlalchemy>=2.0,<3" "psycopg[binary]>=3.2,<4" "pandas>=2.3,<3" \
+    fastembed loguru python-dotenv
 ENV PYTHONPATH=/app/src PYTHONUNBUFFERED=1
 EXPOSE 8000
 CMD ["python", "-m", "uvicorn", "ai_engine.recsys.api:app", "--host", "0.0.0.0", "--port", "8000"]
