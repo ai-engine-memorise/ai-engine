@@ -44,6 +44,7 @@ def _client(demographics=None, cfg=None, policy=None):
     buf = FakeEventSource()
     models = InMemoryUserModelStore()
     from ai_engine.recsys.adapters.event_log import NullEventLog
+    from ai_engine.recsys.adapters.config_store import InMemoryConfigStore
     components = Components(
         cfg=cfg, content_store=store, event_buffer=buf, model_store=models,
         updater=UserModelUpdater(store, models, cfg),
@@ -51,6 +52,7 @@ def _client(demographics=None, cfg=None, policy=None):
         demographics=demographics or NullDemographicsProvider(),
         event_log=NullEventLog(),
         impressions=InMemoryImpressionStore(),
+        config_store=InMemoryConfigStore(),
     )
     return TestClient(create_app(components))
 

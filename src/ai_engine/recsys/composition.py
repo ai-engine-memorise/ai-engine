@@ -26,6 +26,7 @@ class Components:
     demographics: DemographicsProvider
     event_log: object   # durable append-only log (Parquet) — .append(events)
     impressions: object   # short-lived served-feature store (request_id -> features) for online bandit
+    config_store: object   # runtime RecConfig override store (Redis / in-memory)
 
 
 def _build_content_store() -> ContentStore:
@@ -68,6 +69,16 @@ def _build_event_log():
         return ParquetEventLog(d)
     from .adapters.event_log import NullEventLog
     return NullEventLog()
+
+
+def _build_config_store():
+    url = os.getenv("REDIS_URL")
+    if url:
+        import redis
+        from .adapters.config_store import RedisConfigStore
+        return RedisConfigStore(redis.from_url(url, decode_responses=True))
+    from .adapters.config_store import InMemoryConfigStore
+    return InMemoryConfigStore()
 
 
 def _build_config() -> RecConfig:
@@ -126,7 +137,17 @@ def _build_policy(cfg: RecConfig):
 
 
 def build_components(cfg: Optional[RecConfig] = None) -> Components:
+    config_store = _build_config_store()
     cfg = cfg or _build_config()
+    # overlay the runtime override (if any) on top of the env/default baseline
+    if cfg is not None:
+        override = config_store.get()
+        if override:
+            from .adapters.config_store import deep_merge
+            try:
+                cfg = RecConfig.model_validate(deep_merge(cfg.model_dump(), override))
+            except Exception:  # noqa: BLE001 — a bad override must never block startup
+                pass
     content_store = _build_content_store()
     event_buffer, model_store, impressions = _build_stores()
     return Components(
@@ -139,4 +160,5 @@ def build_components(cfg: Optional[RecConfig] = None) -> Components:
         demographics=_build_demographics(),
         event_log=_build_event_log(),
         impressions=impressions,
+        config_store=config_store,
     )

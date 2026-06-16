@@ -387,7 +387,7 @@ def make_router(components: Components) -> APIRouter:
         return {"result": {"users": len(sigs), "content": content[:limit],
                            "themes": themes, "clusters": clusters}}
 
-    @router.get("/policy")
+    @router.get("/policy", dependencies=[Depends(_require_api_key)])
     def policy() -> dict:
         """The ranking policy: mode + bandit theta vs its prior + TRAINING HEALTH
         (per-weight confidence from the posterior, which weights still lack data, verdict)."""
@@ -428,7 +428,7 @@ def make_router(components: Components) -> APIRouter:
             }
         return {"result": out}
 
-    @router.get("/metrics")
+    @router.get("/metrics", dependencies=[Depends(_require_api_key)])
     def metrics_endpoint() -> dict:
         """In-process serving counters for the inspector (not Prometheus)."""
         recs = metrics["recommends"] or 1
@@ -469,7 +469,7 @@ def make_router(components: Components) -> APIRouter:
             out.append({**r, "items": items})
         return {"result": out}
 
-    @router.post("/recommend/preview")
+    @router.post("/recommend/preview", dependencies=[Depends(_require_api_key)])
     def recommend_preview(
         spec: PreviewSpec,
         filter: Optional[str] = Query(default=None),
@@ -493,13 +493,60 @@ def make_router(components: Components) -> APIRouter:
         c.event_log.log_served(_served_record(request_id, signals.user_id, out["items"], out, filter))
         return {"result": out}
 
+    # ----- runtime config (settings page) ---------------------------------- #
+
+    def _apply_cfg(new_cfg) -> None:
+        """Mutate the live cfg in place so the recommender/updater (which hold the
+        same object) see the change, then rebuild the bandit policy."""
+        from .contracts.config import RecConfig
+        from .composition import _build_policy
+        for name in RecConfig.model_fields:
+            setattr(c.cfg, name, getattr(new_cfg, name))
+        c.recommender.policy = _build_policy(c.cfg)
+
+    @router.get("/config", dependencies=[Depends(_require_api_key)])
+    def get_config() -> dict:
+        """Current effective RecConfig (baseline + any runtime override)."""
+        return {"result": c.cfg.model_dump()}
+
+    @router.put("/config", dependencies=[Depends(_require_api_key)])
+    def put_config(patch: dict = Body(...)) -> dict:
+        """Apply a (partial) RecConfig patch: validate -> apply live -> persist to
+        the override store. Survives until the override store is cleared/flushed."""
+        from .contracts.config import RecConfig
+        from .adapters.config_store import deep_merge
+        merged = deep_merge(c.cfg.model_dump(), patch)
+        try:
+            new_cfg = RecConfig.model_validate(merged)   # type/range validation
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(status_code=422, detail=f"invalid config: {e}")
+        _apply_cfg(new_cfg)
+        c.config_store.set(c.cfg.model_dump())
+        return {"result": c.cfg.model_dump(), "status": "applied"}
+
+    @router.post("/config/reset", dependencies=[Depends(_require_api_key)])
+    def reset_config() -> dict:
+        """Drop the runtime override -> revert to the env/default baseline."""
+        from .composition import _build_config
+        c.config_store.clear()
+        _apply_cfg(_build_config())
+        return {"result": c.cfg.model_dump(), "status": "reset_to_baseline"}
+
     return router
 
 
 def create_app(components: Optional[Components] = None) -> FastAPI:
     from fastapi.middleware.cors import CORSMiddleware
 
-    app = FastAPI(title="AI-Engine Recsys")
+    # OpenAPI docs are dev-only: they expose the full API map, so disable in prod
+    # unless AI_ENGINE_DEV=1.
+    _dev = os.getenv("AI_ENGINE_DEV") == "1"
+    app = FastAPI(
+        title="AI-Engine Recsys",
+        docs_url="/docs" if _dev else None,
+        redoc_url="/redoc" if _dev else None,
+        openapi_url="/openapi.json" if _dev else None,
+    )
     # browser test UIs (ui4testing) call /api/* directly; allow cross-origin in dev
     app.add_middleware(
         CORSMiddleware,
@@ -529,6 +576,18 @@ def create_app(components: Optional[Components] = None) -> FastAPI:
         path = os.path.join(os.path.dirname(__file__), "static", "inspector.html")
         if not os.path.exists(path):
             return HTMLResponse("<h1>inspector.html missing</h1>", status_code=404)
+        with open(path, encoding="utf-8") as fh:
+            return HTMLResponse(fh.read())
+
+    @app.get("/settings", tags=["Settings"])
+    def settings_page():
+        # Inert HTML shell: contains no secrets. The operator pastes the API key in
+        # the page; its JS sends it as X-API-Key on the guarded /config calls, so no
+        # data is reachable without the key.
+        from fastapi.responses import HTMLResponse
+        path = os.path.join(os.path.dirname(__file__), "static", "settings.html")
+        if not os.path.exists(path):
+            return HTMLResponse("<h1>settings.html missing</h1>", status_code=404)
         with open(path, encoding="utf-8") as fh:
             return HTMLResponse(fh.read())
 
