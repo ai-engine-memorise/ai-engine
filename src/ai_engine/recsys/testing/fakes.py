@@ -101,6 +101,13 @@ class InMemoryImpressionStore:
     def get(self, request_id: str) -> dict:
         return dict(self._d.get(request_id, {}))
 
+    def consume(self, request_id: str, content_id: str) -> None:
+        d = self._d.get(request_id)
+        if d and content_id in d:
+            del d[content_id]
+            if not d:
+                self._d.pop(request_id, None)
+
 
 class InMemoryUserModelStore:
     """UserModelStore backed by a dict (recompute-backed equivalent of Redis)."""

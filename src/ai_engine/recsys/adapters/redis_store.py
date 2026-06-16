@@ -51,6 +51,21 @@ class RedisImpressionStore:
         raw = self.client.get(f"{self.prefix}:{request_id}")
         return json.loads(raw) if raw else {}
 
+    def consume(self, request_id: str, content_id: str) -> None:
+        """Drop a served item's context after it has produced one reward, so a redelivered
+        reward (retry / at-least-once webhook) can't double-count the update."""
+        key = f"{self.prefix}:{request_id}"
+        raw = self.client.get(key)
+        if not raw:
+            return
+        d = json.loads(raw)
+        if content_id in d:
+            del d[content_id]
+            if d:
+                self.client.set(key, json.dumps(d), ex=self.ttl)
+            else:
+                self.client.delete(key)
+
 
 class RedisUserModelStore:
     def __init__(self, client: "redis.Redis", *, ttl_seconds: int = 7 * 24 * 3600, key_prefix: str = "umodel"):

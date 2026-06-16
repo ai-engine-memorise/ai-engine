@@ -51,6 +51,7 @@ class ImpressionStore(Protocol):
     exact context for an ONLINE bandit update. TTL'd; not durable (the Parquet log is)."""
     def put(self, request_id: str, features: dict) -> None: ...      # {content_id: vector}
     def get(self, request_id: str) -> dict: ...
+    def consume(self, request_id: str, content_id: str) -> None: ...  # drop after one update (idempotency)
 
 
 @runtime_checkable

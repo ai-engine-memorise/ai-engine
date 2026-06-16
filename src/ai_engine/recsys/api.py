@@ -159,6 +159,7 @@ def _online_bandit_update(c: Components, events) -> int:
         reward = engagement_strength(dwell_seconds=e.dwell_seconds, est_reading_time=est,
                                      end_reason=e.end_reason, visits=1, survey_rating=None, cfg=cfg)
         policy.update(x, reward)
+        c.impressions.consume(e.request_id, e.content_id)   # idempotency: one reward per impression
         updated += 1
     if updated:
         path = os.getenv("BANDIT_STATE_PATH")
