@@ -124,10 +124,11 @@ class Recommender:
         # item-kNN like signal: fetch the liked items' vectors once (relative weights).
         # kept out of the stored user model so it doesn't grow with #likes — read at serve.
         liked: list[tuple[float, list[float]]] = []
-        if signals.positives:
-            lv = self.content_store.get_vectors(list(signals.positives))
-            mx = max(signals.positives.values()) or 1.0
-            liked = [(signals.positives[cid] / mx, lv[cid]) for cid in signals.positives if cid in lv]
+        pos = {cid: w for cid, w in signals.positives.items() if w > 0.0}
+        if pos:
+            lv = self.content_store.get_vectors(list(pos))
+            mx = max(pos.values())
+            liked = [(pos[cid] / mx, lv[cid]) for cid in pos if cid in lv]
 
         use_bandit = cfg.ranking_mode == "bandit" and self.policy is not None
         scored: list[ScoredCandidate] = []

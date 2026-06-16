@@ -50,6 +50,8 @@ def _end_reason(value) -> Optional[EndReason]:
 
 def normalize_event(raw: dict) -> Optional[InteractionEvent]:
     """Map one RudderStack track/identify payload to an InteractionEvent (or None)."""
+    if not isinstance(raw, dict):
+        return None
     # identify call (app sends it AFTER the survey, traits = persona/demographics).
     # No `event` field -> route traits through the survey/demographics fold.
     if raw.get("type") == "identify" or (raw.get("traits") and not raw.get("event")):

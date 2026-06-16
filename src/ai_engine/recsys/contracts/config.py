@@ -17,7 +17,6 @@ class FusionWeights(BaseModel):
     recency: float = 0.10     # sequence awareness: similarity to the MOST-RECENT view
     aversion: float = -0.25   # PENALTY: overlap with disliked themes (negative weight)
     geo: float = 0.20         # proximity to the request's location (only scored when one is given)
-    popularity: float = 0.0   # off by default
 
 
 class RecConfig(BaseModel):

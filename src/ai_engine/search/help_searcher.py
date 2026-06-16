@@ -86,9 +86,9 @@ class CommonSearch:
         #     field_schema=PayloadSchemaType.KEYWORD,
         # )
         
-        if isinstance(item_id, str):
+        if isinstance(item_id, (str, int)):
             item_id = [item_id]
-        
+
         scroll_filter = Filter(
             must=[
                 FieldCondition(

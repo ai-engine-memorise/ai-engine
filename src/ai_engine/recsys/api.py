@@ -12,6 +12,7 @@ QDRANT_API_URL set it runs fully in-memory on dev fixtures.
 from __future__ import annotations
 import logging
 import os
+import threading
 from datetime import datetime, timezone
 from typing import Any, Optional, Union
 from uuid import uuid4
@@ -68,17 +69,26 @@ def build_preview_signals(spec: PreviewSpec, content_store) -> UserSignals:
 
 logger = logging.getLogger(__name__)
 
+# serializes online bandit mutation (writer side). When bandit_online is enabled,
+# the reader side (Recommender.policy.rank_scores) should be guarded with the same
+# lock; today the online path is off by default (ranking_mode=static).
+_BANDIT_LOCK = threading.Lock()
+
 
 def _require_api_key(x_api_key: Optional[str] = Header(default=None)) -> None:
     """Guard write endpoints with a shared secret (env INGEST_API_KEY).
 
     If INGEST_API_KEY is unset, requests are allowed (dev) but a warning is logged.
     """
+    import hmac
     expected = os.getenv("INGEST_API_KEY")
     if not expected:
-        logger.warning("INGEST_API_KEY unset: /api/ingest is UNAUTHENTICATED")
-        return
-    if x_api_key != expected:
+        # fail closed in prod; only run unauthenticated when explicitly in dev
+        if os.getenv("AI_ENGINE_DEV") == "1":
+            logger.warning("INGEST_API_KEY unset (AI_ENGINE_DEV=1): write endpoints UNAUTHENTICATED")
+            return
+        raise HTTPException(status_code=503, detail="server auth not configured (INGEST_API_KEY unset)")
+    if not x_api_key or not hmac.compare_digest(x_api_key, expected):
         raise HTTPException(status_code=401, detail="invalid or missing X-API-Key")
 
 
@@ -148,27 +158,35 @@ def _online_bandit_update(c: Components, events) -> int:
         return 0
     from .signals.engagement import estimate_reading_time, engagement_strength
     updated = 0
-    for e in events:
-        if e.event != "CONTENT_VIEW_ENDED" or not e.request_id or not e.content_id:
-            continue
-        x = c.impressions.get(e.request_id).get(e.content_id)
-        if not x:
-            continue
-        content = c.content_store.get([e.content_id]).get(e.content_id)
-        est = estimate_reading_time(content.word_count, content.has_image, cfg) if content else 0.0
-        reward = engagement_strength(dwell_seconds=e.dwell_seconds, est_reading_time=est,
-                                     end_reason=e.end_reason, visits=1, survey_rating=None, cfg=cfg)
-        policy.update(x, reward)
-        c.impressions.consume(e.request_id, e.content_id)   # idempotency: one reward per impression
-        updated += 1
-    if updated:
-        path = os.getenv("BANDIT_STATE_PATH")
-        if path:
-            import json
-            tmp = path + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as fh:
-                json.dump(policy.to_dict(), fh)
-            os.replace(tmp, path)
+    with _BANDIT_LOCK:
+        for e in events:
+            try:
+                if e.event != "CONTENT_VIEW_ENDED" or not e.request_id or not e.content_id:
+                    continue
+                x = c.impressions.get(e.request_id).get(e.content_id)
+                if not x:
+                    continue
+                content = c.content_store.get([e.content_id]).get(e.content_id)
+                est = estimate_reading_time(content.word_count, content.has_image, cfg) if content else 0.0
+                reward = engagement_strength(dwell_seconds=e.dwell_seconds, est_reading_time=est,
+                                             end_reason=e.end_reason, visits=1, survey_rating=None, cfg=cfg)
+                policy.update(x, reward)
+                c.impressions.consume(e.request_id, e.content_id)   # idempotency: one reward per impression
+                updated += 1
+            except Exception:
+                logger.exception("online bandit update failed for one event; skipping")
+                continue
+        if updated:
+            path = os.getenv("BANDIT_STATE_PATH")
+            if path:
+                try:
+                    import json
+                    tmp = path + ".tmp"
+                    with open(tmp, "w", encoding="utf-8") as fh:
+                        json.dump(policy.to_dict(), fh)
+                    os.replace(tmp, path)
+                except Exception:
+                    logger.exception("failed to persist bandit state")
     return updated
 
 

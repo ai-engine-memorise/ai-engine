@@ -21,7 +21,6 @@ def weighted_fuse(per_scorer: dict[str, float], weights: FusionWeights) -> tuple
         "recency": weights.recency,
         "aversion": weights.aversion,
         "geo": weights.geo,
-        "popularity": weights.popularity,
     }
     breakdown = {name: wmap.get(name, 0.0) * val for name, val in per_scorer.items()}
     return sum(breakdown.values()), breakdown

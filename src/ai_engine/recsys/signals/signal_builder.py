@@ -62,13 +62,13 @@ def aggregate_views(events: Sequence[InteractionEvent]) -> dict[str, ViewAggrega
 
         agg.last_ts = max(e.ts for e in evs)
 
-        ratings = [
-            float(e.survey_answers["rating"])
-            for e in evs
+        rating_evs = [
+            e for e in evs
             if isinstance(e.survey_answers, dict) and "rating" in e.survey_answers
         ]
-        if ratings:
-            agg.survey_rating = ratings[-1]
+        if rating_evs:                       # most-recent rating wins (by ts, not list order)
+            latest_rating = max(rating_evs, key=lambda e: e.ts)
+            agg.survey_rating = float(latest_rating.survey_answers["rating"])
 
         out[cid] = agg
     return out
