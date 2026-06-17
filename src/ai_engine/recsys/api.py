@@ -94,17 +94,15 @@ def _require_api_key(x_api_key: Optional[str] = Header(default=None)) -> None:
 
 def _dump_items(items, include_content: bool) -> list:
     """Output contract: id / rank / relevance_score / role (+ breakdown, features, optional content).
-    The distractor is OUTSIDE the rank ordering -> rank=null; only targets are ranked."""
+    EVERY item is ranked by its position in the served ordering (1-based), distractor
+    INCLUDED; the distractor is still flagged via role='distractor' so the UI can mark it."""
     out = []
-    rank = 0
-    for i in items:
+    for rank, i in enumerate(items, start=1):
         d = i.model_dump()
         is_distractor = d.get("kind") == "distractor"
-        if not is_distractor:
-            rank += 1
         item = {
             "id": d["content_id"],
-            "rank": None if is_distractor else rank,
+            "rank": rank,
             "relevance_score": d["final_score"],
             "role": "distractor" if is_distractor else "target",
             "breakdown": d.get("breakdown", {}),

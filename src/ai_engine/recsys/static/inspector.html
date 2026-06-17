@@ -317,7 +317,7 @@ async function runRecommend(){
     tbl.append(el("tr",{},el("th",{style:"width:44px"},"rank"),el("th",{},"id"),el("th",{},"score"),el("th",{style:"width:240px"},"breakdown"),el("th",{},"title")));
     for(const it of r.items){const isD=it.role==="distractor";
       tbl.append(el("tr",{},
-        el("td",{},isD?el("span",{class:"pill distractor"},"distr"):el("b",{},String(it.rank))),
+        el("td",{},el("b",{},String(it.rank)),isD?el("span",{class:"pill distractor",style:"margin-left:6px"},"distr"):""),
         el("td",{class:"num"},it.id),el("td",{class:"num"},fmt(it.relevance_score)),
         el("td",{},breakdownBar(it.breakdown||{})),
         el("td",{class:"small mut"},(it.content&&it.content.title)||"")));}
