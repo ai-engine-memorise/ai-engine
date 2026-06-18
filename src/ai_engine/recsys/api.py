@@ -676,7 +676,14 @@ def make_router(components: Components) -> APIRouter:
             rec = c.recommender.recommend_for_signals(
                 sig, filter=sc.get("filter"), near=near, geo_radius_m=sc.get("geo_radius_m"))
             items = _dump_items(rec.items, include_content=True)
-            vectors = c.content_store.get_vectors([it["id"] for it in items])
+            ids = [it["id"] for it in items]
+            vectors = c.content_store.get_vectors(ids)
+            try:
+                payloads = c.content_store.raw_payloads(ids)     # media/meta for item detail cards
+            except Exception:
+                payloads = {}
+            for it in items:
+                it["payload"] = payloads.get(it["id"])
             results.append({"name": sc.get("name", "scenario"), "filter": sc.get("filter"),
                             "strategy": rec.strategy, "items": items,
                             "metrics": list_metrics(items, vectors, rec.strategy),

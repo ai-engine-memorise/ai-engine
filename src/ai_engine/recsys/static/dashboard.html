@@ -22,7 +22,7 @@
   --sidebar:#16150F; --sidebar-fg:#E8E1D3; --sidebar-mut:#8E8472; --sidebar-line:#ffffff10;
 }
 :root{--serif:'Source Serif 4',Georgia,serif}
-:root{--c-semantic:#4F6276;--c-affinity:#5E7355;--c-tag:#A8895B;--c-recency:#7A5C6E;--c-aversion:#9C5B4F;--c-geo:#4E7E78;--maxw:1040px;--rad:12px;--side-w:248px;--side-w-min:64px}
+:root{--c-semantic:#4F6276;--c-affinity:#5E7355;--c-tag:#A8895B;--c-recency:#7A5C6E;--c-aversion:#9C5B4F;--c-geo:#4E7E78;--maxw:1320px;--rad:12px;--side-w:248px;--side-w-min:64px}
 *{box-sizing:border-box}
 body{margin:0;font-family:var(--serif);font-size:14.5px;line-height:1.55;background:var(--bg);color:var(--fg);-webkit-font-smoothing:antialiased}
 h1,h2,h3,.mont{font-family:Montserrat,sans-serif;font-weight:600;letter-spacing:-.015em}
@@ -79,7 +79,7 @@ body.nav-min .side-foot .conn{margin:0}
 
 /* ===== main ===== */
 main{flex:1 1 auto;min-width:0}
-.page{max-width:var(--maxw);margin:0 auto;padding:26px 30px 80px}
+.page{max-width:var(--maxw);margin:0 auto;padding:26px 56px 80px}
 .pagehead{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:0 0 20px;flex-wrap:wrap}
 .pagehead .eyebrow{margin:0 0 5px}
 .pagehead h1{margin:0;font-size:23px;color:var(--primary-dark)}
@@ -91,7 +91,7 @@ main{flex:1 1 auto;min-width:0}
 
 /* top bar */
 .topbar{position:sticky;top:0;z-index:25;display:flex;align-items:center;gap:12px;
-  padding:10px 30px;background:var(--panel);border-bottom:1px solid var(--line)}
+  padding:10px 56px;background:var(--panel);border-bottom:1px solid var(--line)}
 .tb-field{display:flex;align-items:center;gap:7px}
 .tb-field label{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut);font-weight:700}
 .tb-field input{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 9px;font:inherit;font-size:13px;color:var(--fg);width:130px}
@@ -136,8 +136,17 @@ main{flex:1 1 auto;min-width:0}
 .cfghelp{font-size:12.5px;color:var(--mut);margin-top:2px;line-height:1.45}
 .cfgpath{font-family:'Roboto Mono',monospace;font-size:10.5px;color:var(--mut);opacity:.55;margin-top:3px}
 .cfgctl{justify-self:end;width:100%;display:flex;justify-content:flex-end;align-items:center}
-.cfgctl input.f,.cfgctl select.f{width:100%;max-width:200px}
-.cfgctl input[type=checkbox]{width:18px;height:18px;cursor:pointer}
+.cfgctl input.f,.cfgctl select.f{width:100%;max-width:200px;font-family:'Roboto Mono',monospace;font-size:13px;
+  padding:8px 12px;border-radius:9px;background:var(--bg);transition:border-color .15s,box-shadow .15s,background .15s}
+.cfgctl input.f[type=number],.cfgctl input.f[data-t="num"]{text-align:right}
+.cfgctl input[type=number]{-moz-appearance:textfield;appearance:textfield}
+.cfgctl input[type=number]::-webkit-outer-spin-button,
+.cfgctl input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.cfgctl input.f:hover:not(:disabled),.cfgctl select.f:hover:not(:disabled){border-color:var(--accent)}
+.cfgctl input.f:focus,.cfgctl select.f:focus{background:var(--panel);border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-t)}
+.cfgctl select.f{cursor:pointer;font-family:Montserrat,sans-serif}
+.cfgctl input[type=checkbox]{width:20px;height:20px;cursor:pointer;accent-color:var(--accent)}
+.cfgctl input:disabled,.cfgctl select:disabled{background:var(--code);color:var(--fg);opacity:.9;cursor:default;border-color:transparent}
 
 /* key icon rotated −45° for a hanging-key look */
 .tb-icon svg,.keyglyph svg{transform:rotate(-45deg)}
@@ -402,10 +411,12 @@ const SCOPE={};GROUPS.forEach(g=>Object.keys(g.tabs).forEach(t=>SCOPE[t]=g.label
 const BY_SLUG={};Object.keys(ALL).forEach(n=>BY_SLUG[slug(n)]=n);
 let current="Cohort";
 let userCtx=null;            // {id, sub} when drilled into a single visitor (from the Cohort table)
+let cfgTab=null;             // active Config category subtab
+let cfgEdit=false;           // Config is read-only until Edit is clicked
 const USER_SUBS=[["profile","Profile",renderUser],["history","History",renderHistory],["recommend","Recommend",renderRequest]];
 
-function setTab(n){if(!ALL[n])return;userCtx=null;current=n;const s=slug(n);if(location.hash!=="#/"+s)location.hash="#/"+s;else paint();}
-function openUser(id,sub){id=String(id).trim();if(!id)return;sub=sub||"profile";
+function setTab(n){if(!ALL[n])return;userCtx=null;cfgEdit=false;current=n;const s=slug(n);if(location.hash!=="#/"+s)location.hash="#/"+s;else paint();}
+function openUser(id,sub){id=String(id).trim();if(!id)return;sub=sub||"profile";cfgEdit=false;
   $("#uid").value=id;localStorage.setItem("ins_uid",id);
   const h=`#/user/${encodeURIComponent(id)}/${sub}`;if(location.hash!==h)location.hash=h;else paint();}
 function paint(){
@@ -718,13 +729,19 @@ async function postJSON(path,body){
   if(!r.ok)throw new Error(r.status+" "+r.statusText+", "+path);
   return (await r.json()).result;
 }
-function affinityCard(spec){
-  const aff=Object.entries(spec.tag_affinity||{}).sort((a,b)=>b[1]-a[1]);
+const _COMPLETION={full:"both surveys",personalization:"personalization only",demographics:"onboarding only",none:"no survey"};
+function modelCard(persona){
+  const spec=persona.spec||persona, aff=Object.entries(spec.tag_affinity||{}).sort((a,b)=>b[1]-a[1]);
   const demo=Object.entries(spec.demographics||{});
-  return el("div",{class:"card"},cardhead("Synthetic user model"),
-    demo.length?el("div",{class:"row",style:"margin-bottom:8px"},demo.map(([k,val])=>el("span",{class:"pill neutral"},k+": "+val))):"",
+  const head=el("div",{class:"row",style:"margin-bottom:8px;align-items:center"},
+    el("b",{},persona.name||"Synthetic user"),
+    persona.type?el("span",{class:"pill neutral"},persona.type):"",
+    persona.completion?el("span",{class:"pill "+(persona.completion==="none"?"cold":"bandit")},_COMPLETION[persona.completion]||persona.completion):"");
+  return el("div",{class:"card",id:"ev_modelcard"},head,
+    persona.description?el("div",{class:"small mut",style:"margin:-2px 0 8px"},persona.description):"",
+    demo.length?el("div",{class:"row",style:"margin-bottom:8px;flex-wrap:wrap;gap:5px"},demo.map(([k,val])=>el("span",{class:"pill neutral"},k.replace(/^q:/,"")+": "+(Array.isArray(val)?val.join(", "):val)))):"",
     aff.length?valueBars(aff.map(([k,w])=>[k.split(":").slice(1).join(":")||k,w]),{max:1})
-              :el("div",{class:"small mut"},"No matching tags — persona will fall back to cold/diverse content."));
+              :el("div",{class:"small mut"},"No interest tags — persona relies on the cold/diverse fallback."));
 }
 function metricsGrid(m){
   const g=el("div",{class:"grid"});
@@ -733,6 +750,28 @@ function metricsGrid(m){
            mc("diversity",m.intra_list_diversity),mc("distinct tags",m.distinct_tags),
            mc("distractor",m.distractor_present?"yes":"no"));
   return g;
+}
+// tag chips from an item's content tags (facet:label), capped
+function itemTags(it,max=6){
+  const tags=((it.content&&it.content.tags)||(it.payload&&it.payload.tags)||[]);
+  const wrap=el("div",{class:"row",style:"flex-wrap:wrap;gap:4px;margin-top:5px"});
+  tags.slice(0,max).forEach(t=>wrap.append(el("span",{class:"tag"},t.label||"")));
+  if(tags.length>max)wrap.append(el("span",{class:"small mut"},"+"+(tags.length-max)));
+  return wrap;
+}
+function itemRow(it){
+  const isD=it.role==="distractor", title=(it.content&&it.content.title)||(it.payload&&it.payload.title)||"(untitled)";
+  const r=el("div",{class:"card lift",style:"margin:0 0 8px;cursor:pointer",title:"open item",onclick:()=>openItemDetail(it)},
+    el("div",{class:"row",style:"align-items:flex-start;gap:10px"},
+      el("span",{class:"pill neutral",style:"min-width:30px;text-align:center"},"#"+it.rank),
+      el("div",{style:"flex:1;min-width:0"},
+        el("div",{style:"display:flex;gap:8px;align-items:center"},
+          el("b",{style:"flex:1"},title),
+          isD?el("span",{class:"pill distractor"},"distractor"):"",
+          el("span",{class:"num small mut"},fmt(it.relevance_score))),
+        breakdownBar(it.breakdown||{}),
+        itemTags(it)));
+  return r;
 }
 function scenarioCard(s){
   const m=s.metrics||{}, c=el("div",{class:"card"});
@@ -744,64 +783,88 @@ function scenarioCard(s){
   c.append(metricsGrid(m));
   const fs=Object.entries(m.facet_spread||{});
   if(fs.length)c.append(el("div",{style:"margin-top:8px"},el("span",{class:"small mut"},"facet spread:  "),fs.map(([f,n])=>el("span",{class:"tag"},f+" ×"+n))));
-  if((s.items||[]).length){
-    const tbl=el("table",{style:"margin-top:10px"});
-    tbl.append(el("tr",{},el("th",{style:"width:44px"},"rank"),el("th",{},"id"),el("th",{},"score"),el("th",{style:"width:230px"},"breakdown"),el("th",{},"title")));
-    for(const it of s.items){const isD=it.role==="distractor";
-      tbl.append(el("tr",{},
-        el("td",{},el("b",{},String(it.rank)),isD?el("span",{class:"pill distractor",style:"margin-left:6px"},"distr"):""),
-        el("td",{class:"num"},it.id),el("td",{class:"num"},fmt(it.relevance_score)),
-        el("td",{},breakdownBar(it.breakdown||{})),
-        el("td",{class:"small mut"},(it.content&&it.content.title)||"")));}
-    c.append(tbl);
-  }else c.append(el("div",{class:"empty",style:"margin-top:8px"},"No items for this scenario."));
+  const host=el("div",{style:"margin-top:10px"});
+  if((s.items||[]).length)s.items.forEach(it=>host.append(itemRow(it)));
+  else host.append(el("div",{class:"empty"},"No items for this scenario."));
+  c.append(host);
   return c;
 }
+// item detail modal — memorial-UI card logic (image / title / text / meta / tags / source)
+function openItemDetail(it){
+  const p=it.payload||{}, cnt=it.content||{};
+  const title=cnt.title||p.title||"(No title)", text=cnt.text||p.text||"";
+  const img=p.image_url||p.imageUrl||"", src=p.public_url||p.publicUrl||"";
+  const tags=(cnt.tags||p.tags||[]);
+  const meta=el("div",{class:"row",style:"flex-wrap:wrap;gap:6px;margin:8px 0"});
+  if(p.creator)meta.append(el("span",{class:"pill neutral"},"creator: "+p.creator));
+  if(cnt.content_type||p.content_type)meta.append(el("span",{class:"pill neutral"},cnt.content_type||p.content_type));
+  meta.append(el("span",{class:"pill neutral"},"id "+it.id));
+  if(it.relevance_score!=null)meta.append(el("span",{class:"pill warm"},"score "+fmt(it.relevance_score)));
+  const card=el("div",{class:"modal",style:"max-width:560px;max-height:86vh;overflow:auto"},
+    el("div",{class:"row",style:"justify-content:space-between;align-items:center"},
+      el("h2",{style:"margin:0;font-size:18px"},title),
+      el("button",{class:"iconbtn",onclick:closeItemDetail},"✕")),
+    img?el("img",{src:img,alt:"",style:"width:100%;border-radius:10px;margin:10px 0;object-fit:cover;max-height:300px"}):"",
+    meta,
+    text?el("p",{style:"line-height:1.6;margin:6px 0"},text):el("div",{class:"small mut"},"No text."),
+    tags.length?el("div",{style:"margin-top:8px"},el("div",{class:"small mut",style:"margin-bottom:4px"},"tags"),
+      el("div",{class:"row",style:"flex-wrap:wrap;gap:4px"},tags.map(t=>el("span",{class:"tag"},(t.facet?t.facet+":":"")+(t.label||""))))):"",
+    src?el("div",{style:"margin-top:12px"},el("a",{class:"linkbtn",href:src,target:"_blank",rel:"noopener"},"Open source ↗")):"");
+  const ov=el("div",{class:"overlay show",id:"itemOverlay",onclick:e=>{if(e.target===ov)closeItemDetail();}},card);
+  closeItemDetail(); document.body.append(ov);
+}
+function closeItemDetail(){const o=$("#itemOverlay");if(o)o.remove();}
 async function runEval(){
-  const out=$("#evalout");out.innerHTML="";
-  if(!_evalSpec){out.append(el("div",{class:"empty"},"Pick or build a persona first."));return;}
-  out.append(el("div",{class:"small mut"},"running…"));
+  const out=$("#ev_results");if(!out)return;
+  if(!_evalSpec){out.innerHTML="";out.append(el("div",{class:"empty"},"Pick or build a synthetic visitor above."));return;}
+  out.innerHTML="";out.append(el("div",{class:"small mut"},"running…"));
   const body={spec:_evalSpec,cold:$("#ev_cold").checked,scenarios:[{name:"open"}]};
   const ft=$("#ev_filter").value.trim();
   if(ft)body.scenarios.push({name:"filter: "+ft,filter:ft});
   try{
     const r=await postJSON("/api/eval/run",body);
     out.innerHTML="";
-    out.append(affinityCard(r.user_model||_evalSpec));
     for(const s of (r.scenarios||[]))out.append(scenarioCard(s));
   }catch(e){out.innerHTML="";out.append(el("div",{class:"card err"},String(e)));}
+}
+function setPersona(persona){
+  _evalPersona=persona;_evalSpec=persona.spec;
+  const host=$("#ev_model");if(host){host.innerHTML="";host.append(modelCard(persona));}
 }
 async function buildFromPrompt(){
   const p=$("#ev_prompt").value.trim();if(!p)return;
   try{
-    _evalPersona=await postJSON("/api/eval/generate",{prompt:p});
-    _evalSpec=_evalPersona.spec;
+    const gen=await postJSON("/api/eval/generate",{prompt:p});
+    gen.spec=gen.spec||{}; setPersona(gen);
     $("#ev_personasel").value="__prompt__";
-    runEval();
-  }catch(e){$("#evalout").innerHTML="";$("#evalout").append(el("div",{class:"card err"},String(e)));}
+  }catch(e){const h=$("#ev_model");if(h){h.innerHTML="";h.append(el("div",{class:"card err"},String(e)));}}
 }
 async function renderEval(v){
   let personas;
   try{personas=await api("/api/eval/personas");}catch(e){failCard(v,e);return;}
-  const sel=el("select",{id:"ev_personasel",class:"f",style:"min-width:190px",onchange:e=>{
-    const i=e.target.value;
-    if(i==="__prompt__")return;
-    _evalPersona=personas[+i];_evalSpec=_evalPersona.spec;runEval();
+  // ----- section 1: synthetic visitor (creator + model) -----
+  const sel=el("select",{id:"ev_personasel",class:"f",style:"min-width:210px",onchange:e=>{
+    if(e.target.value==="__prompt__")return;
+    setPersona(personas[+e.target.value]);
   }});
-  personas.forEach((p,i)=>sel.append(el("option",{value:String(i)},p.name+" — "+p.type)));
+  personas.forEach((p,i)=>sel.append(el("option",{value:String(i)},p.name+" · "+p.type)));
   sel.append(el("option",{value:"__prompt__"},"(from prompt)"));
-  v.append(el("div",{class:"card"},cardhead("Pick a synthetic visitor"),
-    el("div",{class:"row"},sel,
-      el("input",{id:"ev_filter",class:"f",size:"16",placeholder:"location filter tag (optional)"}),
-      el("label",{class:"small mut",style:"display:flex;gap:5px;align-items:center"},el("input",{id:"ev_cold",type:"checkbox"}),"add cold-start"),
-      el("button",{class:"primary",onclick:runEval},"Run")),
+  v.append(el("div",{class:"card"},cardhead("1 · Synthetic visitor"),
+    el("div",{class:"row"},sel),
     el("div",{class:"row",style:"margin-top:9px"},
       el("input",{id:"ev_prompt",class:"f",style:"flex:1;min-width:280px",placeholder:"…or describe a visitor: ‘a young student drawn to resistance and Barrack 3’"}),
       el("button",{class:"userchip",onclick:buildFromPrompt},"Build from prompt")),
-    el("div",{class:"small mut",style:"margin-top:7px"},"Personas are grounded in this tenant's real tag vocabulary; recommendations come from the same engine path as live serving (no events needed). Metrics: list diversity, tag spread, distractor placement, cold vs warm.")));
-  v.append(el("div",{id:"evalout"}));
-  // auto-run the first persona so the page is never empty
-  if(personas.length){_evalPersona=personas[0];_evalSpec=personas[0].spec;runEval();}
+    el("div",{class:"small mut",style:"margin-top:7px"},"Built from the personalization survey fields; grounded in this tenant's real tag vocabulary. The model below is what the recommender sees.")));
+  v.append(el("div",{id:"ev_model"}));
+  // ----- section 2: run recommendations (below the model) -----
+  v.append(el("div",{class:"card"},cardhead("2 · Run recommendations"),
+    el("div",{class:"row"},
+      el("input",{id:"ev_filter",class:"f",size:"20",placeholder:"filter tag (e.g. AiARLocationBarrack3)"}),
+      el("label",{class:"small mut",style:"display:flex;gap:5px;align-items:center"},el("input",{id:"ev_cold",type:"checkbox"}),"add cold-start baseline"),
+      el("button",{class:"primary",onclick:runEval},"Run")),
+    el("div",{class:"small mut",style:"margin-top:7px"},"Same engine path as live serving (no events). Click any result to open its full item card. Metrics: list diversity, tag spread, distractor placement, cold vs warm.")));
+  v.append(el("div",{id:"ev_results"},el("div",{class:"empty"},"Pick a visitor, then Run.")));
+  if(personas.length)setPersona(personas[0]);
 }
 
 /* ===== ADMIN: tenants (PVC-backed registry + API-key management) ===== */
@@ -883,7 +946,7 @@ function mintedToast(id,key){
 const CFG_CATS=[
   {title:"Fusion weights",desc:"How much each scorer contributes to the final relevance score (each scorer outputs 0–1; aversion is a penalty).",
    fields:["fusion.semantic","fusion.affinity","fusion.tag","fusion.recency","fusion.aversion","fusion.geo"]},
-  {title:"Engagement signals",desc:"How raw behaviour becomes a continuous like / dislike strength.",
+  {title:"Engagement signals",desc:"After each story, the engine scores how much the visitor liked it on a −1 (disliked) … +1 (loved) scale. These four weights decide how much each behaviour counts — they should add up to about 1. The two cut-offs below turn that score into a like / neutral / dislike.",
    fields:["engagement.dwell","engagement.completion","engagement.revisit","engagement.survey","positive_threshold","negative_threshold","dwell_cap_ratio"]},
   {title:"Reading-time model",desc:"Estimates expected reading time, which dwell is measured against.",
    fields:["reading_speed_wps","img_extra_time"]},
@@ -905,13 +968,13 @@ const CFG_HELP={
   "fusion.recency":["Recency","Similarity to the most-recent view (sequence awareness)."],
   "fusion.aversion":["Aversion","Penalty (negative) for overlap with abandoned themes."],
   "fusion.geo":["Geo","Proximity to the request location; scored only when one is given."],
-  "engagement.dwell":["Dwell","Weight of time-on-content vs the reading-time estimate."],
-  "engagement.completion":["Completion","Weight of finishing the content."],
-  "engagement.revisit":["Revisit","Weight of returning to the same content."],
-  "engagement.survey":["Survey","Weight of an explicit survey rating."],
-  "positive_threshold":["Positive threshold","Strength above this becomes a positive (liked) signal."],
-  "negative_threshold":["Negative threshold","Strength below this becomes a negative (disliked) signal."],
-  "dwell_cap_ratio":["Dwell cap","dwell ÷ estimate is clipped here before normalising (tames outliers)."],
+  "engagement.dwell":["Time spent reading","How much the time-on-story counts. Spending the full expected reading time signals real interest."],
+  "engagement.completion":["Read to the end","How much finishing counts. Tapping “next” is positive; leaving early / abandoning is negative."],
+  "engagement.revisit":["Came back to it","How much returning to the same story counts as interest."],
+  "engagement.survey":["Star rating","How much an explicit 1–5 rating counts (3 = neutral, 5 = loved)."],
+  "positive_threshold":["“Liked it” cut-off","Score at or above this is treated as a like — the story’s themes are added to the visitor’s taste."],
+  "negative_threshold":["“Disliked it” cut-off","Score at or below this is treated as a dislike — those themes get penalised in future picks."],
+  "dwell_cap_ratio":["Max reading credit","Caps how much extra time can count, so one very long visit can’t dominate (2 = up to twice the expected time)."],
   "reading_speed_wps":["Reading speed (wps)","Words per second for the estimate (~4.2 ≈ 250 wpm)."],
   "img_extra_time":["Image time (s)","Seconds added to the estimate for an image."],
   "half_life_days":["Half-life (days)","Exponential decay of a signal's weight over time."],
@@ -933,6 +996,7 @@ const CFG_HELP={
   "bandit_explore":["Explore","Add the UCB bonus when serving with the bandit."],
   "bandit_online":["Online","Update weights live as reward events arrive (vs offline batch)."],
 };
+const CFG_TAB={"Fusion weights":"Fusion","Engagement signals":"Engagement","Reading-time model":"Reading","Recency & decay":"Recency","Candidate generation & diversity":"Candidates","Geo":"Geo","Distractor / novelty":"Distractor","Ranking policy":"Ranking"};
 const CFG_ENUMS={distractor_strategy:["max_dissimilar","unexplored_theme","random"],ranking_mode:["static","bandit"]};
 function _cfgCtl(path,val){
   let inp;
@@ -959,25 +1023,46 @@ async function renderConfig(v){
     if(val&&typeof val==="object"&&!Array.isArray(val))for(const [k2,v2] of Object.entries(val))flat[k+"."+k2]=v2;
     else flat[k]=val;
   }
-  // sticky toolbar: scope + actions + status
+  // sticky toolbar: read-only by default; Edit unlocks Cancel / Save
+  const actions=cfgEdit
+    ? [el("button",{class:"userchip",onclick:resetConfig},"Reset to baseline"),
+       el("button",{class:"ghost",onclick:()=>{cfgEdit=false;paint();}},"Cancel"),
+       el("button",{class:"primary",onclick:saveConfig},"Save & apply")]
+    : [el("button",{class:"primary",onclick:()=>{cfgEdit=true;paint();}},"Edit")];
   v.append(el("div",{class:"card cfgbar"},el("div",{class:"row",style:"justify-content:space-between;width:100%"},
-    el("div",{},cardhead("Runtime config"),el("div",{class:"small mut",style:"margin-top:-8px"},(t?("tenant "+t):"default tenant")+" · applies live, persists as an override")),
-    el("div",{class:"row"},el("span",{id:"cfgstatus",class:"small mut"},""),
-      el("button",{class:"userchip",onclick:resetConfig},"Reset to baseline"),
-      el("button",{class:"primary",onclick:saveConfig},"Save & apply")))));
-  const form=el("div",{id:"cfgform"});
-  const used=new Set();
+    el("div",{},cardhead("Runtime config")),
+    el("div",{class:"row"},el("span",{id:"cfgstatus",class:"small mut"},""),...actions))));
+  // build category panels (ALL kept in the DOM so edits survive tab switches and Save collects every field)
+  const cats=[];const used=new Set();
   for(const cat of CFG_CATS){
     const present=cat.fields.filter(f=>f in flat);
-    if(!present.length)continue;
-    const card=el("div",{class:"card"});
-    card.append(cardhead(cat.title),el("div",{class:"small mut",style:"margin:-7px 0 6px"},cat.desc));
-    present.forEach(f=>{used.add(f);card.append(cfgRow(f,flat[f]));});
-    form.append(card);
+    if(present.length){cats.push({title:cat.title,desc:cat.desc,fields:present});present.forEach(f=>used.add(f));}
   }
   const leftover=Object.keys(flat).filter(f=>!used.has(f));
-  if(leftover.length){const card=el("div",{class:"card"});card.append(cardhead("Other"));leftover.forEach(f=>card.append(cfgRow(f,flat[f])));form.append(card);}
+  if(leftover.length)cats.push({title:"Other",desc:"",fields:leftover});
+  if(cfgTab&&!cats.some(c=>c.title===cfgTab))cfgTab=null;
+  if(!cfgTab)cfgTab=cats[0]&&cats[0].title;
+
+  const bar=el("div",{class:"subtabs",style:"flex-wrap:wrap"});
+  cats.forEach(c=>bar.append(el("button",{class:"subtab"+(c.title===cfgTab?" on":""),["data-cat"]:c.title,
+    onclick:()=>{cfgTab=c.title;showCfgTab();}},CFG_TAB[c.title]||c.title)));
+  v.append(bar);
+
+  const form=el("div",{id:"cfgform"});
+  cats.forEach(c=>{
+    const panel=el("div",{class:"cfgpanel",["data-cat"]:c.title,style:c.title===cfgTab?"":"display:none"});
+    const card=el("div",{class:"card"});
+    card.append(cardhead(c.title));
+    if(c.desc)card.append(el("div",{class:"small mut",style:"margin:-7px 0 6px"},c.desc));
+    c.fields.forEach(f=>card.append(cfgRow(f,flat[f])));
+    panel.append(card);form.append(panel);
+  });
   v.append(form);
+  if(!cfgEdit)for(const e of form.querySelectorAll("[data-path]"))e.disabled=true;   // read-only until Edit
+}
+function showCfgTab(){
+  for(const b of document.querySelectorAll(".subtab[data-cat]"))b.classList.toggle("on",b.getAttribute("data-cat")===cfgTab);
+  for(const p of document.querySelectorAll(".cfgpanel"))p.style.display=(p.getAttribute("data-cat")===cfgTab)?"":"none";
 }
 function _collectConfig(){
   const patch={};
@@ -994,12 +1079,12 @@ function _collectConfig(){
 async function saveConfig(){
   let patch; try{patch=_collectConfig();}catch(e){$("#cfgstatus").textContent=e.message;return;}
   const r=await fetch(base()+"/api/config",{method:"PUT",headers:{...headers(),"Content-Type":"application/json"},body:JSON.stringify(patch)});
-  $("#cfgstatus").textContent=r.ok?"applied ✓":("error "+r.status); if(r.ok)setTimeout(paint,400);
+  $("#cfgstatus").textContent=r.ok?"applied ✓":("error "+r.status); if(r.ok){cfgEdit=false;setTimeout(paint,400);}
 }
 async function resetConfig(){
   if(!confirm("Drop the runtime override and revert to the env/default baseline?"))return;
   const r=await fetch(base()+"/api/config/reset",{method:"POST",headers:headers()});
-  $("#cfgstatus").textContent=r.ok?"reset ✓":("error "+r.status); if(r.ok)setTimeout(paint,400);
+  $("#cfgstatus").textContent=r.ok?"reset ✓":("error "+r.status); if(r.ok){cfgEdit=false;setTimeout(paint,400);}
 }
 
 /* ===== sidebar nav ===== */
@@ -1054,6 +1139,7 @@ async function loadWhoami(){
 /* ===== routing & boot ===== */
 function applyHash(){
   const h=location.hash||"";
+  cfgEdit=false;                              // leaving (or re-entering) any view auto-cancels Config edits
   const um=h.match(/^#\/user\/([^/]+)(?:\/([^/]+))?/);
   if(um){userCtx={id:decodeURIComponent(um[1]),sub:um[2]||"profile"};$("#uid").value=userCtx.id;paint();return;}
   userCtx=null;const s=h.replace(/^#\/?/,"");const n=BY_SLUG[s];

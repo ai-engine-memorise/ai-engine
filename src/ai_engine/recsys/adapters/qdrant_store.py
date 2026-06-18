@@ -82,6 +82,20 @@ class QdrantContentStore:
         )
         return {str(p.id): _payload_to_content(p.id, p.payload) for p in res}
 
+    def raw_payloads(self, ids: Sequence[str]) -> dict[str, dict]:
+        """Raw Qdrant payloads keyed by id (image_url / public_url / creator / time_metadata …)
+        — the full content the recsys `Content` model drops. Used to open item detail cards."""
+        if not ids:
+            return {}
+        try:
+            res = self.client.retrieve(collection_name=self.collection_name,
+                                       ids=[self._pid(i) for i in ids],
+                                       with_payload=True, with_vectors=False)
+        except Exception as exc:
+            logger.warning("raw_payloads retrieve failed: %s", exc)
+            return {}
+        return {str(p.id): (p.payload or {}) for p in res}
+
     def get_vectors(self, ids: Sequence[str]) -> dict[str, Vector]:
         if not ids:
             return {}

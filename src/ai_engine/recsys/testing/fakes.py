@@ -62,6 +62,15 @@ class FakeContentStore:
                 if cid not in ex and any(t.label.lower() == v for t in c.tags)]
         return [Candidate(content_id=cid, generated_by="filter") for cid in sorted(hits)[:limit]]
 
+    def raw_payloads(self, ids):
+        out = {}
+        for i in ids:
+            c = self._contents.get(i)
+            if c:
+                out[i] = {"title": c.title, "text": c.text,
+                          "tags": [{"facet": t.facet, "label": t.label} for t in c.tags]}
+        return out
+
     def vocab(self, *, sample: int = 4000) -> dict:
         from collections import Counter
         counts: Counter = Counter()
