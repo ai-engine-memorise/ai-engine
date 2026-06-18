@@ -17,29 +17,50 @@ from typing import Optional
 
 from .ranking.scorers import cosine
 
-# Built-in synthetic visitors. Each is defined by free-text SEEDS (matched against the
-# collection's real tags at run time) + demographics, so they work on any collection.
+# Built-in synthetic visitors for MEMORISE — visitor types grounded in the personalization
+# survey (age_group / gender / province / personal_connection + q:personalization_theme), so
+# `survey_affinity` drives them exactly as a real survey would. `seeds` add breadth, matched
+# against the collection's REAL tag vocabulary at run time (so nothing is invented).
+#
+# Survey field reference (see survey.py): age_group in {16_18,18_24,25_34,...,65_74,...};
+# province = NL province (Drenthe is Westerbork's); q:personalization_theme = a canonical
+# theme_what label (Resistance / Forced Labor / Deportation / Liberation / Daily Life / ...).
 BUILTIN_PERSONAS = [
-    {"key": "explorer", "name": "Explorer", "type": "Explorer",
-     "description": "Curiosity-led generalist — broad interests, samples widely.",
-     "seeds": ["resistance", "liberation", "everyday life", "biography", "children"],
-     "demographics": {"age_group": "25_34"}},
-    {"key": "facilitator", "name": "Facilitator", "type": "Facilitator",
-     "description": "Visiting for someone else (family / education) — gentle narrative entry points.",
-     "seeds": ["children", "family", "education", "everyday life", "biography"],
-     "demographics": {"age_group": "35_44"}},
-    {"key": "experience_seeker", "name": "Experience-Seeker", "type": "Experience-Seeker",
-     "description": "Place- and icon-driven — the key sites and landmark stories.",
-     "seeds": ["barrack", "watchtower", "entrance", "transport", "deportation"],
-     "demographics": {"age_group": "18_24"}},
-    {"key": "professional", "name": "Hobbyist / Professional", "type": "Hobbyist",
-     "description": "Deep, focused interest in a theme — wants substance and detail.",
-     "seeds": ["forced labor", "anti-jewish measures", "persecution", "administration", "resistance"],
-     "demographics": {"age_group": "45_54"}},
-    {"key": "recharger", "name": "Recharger", "type": "Recharger",
-     "description": "Reflective, contemplative — memorial and commemoration themes.",
-     "seeds": ["memorial", "commemoration", "remembrance", "liberation", "loss"],
-     "demographics": {"age_group": "65_plus"}},
+    {"key": "school_student_nl", "name": "Dutch school student", "type": "Student",
+     "description": "Secondary-school pupil on a class visit — everyday life and stories of children, local (Drenthe).",
+     "seeds": ["children", "daily life", "school", "biography", "personal stories"],
+     "demographics": {"age_group": "16_18", "province": "Drenthe",
+                      "q:personalization_theme": "Daily Life"}},
+    {"key": "university_student", "name": "University student — resistance", "type": "Student",
+     "description": "Young adult studying the war; drawn to resistance, rescue and escape.",
+     "seeds": ["resistance", "rescue", "escape", "aid and protection"],
+     "demographics": {"age_group": "18_24", "q:personalization_theme": "Resistance"}},
+    {"key": "researcher_forced_labour", "name": "Researcher — forced labour", "type": "Researcher",
+     "description": "Academic with a deep, focused interest in forced labour, administration and transit.",
+     "seeds": ["forced labor", "administration", "transit camp", "deportation", "registration"],
+     "demographics": {"age_group": "25_34", "q:personalization_theme": "Forced Labor"}},
+    {"key": "historian_persecution", "name": "Historian — persecution & policy", "type": "Researcher",
+     "description": "Senior historian focused on anti-Jewish measures, persecution and bureaucracy.",
+     "seeds": ["anti-jewish measures", "persecution", "administration", "deportation"],
+     "demographics": {"age_group": "45_54", "q:personalization_theme": "Deportation"}},
+    {"key": "intl_tourist", "name": "International tourist", "type": "Tourist",
+     "description": "Visiting from abroad; place- and landmark-driven — the camp sites and key buildings.",
+     "seeds": ["barrack", "watchtower", "entrance", "memorial", "transport"],
+     "demographics": {"age_group": "35_44", "nationality": "germany"}},
+    {"key": "regional_tourist", "name": "Regional day-tripper", "type": "Tourist",
+     "description": "Dutch visitor from a neighbouring province; general interest, liberation and memory.",
+     "seeds": ["liberation", "memorial", "remembrance", "postwar"],
+     "demographics": {"age_group": "55_64", "province": "Gelderland",
+                      "q:personalization_theme": "Liberation"}},
+    {"key": "descendant", "name": "Descendant / personal tie", "type": "Descendant",
+     "description": "Relative of someone held at the camp; personal stories, biography, commemoration.",
+     "seeds": ["biography", "family", "personal stories", "remembrance", "commemoration"],
+     "demographics": {"age_group": "65_74", "personal_connection": "descendant",
+                      "q:personalization_theme": "Personal stories"}},
+    {"key": "educator", "name": "Teacher / group leader", "type": "Educator",
+     "description": "Preparing a school visit; broad coverage, age-appropriate everyday-life and children's stories.",
+     "seeds": ["education", "children", "daily life", "biography", "resistance"],
+     "demographics": {"age_group": "35_44", "q:personalization_theme": "Daily Life"}},
 ]
 
 _WORD = re.compile(r"[a-z0-9]+")
