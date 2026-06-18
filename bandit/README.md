@@ -53,9 +53,11 @@ all accumulated data (not an incremental drift).
 
 ## Scope / next
 
-- **Global** policy (one θ). Per-segment θ (e.g. by persona bucket) is the next step — more tailored
-  weighting, sparser data per arm.
-- **Offline** batch training (delayed reward → robust). Online incremental `update()` exists on the
-  policy for a future live-feedback hook (needs a Redis impression-context store keyed by request_id).
+- **Global** policy (one theta). Per-segment theta (e.g. by persona bucket) is the next step: more
+  tailored weighting, sparser data per arm.
+- **Offline** batch training (delayed reward, robust) AND **online incremental** updates are both
+  implemented. Online (`RECSYS_BANDIT_ONLINE=true`): the serve path stashes feature vectors in a
+  Redis impression store keyed by request_id; the `/api/ingest` reward hook looks them up, calls
+  `policy.update`, and persists, with consume-on-use idempotency. Offline stays as ground-truth recompute.
 - Reward is a proxy (nominal reading-time est; logs lack word_count). Relative reward ordering drives
   learning; swap in the exact engagement strength once word_count is logged at serve.

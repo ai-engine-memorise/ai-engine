@@ -97,7 +97,9 @@ triggers + steps to migrate there: see [`future-hexagonal.md`](./future-hexagona
   ridge **prior** (`θ0 = weights`) — so `ranking_mode="bandit"` at the prior is byte-for-byte the
   static ranking, then learns away from it. Trained OFFLINE (`bandit/train.py`) from the logs; the
   state JSON is loaded at startup (`BANDIT_STATE_PATH`). Feature vectors are logged in BOTH modes, so
-  a bandit can be fit from traffic served while still static. Online incremental updates: future work.
+  a bandit can be fit from traffic served while still static. Online incremental updates are
+  implemented too (RECSYS_BANDIT_ONLINE): an impression store + the /api/ingest reward hook update
+  theta live, with consume-on-use idempotency; the offline trainer stays as ground-truth recompute.
 
   ```
   RECSYS_RANKING_MODE=static   # default; logs features for later training
