@@ -296,32 +296,51 @@ class ComponentManager:
                         "cluster_model_path": s.cluster_model_path,
                         "api_keys_count": len(s.api_keys or [])}
         for d in self.tenant_store.all():
-            row = {k: v for k, v in d.items() if k != "api_keys"}
-            row["api_keys_count"] = len(d.get("api_keys") or [])
+            row = {k: v for k, v in d.items() if k not in ("api_keys", "api_key_hashes")}
+            row["api_keys_count"] = len(d.get("api_key_hashes") or []) + len(d.get("api_keys") or [])
             out[d["tenant_id"]] = {**row, "source": "runtime"}
         return sorted(out.values(), key=lambda t: t["tenant_id"])
 
     def tenant_for_key(self, key: Optional[str]) -> Optional[str]:
         """Resolve a per-tenant API key to its tenant_id (runtime store first, then baseline).
-        Constant-time compare; returns None for the global key / unknown keys."""
+        Matches the key's sha256 against stored hashes (constant time); also tolerates legacy
+        plaintext keys. Returns None for the global key / unknown keys."""
         if not key:
             return None
         import hmac
+        from .tenancy import hash_key
+        h = hash_key(key)
+
+        def _match(spec_get_hashes, spec_get_plain) -> bool:
+            for kh in (spec_get_hashes or []):
+                if hmac.compare_digest(h, kh):
+                    return True
+            for k in (spec_get_plain or []):                 # legacy plaintext fallback
+                if hmac.compare_digest(key, k):
+                    return True
+            return False
+
         seen: set[str] = set()
         for d in self.tenant_store.all():
             seen.add(d["tenant_id"])
-            for k in (d.get("api_keys") or []):
-                if hmac.compare_digest(key, k):
-                    return d["tenant_id"]
+            if _match(d.get("api_key_hashes"), d.get("api_keys")):
+                return d["tenant_id"]
         for tid in self.registry.ids():
             if tid in seen:
                 continue
-            for k in (self.registry.get(tid).api_keys or []):
-                if hmac.compare_digest(key, k):
-                    return tid
+            s = self.registry.get(tid)
+            if _match(s.api_key_hashes, s.api_keys):
+                return tid
         return None
 
     def upsert_tenant(self, spec: dict) -> None:
+        from .tenancy import hash_key
+        spec = dict(spec)
+        # never persist plaintext keys: fold any provided api_keys into api_key_hashes
+        plain = spec.pop("api_keys", None) or []
+        hashes = list(spec.get("api_key_hashes") or [])
+        hashes += [hash_key(k) for k in plain]
+        spec["api_key_hashes"] = sorted(set(hashes))
         self.tenant_store.set(spec)
         self._cache.pop(spec["tenant_id"], None)      # rebuilt with the new spec next request
 

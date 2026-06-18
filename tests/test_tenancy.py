@@ -67,6 +67,29 @@ def test_per_tenant_key_pins_tenant_over_spoofed_header():
     assert b is None
 
 
+def test_generated_key_is_hashed_and_pins_tenant():
+    """Server mints a key, returns it ONCE, persists only its hash; the key still pins
+    the tenant and the admin list never leaks the key or its hash."""
+    client = TestClient(create_app())
+    body = client.post("/api/tenants",
+                       json={"tenant_id": "gamma", "collection": "c_gamma",
+                             "generate_api_key": True}).json()
+    key = body["api_key"]
+    assert key and "api_keys" not in body["result"] and "api_key_hashes" not in body["result"]
+
+    g = next(t for t in client.get("/api/tenants").json()["result"] if t["tenant_id"] == "gamma")
+    assert "api_keys" not in g and "api_key_hashes" not in g and g["api_keys_count"] == 1
+
+    ts = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+    payload = [_ev("CONTENT_VIEW_STARTED", "u9", ts),
+               _ev("CONTENT_VIEW_ENDED", "u9", ts, reason="next_button", dwell=99)]
+    # generated key pins to gamma even with a spoofed header
+    assert client.post("/api/ingest", json=payload,
+                       headers={"X-API-Key": key, "X-Tenant-Id": "delta"}).json()["ingested"] == 2
+    a = client.get("/api/usermodel", params={"user_id": "u9"}, headers={"X-API-Key": key}).json()["result"]
+    assert a is not None
+
+
 def test_unknown_api_key_rejected():
     """A key that matches neither a per-tenant key nor the global key is 401, even in dev."""
     client = TestClient(create_app())

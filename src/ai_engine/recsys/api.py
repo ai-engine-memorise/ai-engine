@@ -634,7 +634,8 @@ class TenantIn(BaseModel):
     bandit_state_path: Optional[str] = None
     cluster_model_path: Optional[str] = None
     config_overrides: dict = Field(default_factory=dict)
-    api_keys: list[str] = Field(default_factory=list)   # per-tenant keys; presenting one pins the request to this tenant
+    api_keys: list[str] = Field(default_factory=list)        # operator-supplied plaintext keys (hashed before storage)
+    generate_api_key: bool = False                           # server mints a key, returns it ONCE, stores only its hash
 
 
 def make_tenant_admin_router(manager) -> APIRouter:
@@ -659,8 +660,20 @@ def make_tenant_admin_router(manager) -> APIRouter:
 
     @router.post("")
     def upsert_tenant(t: TenantIn) -> dict:
-        manager.upsert_tenant(t.model_dump())
-        return {"result": t.model_dump(), "status": "saved"}
+        import secrets
+        spec = t.model_dump(exclude={"generate_api_key"})
+        generated = None
+        if t.generate_api_key:
+            generated = secrets.token_urlsafe(32)
+            spec.setdefault("api_keys", []).append(generated)
+        manager.upsert_tenant(spec)                           # hashes keys; never persists plaintext
+        # never echo stored keys back; surface a freshly minted key ONCE
+        safe = {k: v for k, v in spec.items() if k not in ("api_keys", "api_key_hashes")}
+        resp = {"result": safe, "status": "saved"}
+        if generated:
+            resp["api_key"] = generated
+            resp["note"] = "store this key now — only its hash is kept, it cannot be retrieved later"
+        return resp
 
     @router.delete("/{tenant_id}")
     def delete_tenant(tenant_id: str) -> dict:

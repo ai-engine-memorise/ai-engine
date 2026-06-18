@@ -15,12 +15,20 @@ A `TenantProxy` lets every endpoint keep using `c.recommender` / `c.cfg` etc. wh
 those resolve to the CURRENT request's tenant, so no per-endpoint changes are needed.
 """
 from __future__ import annotations
+import hashlib
 import hmac
 import json
 import os
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Callable, Optional
+
+
+def hash_key(key: str) -> str:
+    """Hash an API key for at-rest storage. Keys are high-entropy random tokens (256-bit),
+    so an unsalted SHA-256 is sufficient (no dictionary/rainbow risk) and lets us look a key
+    up by its hash. Compare hashes with hmac.compare_digest (constant time)."""
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()
 
 # set per request from the X-Tenant-Id header; "default" preserves single-tenant behaviour.
 current_tenant: ContextVar[str] = ContextVar("current_tenant", default="default")
@@ -41,7 +49,11 @@ class TenantSpec:
     bandit_state_path: Optional[str] = None
     cluster_model_path: Optional[str] = None
     config_overrides: dict = field(default_factory=dict)
-    api_keys: list[str] = field(default_factory=list)   # per-tenant keys; presenting one PINS the request to this tenant
+    # per-tenant key auth. Presenting a matching key PINS the request to this tenant.
+    # api_key_hashes is the AT-REST form (sha256). api_keys (plaintext) is accepted on input
+    # (hashed before persistence) and tolerated as a legacy fallback when matching.
+    api_key_hashes: list[str] = field(default_factory=list)
+    api_keys: list[str] = field(default_factory=list)
 
     @property
     def prefix(self) -> str:
