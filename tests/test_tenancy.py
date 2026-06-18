@@ -31,6 +31,17 @@ def test_registry_default_and_unknown_fallback():
     assert reg.get("ghost").tenant_id == "ghost"
 
 
+def test_tenant_admin_runtime_crud():
+    client = TestClient(create_app())                    # manager-backed
+    r = client.post("/api/tenants", json={"tenant_id": "westerbork-ar", "collection": "westerbork-ar"})
+    assert r.status_code == 200 and r.json()["status"] == "saved"
+    ids = {t["tenant_id"] for t in client.get("/api/tenants").json()["result"]}
+    assert "westerbork-ar" in ids and "default" in ids   # runtime + config baseline
+    client.delete("/api/tenants/westerbork-ar")
+    ids2 = {t["tenant_id"] for t in client.get("/api/tenants").json()["result"]}
+    assert "westerbork-ar" not in ids2
+
+
 def test_user_models_isolated_by_tenant():
     client = TestClient(create_app())                    # no fixed components -> tenant manager + X-Tenant-Id
     ts = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()

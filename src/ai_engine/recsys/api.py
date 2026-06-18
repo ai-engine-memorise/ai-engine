@@ -552,6 +552,48 @@ def make_router(components: Components) -> APIRouter:
     return router
 
 
+class TenantIn(BaseModel):
+    tenant_id: str
+    collection: Optional[str] = None
+    redis_prefix: Optional[str] = None
+    bandit_state_path: Optional[str] = None
+    cluster_model_path: Optional[str] = None
+    config_overrides: dict = Field(default_factory=dict)
+
+
+def make_tenant_admin_router(manager) -> APIRouter:
+    """Control-plane: runtime tenant management (list / create / delete) WITHOUT a redeploy.
+    A separate router so it stays out of the app-facing serving surface. INGEST_API_KEY-guarded.
+    Note: this registers the tenant SLICE; its content must still be ingested into the tenant's
+    Qdrant collection (content-engine) separately."""
+    router = APIRouter(prefix="/api/tenants", tags=["tenants"], dependencies=[Depends(_require_api_key)])
+
+    @router.get("")
+    def list_tenants() -> dict:
+        items = manager.list_tenants()
+        qc = getattr(manager, "qdrant_client", None)
+        if qc is not None:
+            for t in items:                                  # best-effort: show content count
+                col = t.get("collection")
+                try:
+                    t["content_count"] = qc.count(col).count if col else None
+                except Exception:
+                    t["content_count"] = None
+        return {"result": items}
+
+    @router.post("")
+    def upsert_tenant(t: TenantIn) -> dict:
+        manager.upsert_tenant(t.model_dump())
+        return {"result": t.model_dump(), "status": "saved"}
+
+    @router.delete("/{tenant_id}")
+    def delete_tenant(tenant_id: str) -> dict:
+        manager.delete_tenant(tenant_id)
+        return {"status": "deleted", "tenant_id": tenant_id}
+
+    return router
+
+
 def create_app(components: Optional[Components] = None) -> FastAPI:
     from fastapi.middleware.cors import CORSMiddleware
 
@@ -569,14 +611,18 @@ def create_app(components: Optional[Components] = None) -> FastAPI:
     # Multi-tenancy: a fixed Components (tests) serves a single tenant; otherwise build a
     # ComponentManager and resolve the tenant per request from the X-Tenant-Id header.
     from .tenancy import TenantProxy, TenantASGIMiddleware
+    manager = None
     if components is not None:
         c_or_proxy = components                          # tests / single fixed tenant
     else:
         from .composition import ComponentManager
-        c_or_proxy = TenantProxy(ComponentManager())
+        manager = ComponentManager()
+        c_or_proxy = TenantProxy(manager)
         app.add_middleware(TenantASGIMiddleware)         # pure ASGI -> contextvar reaches the endpoint
 
     app.include_router(make_router(c_or_proxy))
+    if manager is not None:
+        app.include_router(make_tenant_admin_router(manager))
 
     # Qdrant search surface (ported from legacy ai-engine-api service.py).
     # Guarded so the recsys API still boots if the search stack (embedding model

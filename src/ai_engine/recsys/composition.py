@@ -229,6 +229,22 @@ class ComponentManager:
         self._redis_init = False
         self._qdrant = None
         self._qdrant_init = False
+        self._tenant_store = None
+        self._ts_init = False
+
+    @property
+    def tenant_store(self):
+        """Runtime tenant registry (Redis), merged over the TENANTS_PATH baseline."""
+        if not self._ts_init:
+            self._ts_init = True
+            rc = self.redis_client
+            if rc is not None:
+                from .adapters.tenant_store import RedisTenantStore
+                self._tenant_store = RedisTenantStore(rc)
+            else:
+                from .adapters.tenant_store import InMemoryTenantStore
+                self._tenant_store = InMemoryTenantStore()
+        return self._tenant_store
 
     @property
     def redis_client(self):
@@ -250,11 +266,39 @@ class ComponentManager:
                 self._qdrant = QdrantClient(url=url, api_key=os.getenv("QDRANT_API_KEY"))
         return self._qdrant
 
+    def _spec(self, tenant_id):
+        from .tenancy import TenantSpec
+        d = self.tenant_store.get(tenant_id) if tenant_id else None   # runtime store wins
+        if d:
+            fields = TenantSpec.__dataclass_fields__
+            return TenantSpec(**{k: v for k, v in d.items() if k in fields})
+        return self.registry.get(tenant_id)
+
     def get(self, tenant_id) -> Components:
-        spec = self.registry.get(tenant_id)
+        spec = self._spec(tenant_id)
         if spec.tenant_id not in self._cache:
             self._cache[spec.tenant_id] = build_components_for(spec, self)
         return self._cache[spec.tenant_id]
+
+    def list_tenants(self) -> list[dict]:
+        """All tenants: config baseline + runtime-created, runtime wins. For the admin UI."""
+        out: dict[str, dict] = {}
+        for tid in self.registry.ids():
+            s = self.registry.get(tid)
+            out[tid] = {"tenant_id": tid, "collection": s.collection, "source": "config",
+                        "bandit_state_path": s.bandit_state_path,
+                        "cluster_model_path": s.cluster_model_path}
+        for d in self.tenant_store.all():
+            out[d["tenant_id"]] = {**d, "source": "runtime"}
+        return sorted(out.values(), key=lambda t: t["tenant_id"])
+
+    def upsert_tenant(self, spec: dict) -> None:
+        self.tenant_store.set(spec)
+        self._cache.pop(spec["tenant_id"], None)      # rebuilt with the new spec next request
+
+    def delete_tenant(self, tenant_id: str) -> None:
+        self.tenant_store.delete(tenant_id)
+        self._cache.pop(tenant_id, None)
 
 
 def build_components(cfg: Optional[RecConfig] = None) -> Components:
