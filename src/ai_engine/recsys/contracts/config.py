@@ -50,8 +50,8 @@ class RecConfig(BaseModel):
     # placed in a fixed slot and labelled kind="distractor" so the UI can surface it.
     distractor_enabled: bool = True
     distractor_strategy: str = "max_dissimilar"   # max_dissimilar | unexplored_theme | random
-    distractor_probability: float = 1.0           # 1.0 = always inject a distractor
-    distractor_slots: list[int] = [3, 4]          # placed at one of these positions (random)
+    distractor_probability: float = 1.0           # 1.0 = always; 0.5 = every other request
+    distractor_slots: list[int] = [3, 4]          # 1-based positions; picked at random -> rank 3 or 4
 
     # cold/warm routing
     cold_start_min_positives: int = 1

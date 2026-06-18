@@ -107,6 +107,12 @@ def _build_config() -> RecConfig:
     f.aversion = _f("RECSYS_W_AVERSION", f.aversion)
     cfg.mmr_lambda = _f("RECSYS_MMR_LAMBDA", cfg.mmr_lambda)
     cfg.distractor_probability = _f("RECSYS_DISTRACTOR_PROBABILITY", cfg.distractor_probability)
+    ds = os.getenv("RECSYS_DISTRACTOR_SLOTS")        # e.g. "2,3" -> distractor at rank 2 or 3
+    if ds:
+        try:
+            cfg.distractor_slots = [int(x) for x in ds.split(",") if x.strip()]
+        except ValueError:
+            pass
     cfg.ranking_mode = os.getenv("RECSYS_RANKING_MODE", cfg.ranking_mode)   # "static" | "bandit"
     cfg.bandit_alpha = _f("RECSYS_BANDIT_ALPHA", cfg.bandit_alpha)
     cfg.bandit_ridge = _f("RECSYS_BANDIT_RIDGE", cfg.bandit_ridge)

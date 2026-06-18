@@ -176,8 +176,9 @@ class Recommender:
             else:
                 distractor = self._distractor(signals, seen | ranked_ids)
             if distractor is not None:
-                slot = min(random.choice(cfg.distractor_slots), len(ranked))
-                ranked.insert(slot, distractor)
+                # distractor_slots are 1-BASED target positions: slot 3 -> rank 3 (insert at index 2)
+                slot = min(random.choice(cfg.distractor_slots), len(ranked) + 1)
+                ranked.insert(slot - 1, distractor)
                 diagnostics["distractor"] = {
                     "content_id": distractor.content_id,
                     "strategy": "within_constraint" if constrained else cfg.distractor_strategy, "slot": slot,

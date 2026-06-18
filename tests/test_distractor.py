@@ -29,8 +29,17 @@ def test_always_one_distractor_at_slot_3_or_4():
     d = next(it for it in rec.items if it.kind == "distractor")
     assert d.content_id != "A1"                                   # unseen
     assert rec.diagnostics["distractor"]["content_id"] == d.content_id
-    assert rec.diagnostics["distractor"]["slot"] in (3, 4)        # placed at position 3 or 4
-    assert rec.items.index(d) == rec.diagnostics["distractor"]["slot"]
+    slot = rec.diagnostics["distractor"]["slot"]
+    assert slot in (3, 4)                                         # 1-based position
+    assert rec.items.index(d) + 1 == slot                        # rank (1-based) == slot
+
+
+def test_distractor_slots_are_1_based_positions():
+    # configure the distractor to land at rank 2 (1-based) and confirm it does
+    rec = _rec(RecConfig(distractor_slots=[2], final_limit=6))
+    d = next(it for it in rec.items if it.kind == "distractor")
+    assert rec.items.index(d) == 1                        # index 1 == rank 2
+    assert rec.diagnostics["distractor"]["slot"] == 2
 
 
 def test_distractor_strategies_all_produce_one():
