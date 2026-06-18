@@ -35,7 +35,15 @@ class UserRecommender:
 
         if not positives:
             logger.info(f"No positive signals for user {user_id}, cannot recommend.")
-            return []
+            return SearchResult(
+                search_type="user",
+                query_text=None,
+                lat=None,
+                lon=None,
+                radius_meters=None,
+                items=[],
+                next_offset=None,
+            )
 
         positive_ids = [int(i) for i in positives]
         negative_ids = [int(i) for i in negatives] if negatives else None

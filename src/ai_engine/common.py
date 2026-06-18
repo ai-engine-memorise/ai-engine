@@ -11,6 +11,7 @@ def clean_payload_field(data: Any) -> Any:
     """Converts data containing NumPy types to native Python types."""
     if isinstance(data, (np.ndarray, pd.Series)):
         return data.tolist()
+    return data
 
 
 @dataclass

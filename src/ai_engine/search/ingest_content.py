@@ -9,20 +9,17 @@ from loguru import logger
 from qdrant_client import QdrantClient
 from qdrant_client.models import VectorParams, Distance, PointStruct, PayloadSchemaType
 
-from sentence_transformers import SentenceTransformer
-
 import pandas as pd
 import numpy as np
 from ai_engine.config import QDRANT_API_URL, QDRANT_API_KEY, COLLECTION_NAME, EMBEDDING_MODEL
 from ai_engine.common import Item
 
+# NOTE: offline ingestion script (run as __main__, not imported on the serving path).
+# The heavy sentence_transformers (torch) import and the data-file load live inside
+# __main__ so importing this module stays cheap and side-effect free.
 OMEKA_DATA_PATH = "../../../data/omeka_data.parquet"
 FILTER_ITEMS_PATH = "../../../data/test_items.json"
 TOPIC_BERT_PATH = "../../../data/documents.json"
-
-with open(FILTER_ITEMS_PATH, 'r') as f:
-    filter_ids_dict = json.load(f)
-    filter_ids = set(filter_ids_dict['filter_ids'])
 
 def to_serializable(obj):
     # NumPy arrays -> Python lists
@@ -38,6 +35,11 @@ def to_serializable(obj):
 # TODO: Compute item length in words
 
 if __name__ == '__main__':
+    from sentence_transformers import SentenceTransformer
+
+    with open(FILTER_ITEMS_PATH, 'r') as f:
+        filter_ids_dict = json.load(f)
+        filter_ids = set(filter_ids_dict['filter_ids'])
 
     ##################
     ####  Omeka  #####

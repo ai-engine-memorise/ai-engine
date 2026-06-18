@@ -1,0 +1,28 @@
+[
+  {
+    "name": "Forced-labour historian",
+    "description": "A historian researching forced labour and work details in the camp: workshops, construction, armament production, daily labour conditions.",
+    "model": {"tag_affinity": {"theme_what:Forced Labor": 1.0, "theme_what:work detail": 0.8}}
+  },
+  {
+    "name": "Family & children",
+    "description": "A visitor drawn to personal family stories: children, mothers, siblings, and daily family life inside the camp.",
+    "model": {"tag_affinity": {"theme_what:Family": 1.0, "theme_what:children": 0.8},
+              "demographics": {"age_group": "35_44", "personal_connection": "yes"}}
+  },
+  {
+    "name": "Liberation researcher",
+    "description": "Researching the liberation of the camp and its aftermath: the end of the war, liberators, the first days of freedom and what came after.",
+    "model": {"tag_affinity": {"theme_what:Liberation": 1.0}}
+  },
+  {
+    "name": "Young Dutch first-time visitor (cold start)",
+    "description": "An 18-24 year old Dutch visitor with no reading history yet; expects accessible, relatable Westerbork/Dutch stories.",
+    "model": {"demographics": {"age_group": "18_24", "gender": "female", "nationality": "netherlands"}}
+  },
+  {
+    "name": "Likes a specific story (semantic)",
+    "description": "Engaged deeply with the story about producing party hats in barrack 56 after liberation; wants thematically and temporally similar stories.",
+    "model": {"like_items": ["2410"]}
+  }
+]

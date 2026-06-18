@@ -246,7 +246,7 @@ class KeycloakTokenClient:
             "password": self.password,
         }
 
-        resp = requests.post(self.token_url, data=data)
+        resp = requests.post(self.token_url, data=data, timeout=30)
         resp.raise_for_status()
         token_data = resp.json()
         self._store_token_data(token_data)
@@ -262,7 +262,7 @@ class KeycloakTokenClient:
             "refresh_token": self._refresh_token,
         }
 
-        resp = requests.post(self.token_url, data=data)
+        resp = requests.post(self.token_url, data=data, timeout=30)
         if not resp.ok:
             return False
 

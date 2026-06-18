@@ -101,7 +101,7 @@ class GeoSearch:
         lat: float,
         lon: float,
         radius_meters: float = 5000,
-        limit: int = 10,
+        limit: int = SEARCH_LIMIT,
         search_params: SearchParams | None = None,
         query_text: str | None = None,
     ):
@@ -114,15 +114,16 @@ class GeoSearch:
             radius_meters=radius_meters,
         )
 
-        results = self.client.search(
+        results = self.client.query_points(
             collection_name=self.collection_name,
-            query_vector=query_vector,
+            query=query_vector,
             query_filter=geo_filter,
             limit=limit,
             with_payload=True,
+            with_vectors=False,
             search_params=search_params,
-        ) # list[ScoredPoint]
-        
+        ).points # list[ScoredPoint]
+
         items = [
             hit_to_item(hit=hit, source="hybrid", query_text=query_text)
             for hit in results

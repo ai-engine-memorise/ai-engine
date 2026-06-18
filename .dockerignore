@@ -1,0 +1,17 @@
+# Build context hygiene for Dockerfile.recsys (COPY src ./src).
+**/__pycache__/
+**/*.py[cod]
+**/*.db
+**/*.sqlite3
+.git/
+.github/
+.venv/
+tests/
+docs/
+site/
+data/
+*.parquet
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.md

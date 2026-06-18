@@ -73,6 +73,8 @@ class GlobalSearch:
             raise ValueError(f"Item id {item_id} not found")
 
         query_vector = vectors[item_id]
+        if query_vector is None:
+            raise ValueError(f"Item id {item_id} has no stored vector")
 
         # If Qdrant returns named vectors: {"text": [...], ...}
         if isinstance(query_vector, dict):
@@ -86,10 +88,9 @@ class GlobalSearch:
         result = self.vector_searcher.search(vector=query_vector)
 
         if exclude_self and getattr(result, "items", None):
-            result.items = [
-                it for it in result.items
-                if str(getattr(it, "id", "")) != str(item_id)
-            ]
+            def _item_id(it):
+                return str(it["id"] if isinstance(it, dict) else getattr(it, "id", ""))
+            result.items = [it for it in result.items if _item_id(it) != str(item_id)]
 
         return result
 
