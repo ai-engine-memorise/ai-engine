@@ -27,6 +27,8 @@ class Components:
     event_log: object   # durable append-only log (Parquet) — .append(events)
     impressions: object   # short-lived served-feature store (request_id -> features) for online bandit
     config_store: object   # runtime RecConfig override store (Redis / in-memory)
+    cluster_model_path: Optional[str] = None   # per-tenant explainable-cluster model
+    bandit_state_path: Optional[str] = None    # per-tenant bandit state (online persistence)
 
 
 def _build_content_store() -> ContentStore:
@@ -140,6 +142,119 @@ def _build_policy(cfg: RecConfig):
             return LinearBandit.from_dict(json.load(fh))
     weights = {name: getattr(cfg.fusion, name, 0.0) for name in FEATURE_ORDER}
     return LinearBandit.with_prior(weights, ridge=cfg.bandit_ridge, alpha=cfg.bandit_alpha)
+
+
+def _build_policy_for(cfg: RecConfig, path: Optional[str]):
+    if cfg.ranking_mode != "bandit":
+        return None
+    from .ranking.bandit import LinearBandit, FEATURE_ORDER
+    if path and os.path.exists(path):
+        import json
+        with open(path, encoding="utf-8") as fh:
+            return LinearBandit.from_dict(json.load(fh))
+    weights = {name: getattr(cfg.fusion, name, 0.0) for name in FEATURE_ORDER}
+    return LinearBandit.with_prior(weights, ridge=cfg.bandit_ridge, alpha=cfg.bandit_alpha)
+
+
+def build_components_for(spec, mgr) -> Components:
+    """Build a tenant-scoped Components: its own Qdrant collection + Redis key-prefix +
+    config / bandit / cluster / event-log, sharing the manager's Redis & Qdrant clients."""
+    from .adapters.config_store import deep_merge
+    cfg = _build_config()
+    if spec.config_overrides:
+        try:
+            cfg = RecConfig.model_validate(deep_merge(cfg.model_dump(), spec.config_overrides))
+        except Exception:
+            pass
+
+    qc = mgr.qdrant_client
+    if qc is not None:
+        from .adapters.qdrant_store import QdrantContentStore
+        content_store = QdrantContentStore(qc, spec.collection or os.getenv("COLLECTION_NAME", "omeka-items"))
+    else:
+        from .testing.fakes import FakeContentStore
+        from .testing.fixtures import make_contents_and_vectors
+        contents, vectors = make_contents_and_vectors()
+        content_store = FakeContentStore(contents, vectors)
+
+    rc = mgr.redis_client
+    p = spec.prefix
+    if rc is not None:
+        from .adapters.redis_store import RedisEventBuffer, RedisUserModelStore, RedisImpressionStore
+        from .adapters.config_store import RedisConfigStore
+        event_buffer = RedisEventBuffer(rc, key_prefix=f"{p}:evt")
+        model_store = RedisUserModelStore(rc, key_prefix=f"{p}:umodel")
+        impressions = RedisImpressionStore(rc, key_prefix=f"{p}:imp")
+        config_store = RedisConfigStore(rc, key=f"{p}:recsys:config")
+    else:
+        from .testing.fakes import FakeEventSource, InMemoryUserModelStore, InMemoryImpressionStore
+        from .adapters.config_store import InMemoryConfigStore
+        event_buffer, model_store, impressions = FakeEventSource(), InMemoryUserModelStore(), InMemoryImpressionStore()
+        config_store = InMemoryConfigStore()
+
+    override = config_store.get()
+    if override:
+        try:
+            cfg = RecConfig.model_validate(deep_merge(cfg.model_dump(), override))
+        except Exception:
+            pass
+
+    base = os.getenv("EVENT_LOG_DIR")
+    if base:
+        from .adapters.event_log import ParquetEventLog
+        event_log = ParquetEventLog(os.path.join(base, spec.tenant_id))   # per-tenant partition
+    else:
+        from .adapters.event_log import NullEventLog
+        event_log = NullEventLog()
+
+    return Components(
+        cfg=cfg, content_store=content_store, event_buffer=event_buffer, model_store=model_store,
+        updater=UserModelUpdater(content_store, model_store, cfg),
+        recommender=Recommender(content_store, model_store, cfg,
+                                policy=_build_policy_for(cfg, spec.bandit_state_path)),
+        demographics=_build_demographics(), event_log=event_log, impressions=impressions,
+        config_store=config_store, cluster_model_path=spec.cluster_model_path,
+        bandit_state_path=spec.bandit_state_path,
+    )
+
+
+class ComponentManager:
+    """Builds + caches one Components per tenant, over shared Redis & Qdrant clients."""
+
+    def __init__(self, registry=None):
+        from .tenancy import TenantRegistry
+        self.registry = registry or TenantRegistry.from_env()
+        self._cache: dict = {}
+        self._redis = None
+        self._redis_init = False
+        self._qdrant = None
+        self._qdrant_init = False
+
+    @property
+    def redis_client(self):
+        if not self._redis_init:
+            self._redis_init = True
+            url = os.getenv("REDIS_URL")
+            if url:
+                import redis
+                self._redis = redis.from_url(url, decode_responses=True)
+        return self._redis
+
+    @property
+    def qdrant_client(self):
+        if not self._qdrant_init:
+            self._qdrant_init = True
+            url = os.getenv("QDRANT_API_URL")
+            if url:
+                from qdrant_client import QdrantClient
+                self._qdrant = QdrantClient(url=url, api_key=os.getenv("QDRANT_API_KEY"))
+        return self._qdrant
+
+    def get(self, tenant_id) -> Components:
+        spec = self.registry.get(tenant_id)
+        if spec.tenant_id not in self._cache:
+            self._cache[spec.tenant_id] = build_components_for(spec, self)
+        return self._cache[spec.tenant_id]
 
 
 def build_components(cfg: Optional[RecConfig] = None) -> Components:

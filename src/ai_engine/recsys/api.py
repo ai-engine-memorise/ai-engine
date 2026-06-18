@@ -133,10 +133,10 @@ def _served_record(request_id: str, user_id: str, items: list, out: dict, filter
     }
 
 
-def _load_cluster_model() -> Optional[dict]:
-    """Lazily load the offline-trained cluster model from CLUSTER_MODEL_PATH (or None)."""
+def _load_cluster_model(path: Optional[str] = None) -> Optional[dict]:
+    """Lazily load the offline-trained cluster model (per-tenant path, else env)."""
     import json
-    path = os.getenv("CLUSTER_MODEL_PATH")
+    path = path or os.getenv("CLUSTER_MODEL_PATH")
     if not path or not os.path.exists(path):
         return None
     try:
@@ -175,7 +175,7 @@ def _online_bandit_update(c: Components, events) -> int:
                 logger.exception("online bandit update failed for one event; skipping")
                 continue
         if updated:
-            path = os.getenv("BANDIT_STATE_PATH")
+            path = getattr(c, "bandit_state_path", None) or os.getenv("BANDIT_STATE_PATH")
             if path:
                 try:
                     import json
@@ -281,7 +281,7 @@ def make_router(components: Components) -> APIRouter:
         if verbalize:
             exp.summary = _verbalize(exp)
         out = exp.model_dump()
-        model = _load_cluster_model()
+        model = _load_cluster_model(getattr(c, "cluster_model_path", None))
         if model:                                  # place the visitor in a learned segment
             from .explain.clusters import assign, assign_fuzzy
             out["cluster"] = (assign_fuzzy(sig, model) if model.get("method") == "fcm"
@@ -328,7 +328,7 @@ def make_router(components: Components) -> APIRouter:
     def clusters() -> dict:
         """The explainable visitor segments (offline-trained). Each cluster is described
         by its top taxonomy tags + a Falk breadth hint. CLUSTER_MODEL_PATH must be set."""
-        model = _load_cluster_model()
+        model = _load_cluster_model(getattr(c, "cluster_model_path", None))
         if not model:
             return {"result": None, "detail": "CLUSTER_MODEL_PATH not set / file missing"}
         return {"result": {"method": model.get("method", "kmeans"), "profiles": model.get("profiles", [])}}
@@ -367,7 +367,7 @@ def make_router(components: Components) -> APIRouter:
                         key=lambda kv: kv[1], reverse=True)[:15]
 
         clusters = []
-        model = _load_cluster_model()
+        model = _load_cluster_model(getattr(c, "cluster_model_path", None))
         if model:
             by_user = {s.user_id: s for s in sigs}
             for p in model.get("profiles", []):
@@ -403,7 +403,7 @@ def make_router(components: Components) -> APIRouter:
         prior = [prior_w[n] for n in FEATURE_ORDER]
         pol = getattr(c.recommender, "policy", None)
         if pol is None:                                   # static mode: still load a trained file to inspect
-            path = os.getenv("BANDIT_STATE_PATH")
+            path = getattr(c, "bandit_state_path", None) or os.getenv("BANDIT_STATE_PATH")
             if path and os.path.exists(path):
                 import json
                 try:
@@ -555,7 +555,18 @@ def create_app(components: Optional[Components] = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    app.include_router(make_router(components or build_components()))
+
+    # Multi-tenancy: a fixed Components (tests) serves a single tenant; otherwise build a
+    # ComponentManager and resolve the tenant per request from the X-Tenant-Id header.
+    from .tenancy import TenantProxy, TenantASGIMiddleware
+    if components is not None:
+        c_or_proxy = components                          # tests / single fixed tenant
+    else:
+        from .composition import ComponentManager
+        c_or_proxy = TenantProxy(ComponentManager())
+        app.add_middleware(TenantASGIMiddleware)         # pure ASGI -> contextvar reaches the endpoint
+
+    app.include_router(make_router(c_or_proxy))
 
     # Qdrant search surface (ported from legacy ai-engine-api service.py).
     # Guarded so the recsys API still boots if the search stack (embedding model

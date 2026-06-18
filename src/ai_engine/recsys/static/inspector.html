@@ -123,6 +123,7 @@ pre{white-space:pre-wrap;word-break:break-word}
   <div class="brand"><svg class="ring" viewBox="0 0 24 24"><circle class="r" cx="12" cy="12" r="9"/><circle class="c" cx="12" cy="12" r="3.4"/></svg>AI-Engine Inspector</div>
   <div class="spacer"></div>
   <div class="cfg">
+    <span class="lab">tenant <input id="tenant" placeholder="default" style="width:88px"/></span>
     <span class="lab">user <input id="uid" placeholder="user_id"/></span>
     <input id="base" class="mini" placeholder="base url"/>
     <input id="key" class="mini" placeholder="X-API-Key"/>
@@ -139,7 +140,7 @@ const COLORS={semantic:"var(--c-semantic)",affinity:"var(--c-affinity)",tag:"var
 const $=(s,el=document)=>el.querySelector(s);
 const el=(t,a={},...kids)=>{const e=document.createElement(t);for(const k in a){if(k==="class")e.className=a[k];else if(k==="html")e.innerHTML=a[k];else if(k.startsWith("on"))e[k]=a[k];else e.setAttribute(k,a[k]);}for(const k of kids.flat())e.append(k&&k.nodeType?k:document.createTextNode(k??""));return e;};
 const base=()=>($("#base").value||"http://localhost:8010").replace(/\/$/,"");
-const headers=()=>{const h={};const k=$("#key").value.trim();if(k)h["X-API-Key"]=k;return h;};
+const headers=()=>{const h={};const k=$("#key").value.trim();if(k)h["X-API-Key"]=k;const t=$("#tenant").value.trim();if(t)h["X-Tenant-Id"]=t;return h;};
 async function api(path){const r=await fetch(base()+path,{headers:headers()});if(!r.ok)throw new Error(r.status+" "+r.statusText+", "+path);return (await r.json()).result;}
 const fmt=x=>(typeof x==="number")?(Math.round(x*1000)/1000):x;
 const mdInline=t=>String(t??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>");
@@ -442,9 +443,10 @@ function buildNav(){const nav=$("#tabs");nav.innerHTML="";
 $("#base").value=localStorage.getItem("ins_base")||window.location.origin||"http://localhost:8010";
 $("#key").value=localStorage.getItem("ins_key")||"";
 $("#uid").value=localStorage.getItem("ins_uid")||"u1";
+$("#tenant").value=localStorage.getItem("ins_tenant")||"";
 document.documentElement.dataset.theme=localStorage.getItem("ins_theme")||"light";
 $("#theme").textContent=document.documentElement.dataset.theme==="dark"?"☀":"☾";
-for(const b of ["base","key","uid"])$("#"+b).addEventListener("change",()=>{localStorage.setItem("ins_"+b,$("#"+b).value);if(b==="base")ping();});
+for(const b of ["base","key","uid","tenant"])$("#"+b).addEventListener("change",()=>{localStorage.setItem("ins_"+b,$("#"+b).value);if(b==="base")ping();if(b==="tenant")render();});
 $("#theme").onclick=()=>{const t=document.documentElement.dataset.theme==="dark"?"light":"dark";document.documentElement.dataset.theme=t;localStorage.setItem("ins_theme",t);$("#theme").textContent=t==="dark"?"☀":"☾";};
 async function ping(){try{await fetch(base()+"/health");$("#conn").textContent="● connected";$("#conn").style.color="#9cc090";}catch(e){$("#conn").textContent="● offline";$("#conn").style.color="#d89a8e";}}
 buildNav();ping();setTab("Cohort");

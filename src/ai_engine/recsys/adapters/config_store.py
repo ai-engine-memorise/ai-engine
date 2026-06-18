@@ -28,18 +28,19 @@ def deep_merge(base: dict, patch: dict) -> dict:
 
 
 class RedisConfigStore:
-    def __init__(self, client):
+    def __init__(self, client, *, key: str = CONFIG_KEY):
         self.client = client
+        self.key = key                       # per-tenant config lives under a distinct key
 
     def get(self) -> Optional[dict]:
-        raw = self.client.get(CONFIG_KEY)
+        raw = self.client.get(self.key)
         return json.loads(raw) if raw else None
 
     def set(self, data: dict) -> None:
-        self.client.set(CONFIG_KEY, json.dumps(data))
+        self.client.set(self.key, json.dumps(data))
 
     def clear(self) -> None:
-        self.client.delete(CONFIG_KEY)
+        self.client.delete(self.key)
 
 
 class InMemoryConfigStore:
