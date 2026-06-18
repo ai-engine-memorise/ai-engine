@@ -112,7 +112,26 @@ class Recommender:
             cold_fallback = True
             strategy = "cold"
 
-        if not candidate_ids:   # empty filter / catalogue empty / all seen
+        # re-show fallback: a location whose UNSEEN content is exhausted re-shows its OWN
+        # (already-seen) stories rather than returning empty. Stays inside the filter/geo set
+        # (no leak), so an in-place visitor at a small location always gets its content.
+        seen_fallback = False
+        if not candidate_ids and constrained and cfg.filter_reshow_when_exhausted:
+            id_sets = []
+            if filter:
+                id_sets.append({c.content_id for c in
+                                self.content_store.search_filter(filter, limit=cfg.pool_per_generator)})
+            if geo_active:
+                id_sets.append({c.content_id for c in
+                                self.content_store.search_geo(near[0], near[1], geo_radius_m,
+                                                              limit=cfg.pool_per_generator)})
+            keep = set.intersection(*id_sets) if len(id_sets) > 1 else (id_sets[0] if id_sets else set())
+            for cid in keep:
+                pool.setdefault(cid, Candidate(content_id=cid, generated_by="+".join(generators)))
+            candidate_ids = list(pool)          # include already-seen items
+            seen_fallback = bool(candidate_ids)
+
+        if not candidate_ids:   # location genuinely has no content / catalogue empty
             return Recommendation(user_id=signals.user_id, items=[], strategy=strategy,
                                   diagnostics={"reason": "empty_filter" if constrained else "no_content",
                                                "filter": filter, "generators": generators, "pool_size": 0})
@@ -160,6 +179,7 @@ class Recommender:
 
         diagnostics = {"pool_size": len(pool), "scored": len(scored),
                        "generators": generators, "cold_start_fallback": cold_fallback,
+                       "seen_fallback": seen_fallback,
                        "filter": filter, "geo": bool(near),
                        "ranking": "bandit" if use_bandit else "static"}
 

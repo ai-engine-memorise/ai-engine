@@ -122,6 +122,30 @@ def test_filter_restricts_candidates_to_tagged_content():
     assert rec.diagnostics["filter"] == "AiARLocationBarrack3"
 
 
+def test_filter_reshows_location_when_all_seen():
+    from ai_engine.recsys.contracts.models import Content, Tag, UserSignals
+    contents = {
+        "L1": Content(id="L1", title="a", tags=[Tag(facet="location", label="Loc")]),
+        "L2": Content(id="L2", title="b", tags=[Tag(facet="location", label="Loc")]),
+    }
+    store = FakeContentStore(contents, {k: [1.0, 0.0] for k in contents})
+    sig = UserSignals(user_id="u", viewed=["L1", "L2"])              # has seen the whole location
+    rec = Recommender(store, InMemoryUserModelStore(), RecConfig(distractor_enabled=False)) \
+        .recommend_for_signals(sig, filter="Loc")
+    assert {i.content_id for i in rec.items} == {"L1", "L2"}         # re-shown, not empty
+    assert rec.diagnostics["seen_fallback"] is True
+
+
+def test_filter_reshow_can_be_disabled():
+    from ai_engine.recsys.contracts.models import Content, Tag, UserSignals
+    contents = {"L1": Content(id="L1", title="a", tags=[Tag(facet="location", label="Loc")])}
+    store = FakeContentStore(contents, {"L1": [1.0, 0.0]})
+    sig = UserSignals(user_id="u", viewed=["L1"])
+    cfg = RecConfig(distractor_enabled=False, filter_reshow_when_exhausted=False)
+    rec = Recommender(store, InMemoryUserModelStore(), cfg).recommend_for_signals(sig, filter="Loc")
+    assert rec.items == [] and rec.diagnostics["reason"] == "empty_filter"
+
+
 def test_no_user_model_cold_start_returns_content():
     rec = Recommender(_store(), InMemoryUserModelStore(), CFG).recommend("ghost")
     assert rec.strategy == "cold"

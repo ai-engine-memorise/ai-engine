@@ -46,6 +46,11 @@ class RecConfig(BaseModel):
     geo_scale_m: float = 300.0          # exp(-distance/scale); ~camp-sized falloff
     geo_radius_m: float = 1000.0        # default radius when a geo filter is requested
 
+    # when a filter/geo location's UNSEEN content is exhausted, re-show its (already-seen)
+    # content rather than returning empty — so an in-place visitor at a small location
+    # always gets its stories. Within the filter only (never leaks outside it).
+    filter_reshow_when_exhausted: bool = True
+
     # distractor / novelty injection (exploration): one deliberately off-profile item,
     # placed in a fixed slot and labelled kind="distractor" so the UI can surface it.
     distractor_enabled: bool = True

@@ -106,6 +106,7 @@ Base URL below assumes local: `http://localhost:8010`. Replace with the deployed
 | G.3 | Ingest a malformed / partial event (missing fields). | Skipped gracefully, other events still ingested |
 | G.4 | Geo query when content has no coordinates. | Empty or proximity-0, **no crash** (degrades) |
 | G.5 | Recommend for a location with very few items. | All items shown, distractor `placed:false` with a reason (not silent) |
+| G.6 | **Exhausted location** — view ALL of a small location's stories, then recommend with that `filter`. | Location **re-shows** its (now-seen) stories rather than returning empty; `diagnostics.seen_fallback: true`. (Disable via `filter_reshow_when_exhausted=false` → empty.) |
 
 ---
 
