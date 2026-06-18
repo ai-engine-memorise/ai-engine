@@ -3,7 +3,7 @@
 Each tenant gets its OWN Qdrant collection (content can't cross) and its OWN Redis
 key-prefix (user models / events / impressions / config can't cross), plus its own
 bandit policy and cluster model. Shared infra, hard logical isolation — the standard
-SaaS "pooled" model.
+"pooled" multi-tenant model.
 
 The engine core (recommender, scorers, user model) is already tenant-agnostic: it
 operates on whatever stores it is handed. Tenancy is purely an edge concern:

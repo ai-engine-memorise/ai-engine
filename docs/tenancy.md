@@ -1,9 +1,9 @@
-# Multi-tenancy (SaaS)
+# Multi-tenancy
 
 One engine serves many clients (UIs / memorial sites), each **hard-isolated**: its own
 Qdrant collection (content can't cross), its own Redis key-prefix (user models, events,
 impressions, config can't cross), and its own bandit policy + cluster model. Shared infra,
-logical isolation — the standard SaaS "pooled" model.
+logical isolation — the standard "pooled" multi-tenant model.
 
 ## How a request is routed
 

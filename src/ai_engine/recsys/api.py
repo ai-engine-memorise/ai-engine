@@ -190,7 +190,7 @@ def _online_bandit_update(c: Components, events) -> int:
 
 def _tenant_doc(x_tenant_id: Optional[str] = Header(
         default=None, alias="X-Tenant-Id",
-        description="SaaS tenant id. Selects an isolated slice: its own Qdrant collection, "
+        description="Tenant id. Selects an isolated slice: its own Qdrant collection, "
                     "Redis namespace (user models / events / impressions / config), bandit policy, "
                     "clusters and event log. Omit to use the 'default' tenant. Resolution happens in "
                     "the ASGI tenant middleware; this declaration only documents the header.")) -> Optional[str]:
