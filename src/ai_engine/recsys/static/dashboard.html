@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>AI-Engine Inspector, MEMORISE</title>
+<title>AI-Engine Dashboard, MEMORISE</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <style>
@@ -13,49 +13,101 @@
   --bg:#FAF8F4; --panel:#ffffff; --line:#E6DFD2; --fg:#2A2823; --mut:#8C8475;
   --primary:#6B6457; --primary-dark:#423D34; --accent:#A8895B; --accent-t:rgba(168,137,91,.12);
   --link:#8A6F3F; --code:#F2EFE9; --track:#EDE8DE; --shadow:rgba(107,100,87,.13);
+  --sidebar:#2F2B24; --sidebar-fg:#E8E1D3; --sidebar-mut:#A79C88; --sidebar-line:#46413708;
 }
 :root[data-theme="dark"]{
   --bg:#1C1B18; --panel:#252320; --line:#3A372F; --fg:#E8E4DC; --mut:#9C9384;
   --primary:#8A8273; --primary-dark:#2A2823; --accent:#CDB78C; --accent-t:rgba(205,183,140,.14);
   --link:#CDB78C; --code:#211F1B; --track:#201E1A; --shadow:rgba(0,0,0,.45);
+  --sidebar:#16150F; --sidebar-fg:#E8E1D3; --sidebar-mut:#8E8472; --sidebar-line:#ffffff10;
 }
-:root{--c-semantic:#4F6276;--c-affinity:#5E7355;--c-tag:#A8895B;--c-recency:#7A5C6E;--c-aversion:#9C5B4F;--c-geo:#4E7E78;--maxw:980px;--rad:12px}
+:root{--c-semantic:#4F6276;--c-affinity:#5E7355;--c-tag:#A8895B;--c-recency:#7A5C6E;--c-aversion:#9C5B4F;--c-geo:#4E7E78;--maxw:1040px;--rad:12px;--side-w:248px;--side-w-min:64px}
 *{box-sizing:border-box}
 body{margin:0;font-family:Montserrat,system-ui,Segoe UI,sans-serif;font-size:14px;line-height:1.55;background:var(--bg);color:var(--fg);-webkit-font-smoothing:antialiased}
 h1,h2,h3,.mont{font-family:Montserrat,Inter,sans-serif;font-weight:600;letter-spacing:-.015em}
 
-/* header */
-header{position:sticky;top:0;z-index:20;height:56px;padding:0 20px;background:var(--primary-dark);color:#fff;display:flex;align-items:center;gap:14px}
-.brand{display:flex;align-items:center;gap:9px;font-family:Montserrat,sans-serif;font-weight:600;font-size:15px;white-space:nowrap}
-.ring{width:22px;height:22px;flex:0 0 auto}
+/* ===== app shell ===== */
+.layout{display:flex;min-height:100vh}
+aside.sidebar{position:sticky;top:0;height:100vh;width:var(--side-w);flex:0 0 var(--side-w);
+  background:var(--sidebar);color:var(--sidebar-fg);display:flex;flex-direction:column;
+  border-right:1px solid var(--sidebar-line);transition:width .18s ease;z-index:30}
+body.nav-min aside.sidebar{width:var(--side-w-min);flex-basis:var(--side-w-min)}
+.side-brand{display:flex;align-items:center;gap:10px;height:58px;padding:0 16px;flex:0 0 auto;
+  border-bottom:1px solid var(--sidebar-line);white-space:nowrap;overflow:hidden}
+.ring{width:24px;height:24px;flex:0 0 auto}
 .ring .r{fill:none;stroke:var(--accent);stroke-width:2;transform-origin:center;animation:spin 9s linear infinite}
 .ring .c{fill:var(--accent);transform-origin:center;animation:pulse 1.9s ease-in-out infinite}
 @keyframes spin{to{transform:rotate(360deg)}}@keyframes pulse{0%,100%{opacity:.45}50%{opacity:1}}
-.spacer{flex:1}
-.cfg{display:flex;align-items:center;gap:9px}
-.lab{display:flex;align-items:center;gap:6px;font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:#ffffffa6}
-header input{background:#ffffff14;color:#fff;border:1px solid #ffffff2b;border-radius:8px;padding:6px 9px;font:inherit;font-size:13px}
-header input::placeholder{color:#ffffff80}
-header input:focus{outline:none;border-color:var(--accent);background:#ffffff20}
-header input.mini{width:122px}
-#uid{width:78px;font-weight:600}
-.dot{font-size:12px;white-space:nowrap}
-.iconbtn{background:#ffffff14;border:1px solid #ffffff2b;color:#fff;border-radius:8px;padding:6px 8px;cursor:pointer;line-height:1}
+.side-brand .name{font-family:Montserrat,sans-serif;font-weight:700;font-size:14.5px}
+.side-brand .name span{color:var(--accent)}
+body.nav-min .side-brand .name{display:none}
+.side-toggle{margin-left:auto;background:transparent;border:0;color:var(--sidebar-mut);cursor:pointer;padding:5px;border-radius:7px;line-height:0}
+.side-toggle:hover{background:#ffffff12;color:var(--sidebar-fg)}
+.side-toggle svg{transition:transform .18s ease}
+body.nav-min .side-brand{justify-content:center;padding:0 6px;gap:2px}
+body.nav-min .side-toggle{margin:0}
+body.nav-min .side-toggle svg{transform:rotate(180deg)}
+
+nav.side-nav{flex:1 1 auto;overflow-y:auto;padding:10px 10px 14px}
+nav.side-nav::-webkit-scrollbar{width:7px}nav.side-nav::-webkit-scrollbar-thumb{background:#ffffff18;border-radius:9px}
+.navgroup{margin-bottom:12px}
+.grouplbl{font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--sidebar-mut);font-weight:700;padding:6px 10px 4px}
+body.nav-min .grouplbl{text-align:center;font-size:8px;padding:6px 0 4px;letter-spacing:.04em}
+.navitem{display:flex;align-items:center;gap:11px;width:100%;border:0;background:transparent;color:var(--sidebar-fg);
+  padding:9px 11px;border-radius:9px;font-family:inherit;font-weight:600;font-size:13.5px;cursor:pointer;text-align:left;
+  margin:1px 0;transition:.13s;white-space:nowrap;position:relative}
+.navitem svg{flex:0 0 18px;width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;opacity:.82}
+.navitem:hover{background:#ffffff10}
+.navitem.on{background:var(--accent);color:#1c160a}
+.navitem.on svg{opacity:1}
+body.nav-min .navitem{justify-content:center;padding:10px 0}
+body.nav-min .navitem .lbl{display:none}
+body.nav-min .navitem.on::after{content:"";position:absolute;right:-10px;top:8px;bottom:8px;width:3px;border-radius:3px;background:var(--accent)}
+
+.side-foot{flex:0 0 auto;border-top:1px solid var(--sidebar-line);padding:11px 12px;display:flex;flex-direction:column;gap:8px}
+.ctx{display:flex;flex-direction:column;gap:3px}
+.ctx label{font-size:9.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--sidebar-mut);font-weight:700}
+.ctx input{background:#ffffff10;color:var(--sidebar-fg);border:1px solid #ffffff1f;border-radius:7px;padding:6px 9px;font:inherit;font-size:13px}
+.ctx input::placeholder{color:#ffffff55}
+.ctx input:focus{outline:none;border-color:var(--accent);background:#ffffff16}
+.foot-row{display:flex;align-items:center;gap:7px}
+.foot-btn{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;background:#ffffff10;border:1px solid #ffffff1f;
+  color:var(--sidebar-fg);border-radius:8px;padding:7px 8px;font:inherit;font-size:12px;font-weight:600;cursor:pointer;line-height:1}
+.foot-btn:hover{border-color:var(--accent)}
+.foot-btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8}
+.conn{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--mut)}
+.conn .dot{width:8px;height:8px;border-radius:50%;background:#9C5B4F;flex:0 0 auto}
+.conn.ok .dot{background:#7fae6e;box-shadow:0 0 0 3px #7fae6e30}
+body.nav-min .side-foot .ctx,body.nav-min .side-foot .conn span,body.nav-min .foot-btn .lbl{display:none}
+body.nav-min .side-foot{align-items:center}
+body.nav-min .foot-row{flex-direction:column}
+
+/* ===== main ===== */
+main{flex:1 1 auto;min-width:0}
+.page{max-width:var(--maxw);margin:0 auto;padding:26px 30px 80px}
+.pagehead{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:0 0 20px;flex-wrap:wrap}
+.pagehead .eyebrow{margin:0 0 5px}
+.pagehead h1{margin:0;font-size:23px;color:var(--primary-dark)}
+[data-theme="dark"] .pagehead h1{color:var(--fg)}
+.pagehead .sub{font-size:13px;color:var(--mut);margin-top:5px;max-width:560px}
+.eyebrow{font-size:11px;letter-spacing:.11em;text-transform:uppercase;color:var(--accent);font-weight:700}
+.iconbtn{background:var(--panel);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:7px 9px;cursor:pointer;line-height:1}
 .iconbtn:hover{border-color:var(--accent)}
 
-/* nav */
-nav{position:sticky;top:56px;z-index:19;display:flex;gap:8px;align-items:center;flex-wrap:wrap;
-    padding:9px 20px;background:var(--panel);border-bottom:1px solid var(--line)}
-.navgroup{display:flex;gap:4px;align-items:center}
-.grouplbl{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--mut);margin-right:5px;font-weight:700}
-.vsep{width:1px;height:24px;background:var(--line);margin:0 12px}
-nav button.tab{border:1px solid transparent;background:transparent;color:var(--mut);padding:6px 14px;border-radius:999px;font-weight:600;font-size:13px;cursor:pointer;transition:.15s}
-nav button.tab.on{background:var(--accent);color:#fff}
-nav button.tab:not(.on):hover{color:var(--fg);background:var(--accent-t)}
+/* top bar */
+.topbar{position:sticky;top:0;z-index:25;display:flex;align-items:center;gap:12px;
+  padding:10px 30px;background:var(--panel);border-bottom:1px solid var(--line)}
+.tb-field{display:flex;align-items:center;gap:7px}
+.tb-field label{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut);font-weight:700}
+.tb-field input{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 9px;font:inherit;font-size:13px;color:var(--fg);width:130px}
+.tb-field input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-t)}
+.tb-spacer{flex:1}
+.tb-btn{background:var(--panel);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:7px 9px;cursor:pointer;line-height:0;display:flex;align-items:center}
+.tb-btn:hover{border-color:var(--accent);color:var(--accent)}
+.tb-btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8}
+.tb-btn .ic-sun{display:none}.tb-btn .ic-moon{display:block}
+[data-theme="dark"] .tb-btn .ic-sun{display:block}[data-theme="dark"] .tb-btn .ic-moon{display:none}
 
-/* layout */
-main{max-width:var(--maxw);margin:0 auto;padding:24px 22px 72px}
-.eyebrow{font-size:11px;letter-spacing:.11em;text-transform:uppercase;color:var(--accent);font-weight:700;margin:0 0 16px}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--rad);padding:16px 18px;margin-bottom:14px;
       transition:border-color .2s,box-shadow .2s,transform .2s}
 .card.lift:hover{border-color:var(--accent);box-shadow:0 6px 20px var(--shadow);transform:translateY(-2px)}
@@ -102,8 +154,8 @@ td:first-child,th:first-child{padding-left:2px} td:last-child,th:last-child{padd
 [data-theme="dark"] .metric{color:var(--accent)}
 .metric+div{margin-top:4px}
 
-input.f{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font:inherit;font-size:13px}
-input.f:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-t)}
+input.f,select.f{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font:inherit;font-size:13px}
+input.f:focus,select.f:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-t)}
 button.primary{background:var(--accent);color:#221a0c;border:1px solid transparent;border-radius:8px;padding:7px 16px;font:inherit;font-weight:600;cursor:pointer}
 [data-theme="dark"] button.primary{color:#1c1b18}
 button.primary:hover{filter:brightness(1.05)}
@@ -117,30 +169,109 @@ details.members summary::-webkit-details-marker{display:none}
 details.members summary:hover{color:var(--accent)}
 details.members[open] summary{margin-bottom:8px}
 pre{white-space:pre-wrap;word-break:break-word}
+
+/* ===== API-key modal ===== */
+.overlay{position:fixed;inset:0;background:rgba(28,24,18,.55);backdrop-filter:blur(3px);z-index:100;
+  display:none;align-items:center;justify-content:center;padding:20px}
+.overlay.show{display:flex}
+.modal{width:min(440px,100%);background:var(--panel);border:1px solid var(--line);border-radius:16px;
+  box-shadow:0 24px 60px var(--shadow);overflow:hidden;animation:pop .18s ease}
+@keyframes pop{from{transform:translateY(8px) scale(.98);opacity:0}to{transform:none;opacity:1}}
+.modal .mhead{display:flex;align-items:center;gap:11px;padding:18px 22px 6px}
+.modal .mhead .ring{width:26px;height:26px}
+.modal .mhead h2{margin:0;font-size:17px;color:var(--primary-dark)}
+[data-theme="dark"] .modal .mhead h2{color:var(--fg)}
+.modal .mbody{padding:8px 22px 4px}
+.modal .mbody p{color:var(--mut);font-size:13px;margin:0 0 16px}
+.field{margin-bottom:13px}
+.field label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--mut);font-weight:700;margin-bottom:5px}
+.field input{width:100%;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:9px;padding:9px 11px;font:inherit;font-size:14px}
+.field input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-t)}
+.field .hint{font-size:11px;color:var(--mut);margin-top:4px}
+.keywrap{position:relative}
+.keywrap input{padding-right:40px}
+.eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:transparent;border:0;cursor:pointer;
+  color:var(--mut);padding:6px;border-radius:7px;line-height:0}
+.eye:hover{color:var(--accent);background:var(--accent-t)}
+.eye svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8}
+.eye.off svg .slash{display:none}
+.mfoot{display:flex;align-items:center;gap:10px;padding:14px 22px 20px;border-top:1px solid var(--line);margin-top:10px}
+.mfoot .mstatus{font-size:12.5px;font-weight:600;margin-right:auto}
+.mfoot .mstatus.ok{color:#5E7355}.mfoot .mstatus.err{color:#9C5B4F}
+button.ghost{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:7px 16px;font:inherit;font-weight:600;cursor:pointer}
+button.ghost:hover{border-color:var(--accent)}
+.linkbtn{background:transparent;border:0;color:var(--link);font:inherit;font-size:13px;font-weight:600;cursor:pointer;text-decoration:underline;padding:0}
+.keyglyph{margin-bottom:8px;color:var(--accent)}
+.keyglyph svg{width:30px;height:30px}
+.toast{position:fixed;right:20px;bottom:20px;z-index:120;display:flex;flex-direction:column;gap:10px;max-width:380px}
+.toast .card{background:var(--panel)}
 </style>
 </head>
 <body>
-<header>
-  <div class="brand"><svg class="ring" viewBox="0 0 24 24"><circle class="r" cx="12" cy="12" r="9"/><circle class="c" cx="12" cy="12" r="3.4"/></svg>AI-Engine&nbsp;<span style="color:var(--accent)">Control Panel</span></div>
-  <div class="spacer"></div>
-  <div class="cfg">
-    <span class="lab">tenant <input id="tenant" placeholder="default" style="width:88px"/></span>
-    <span class="lab">user <input id="uid" placeholder="user_id"/></span>
-    <input id="base" class="mini" placeholder="base url"/>
-    <input id="key" class="mini" placeholder="X-API-Key"/>
-    <span id="conn" class="dot">...</span>
-    <button class="iconbtn" id="theme" title="toggle theme">☾</button>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="side-brand">
+      <svg class="ring" viewBox="0 0 24 24"><circle class="r" cx="12" cy="12" r="9"/><circle class="c" cx="12" cy="12" r="3.4"/></svg>
+      <span class="name">AI&#8209;Engine&nbsp;<span>Dashboard</span></span>
+      <button class="side-toggle" id="navtoggle" title="collapse sidebar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 6l-6 6 6 6"/></svg>
+      </button>
+    </div>
+    <nav class="side-nav" id="tabs"></nav>
+  </aside>
+
+  <main>
+    <header class="topbar">
+      <div class="tb-field"><label>tenant</label><input id="tenant" placeholder="default"/></div>
+      <input id="uid" type="hidden"/>
+      <div class="tb-spacer"></div>
+      <div class="conn" id="conn"><span class="dot"></span><span>not connected</span></div>
+      <button class="tb-btn" id="openkey" title="API key / connection" aria-label="API key">
+        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="12" r="3.7"/><circle cx="7" cy="12" r="1" fill="currentColor" stroke="none"/><path d="M10.7 12H21M18 12v3.4M14.7 12v2.6"/></svg>
+      </button>
+      <button class="tb-btn" id="theme" title="toggle theme" aria-label="toggle theme">
+        <svg class="ic-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg class="ic-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8"/></svg>
+      </button>
+    </header>
+    <div class="page" id="view"></div>
+  </main>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<!-- API-key popup -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="mhead">
+      <svg class="ring" viewBox="0 0 24 24"><circle class="r" cx="12" cy="12" r="9"/><circle class="c" cx="12" cy="12" r="3.4"/></svg>
+      <h2>Connect to AI&#8209;Engine</h2>
+    </div>
+    <div class="mbody">
+      <div class="field">
+        <div class="keywrap">
+          <input id="key" type="password" placeholder="API key" autocomplete="off"/>
+          <button type="button" id="keytoggle" class="eye off" title="show key" aria-label="show key">
+            <svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/><line class="slash" x1="3" y1="3" x2="21" y2="21"/></svg>
+          </button>
+        </div>
+        <div class="hint">Stays in this browser, sent as <code>X-API-Key</code>. A per-tenant key scopes itself; empty = public serving only.</div>
+      </div>
+    </div>
+    <div class="mfoot">
+      <span class="mstatus" id="mstatus"></span>
+      <button class="ghost" id="cancelkey">Cancel</button>
+      <button class="primary" id="connect">Connect</button>
+    </div>
   </div>
-</header>
-<nav id="tabs"></nav>
-<main id="view"></main>
+</div>
 
 <script>
 const FEAT=["semantic","affinity","tag","recency","aversion","geo"];
 const COLORS={semantic:"var(--c-semantic)",affinity:"var(--c-affinity)",tag:"var(--c-tag)",recency:"var(--c-recency)",aversion:"var(--c-aversion)",geo:"var(--c-geo)",popularity:"#999"};
 const $=(s,el=document)=>el.querySelector(s);
 const el=(t,a={},...kids)=>{const e=document.createElement(t);for(const k in a){if(k==="class")e.className=a[k];else if(k==="html")e.innerHTML=a[k];else if(k.startsWith("on"))e[k]=a[k];else e.setAttribute(k,a[k]);}for(const k of kids.flat())e.append(k&&k.nodeType?k:document.createTextNode(k??""));return e;};
-const base=()=>($("#base").value||"http://localhost:8010").replace(/\/$/,"");
+const base=()=>window.location.origin;   // dashboard is served by the API itself, so same-origin
 const headers=()=>{const h={};const k=$("#key").value.trim();if(k)h["X-API-Key"]=k;const t=$("#tenant").value.trim();if(t)h["X-Tenant-Id"]=t;return h;};
 async function api(path){const r=await fetch(base()+path,{headers:headers()});if(!r.ok)throw new Error(r.status+" "+r.statusText+", "+path);return (await r.json()).result;}
 const fmt=x=>(typeof x==="number")?(Math.round(x*1000)/1000):x;
@@ -150,8 +281,46 @@ const PERSONA_COLORS={Explorer:"#4F6276",Hobbyist:"#5E7355","Experience-Seeker":
 function personaPill(label,type,extra=""){const c=PERSONA_COLORS[type];
   if(!c)return el("span",{class:"pill neutral",style:extra},label);
   return el("span",{class:"pill",style:`background:${c}22;color:${c};border-color:${c}66;${extra}`},label);}
-const head=(v,t)=>v.append(el("div",{class:"eyebrow"},t));
 const cardhead=t=>el("h3",{class:"cardhead"},t);
+// No key (or 401/403) -> show a quiet blank prompt, never a red "unauthorized".
+const isAuth=e=>/\b(401|403)\b/.test(String(e));
+function failCard(v,e){
+  if(isAuth(e)||!$("#key").value.trim()){
+    v.append(el("div",{class:"empty"},
+      el("div",{class:"keyglyph",html:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="12" r="3.7"/><circle cx="7" cy="12" r="1" fill="currentColor" stroke="none"/><path d="M10.7 12H21M18 12v3.4M14.7 12v2.6"/></svg>'}),"Add an API key to view this.",
+      el("div",{style:"margin-top:10px"},el("button",{class:"userchip",onclick:openModal},"Enter API key"))));
+    return;
+  }
+  v.append(el("div",{class:"card err"},String(e)));
+}
+// Discover known visitor ids (cluster members + recently served) so within-user
+// pages let you PICK a user from the section instead of typing one blindly.
+async function discoverUsers(){
+  const set=new Set();
+  try{const cl=await api("/api/clusters");(cl&&cl.profiles||[]).forEach(p=>(p.members||[]).forEach(u=>set.add(u)));}catch(e){}
+  try{const sv=await api("/api/served/recent?n=200");(sv||[]).forEach(r=>r.user_id&&set.add(r.user_id));}catch(e){}
+  return [...set].sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true}));
+}
+// Visitor selector shown at the top of every within-user page.
+async function userBar(v){
+  const cur=$("#uid").value.trim();
+  const users=await discoverUsers();
+  const apply=val=>{val=String(val).trim();if(!val)return;$("#uid").value=val;localStorage.setItem("ins_uid",val);paint();};
+  let picker;
+  if(users.length){
+    picker=el("select",{class:"f",style:"min-width:150px",onchange:e=>apply(e.target.value)},
+      el("option",{value:""},`— pick visitor (${users.length}) —`),
+      ...users.map(u=>{const o=el("option",{value:u},u);if(u===cur)o.selected=true;return o;}));
+  }else{
+    picker=el("span",{class:"small mut"},"no known visitors yet — type an id");
+  }
+  const free=el("input",{class:"f",size:"12",value:cur,placeholder:"user_id",
+    onchange:e=>apply(e.target.value),onkeydown:e=>{if(e.key==="Enter")apply(e.target.value);}});
+  v.append(el("div",{class:"card"},el("div",{class:"row"},
+    el("span",{class:"small mut",style:"font-weight:700"},"VISITOR"),picker,
+    el("span",{class:"small mut"},"or"),free,
+    cur?el("span",{class:"pill neutral"},"current: "+cur):"")));
+}
 
 function breakdownBar(bd){
   const wrap=el("div",{class:"barwrap"});
@@ -177,45 +346,136 @@ function valueBars(pairs,{signed=false,max=null}={}){
   return box;
 }
 
+/* ===== icons (sidebar) ===== */
+const ICONS={
+  cohort:'<circle cx="9" cy="8" r="3"/><circle cx="17" cy="10" r="2.4"/><path d="M3 19c0-3 3-5 6-5s6 2 6 5M15 18c.4-2 2-3 4-3s3 .7 3.5 2"/>',
+  content:'<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
+  policy:'<path d="M4 19V5M4 19h16M8 16V9M12 16V6M16 16v-4"/>',
+  traffic:'<path d="M4 12h4l2 5 4-12 2 7h4"/>',
+  request:'<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',
+  user:'<circle cx="12" cy="8" r="3.4"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"/>',
+  history:'<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>',
+  tenants:'<rect x="4" y="9" width="7" height="11" rx="1"/><rect x="13" y="4" width="7" height="16" rx="1"/><path d="M16 8h1M16 11h1M16 14h1"/>',
+  config:'<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>',
+  personas:'<path d="M4 14c0 3 3 5 5 5 1.5 0 2-1 3-1s1.5 1 3 1c2 0 5-2 5-5 0-4-3-9-5-9-1.5 0-2 1-3 1s-1.5-1-3-1c-2 0-5 5-5 9Z"/>',
+  evaluate:'<path d="M9 3h6M10 3v6l-4.5 8a2 2 0 0 0 1.8 3h9.4a2 2 0 0 0 1.8-3L14 9V3M7.5 15h9"/>',
+};
+const slug=n=>n.toLowerCase().replace(/\s+/g,"-");
+
 const GROUPS=[
-  {label:"Across users",tabs:{Cohort:renderCohort,Content:renderContent,Policy:renderPolicy,Traffic:renderTraffic}},
-  {label:"Within user", tabs:{Request:renderRequest,"User model":renderUser,History:renderHistory}},
-  {label:"Admin",       tabs:{Tenants:renderTenants,Config:renderConfig}},
-  {label:"Reference",   tabs:{Personas:renderPersonas}},
+  {label:"Overview",   tabs:{Cohort:renderCohort,Content:renderContent,Policy:renderPolicy,Traffic:renderTraffic}},
+  {label:"Evaluation", tabs:{"Synthetic users":renderEval}},
+  {label:"Admin",      tabs:{Tenants:renderTenants,Config:renderConfig}},
+  {label:"Reference",  tabs:{Personas:renderPersonas}},
 ];
+const ICON_OF={Cohort:"cohort",Content:"content",Policy:"policy",Traffic:"traffic","Synthetic users":"evaluate",Tenants:"tenants",Config:"config",Personas:"personas"};
+const SUBTITLE={
+  Cohort:"Search any visitor, or browse the learned segments. Open a visitor for their model, history and live recommendations.",
+  Content:"Which items get seen, liked and abandoned across all visitors.",
+  Policy:"The ranking policy: fusion weights, bandit theta and training health.",
+  Traffic:"Serving counters and the tail of the served-impression log.",
+  "Synthetic users":"Probe recommender behaviour with built-in or prompt-built personas — across scenarios, with metrics.",
+  Tenants:"Create, inspect and delete tenant slices at runtime (no redeploy).",
+  Config:"Live RecConfig: edit, apply and persist runtime overrides.",
+  Personas:"How the engine reads a visitor — the research behind the labels.",
+};
 const ALL=Object.assign({},...GROUPS.map(g=>g.tabs));
 const SCOPE={};GROUPS.forEach(g=>Object.keys(g.tabs).forEach(t=>SCOPE[t]=g.label));
+const BY_SLUG={};Object.keys(ALL).forEach(n=>BY_SLUG[slug(n)]=n);
 let current="Cohort";
-function setTab(n){current=n;for(const b of document.querySelectorAll("nav button.tab"))b.classList.toggle("on",b.dataset.t===n);render();}
-function render(){const v=$("#view");v.innerHTML="";head(v,SCOPE[current]+" / "+current);ALL[current](v).catch(e=>v.append(el("div",{class:"card err"},String(e))));}
+let userCtx=null;            // {id, sub} when drilled into a single visitor (from the Cohort table)
+const USER_SUBS=[["profile","Profile",renderUser],["history","History",renderHistory],["recommend","Recommend",renderRequest]];
 
-/* ===== ACROSS USERS ===== */
+function setTab(n){if(!ALL[n])return;userCtx=null;current=n;const s=slug(n);if(location.hash!=="#/"+s)location.hash="#/"+s;else paint();}
+function openUser(id,sub){id=String(id).trim();if(!id)return;sub=sub||"profile";
+  $("#uid").value=id;localStorage.setItem("ins_uid",id);
+  const h=`#/user/${encodeURIComponent(id)}/${sub}`;if(location.hash!==h)location.hash=h;else paint();}
+function paint(){
+  const navActive=userCtx?"Cohort":current;
+  for(const b of document.querySelectorAll(".navitem"))b.classList.toggle("on",b.dataset.t===navActive);
+  const v=$("#view");v.innerHTML="";
+  if(userCtx){renderUserDetail(v);return;}
+  v.append(el("div",{class:"pagehead"},
+    el("div",{},el("div",{class:"eyebrow"},SCOPE[current]),el("h1",{},current),
+      SUBTITLE[current]?el("div",{class:"sub"},SUBTITLE[current]):""),
+    el("button",{class:"iconbtn",title:"refresh",onclick:paint},"↻")));
+  const host=el("div");v.append(host);
+  ALL[current](host).catch(e=>failCard(host,e));
+}
+function renderUserDetail(v){
+  const {id,sub}=userCtx;const fn=(USER_SUBS.find(s=>s[0]===sub)||USER_SUBS[0])[2];
+  v.append(el("div",{class:"pagehead"},
+    el("div",{},
+      el("button",{class:"backlink",onclick:()=>setTab("Cohort")},"← Cohort"),
+      el("h1",{},"Visitor ",el("span",{style:"color:var(--accent)"},id))),
+    el("button",{class:"iconbtn",title:"refresh",onclick:paint},"↻")));
+  const bar=el("div",{class:"subtabs"});
+  USER_SUBS.forEach(([key,label])=>bar.append(el("button",{class:"subtab"+(key===sub?" on":""),onclick:()=>openUser(id,key)},label)));
+  v.append(bar);
+  const host=el("div");v.append(host);
+  fn(host).catch(e=>failCard(host,e));
+}
+
+/* ===== COHORT: visitor search + table, segments below ===== */
 async function renderCohort(v){
   const r=await api("/api/clusters").catch(()=>null);
-  if(!r){v.append(el("div",{class:"empty"},"No cluster model yet. Train one, ",el("code",{},"python explain/cluster_train.py --method fcm"),", and set ",el("code",{},"CLUSTER_MODEL_PATH"),"."));return;}
-  const total=(r.profiles||[]).reduce((s,p)=>s+p.size,0)||1;
-  v.append(el("div",{class:"row small mut",style:"margin-bottom:12px"},"method ",el("code",{},r.method||"kmeans"),` / ${total} visitors`));
-  const g=el("div",{class:"grid",style:"grid-template-columns:repeat(auto-fill,minmax(260px,1fr))"});
-  for(const p of r.profiles){
-    const card=el("div",{class:"card lift",style:"margin:0"},
-      el("div",{class:"row",style:"justify-content:space-between"},el("h3",{class:"mont",style:"margin:0;font-size:15px"},"Cluster "+p.cluster),personaPill(p.falk_hint,Object.keys(PERSONA_COLORS).find(k=>(p.falk_hint||"").startsWith(k)))),
-      el("div",{class:"barwrap",style:"margin:11px 0 7px"},el("div",{class:"seg",style:`width:${100*p.size/total}%;background:var(--accent)`})),
-      el("div",{class:"small mut",style:"margin-bottom:8px"},`${p.size} visitors / breadth ${fmt(p.breadth)}`),
-      el("div",{},(p.top_tags||[]).map(t=>el("span",{class:"tag"},t.label))));
-    const mems=p.members||[];
-    if(mems.length){
-      const det=el("details",{class:"members"});
-      det.append(el("summary",{},`view ${mems.length} user${mems.length>1?"s":""}`));
-      const box=el("div",{class:"row",style:"gap:5px"});
-      for(const u of mems)box.append(el("button",{class:"userchip",title:"open this visitor",onclick:()=>loadUser(u)},u));
-      det.append(box);
-      card.append(det);
+  const users=await discoverUsers();
+  const u2c={};                                  // visitor id -> its cluster profile
+  if(r&&r.profiles)r.profiles.forEach(p=>(p.members||[]).forEach(u=>u2c[u]=p));
+
+  // search / open
+  const search=el("input",{class:"f",id:"usearch",placeholder:"search visitor id…",style:"flex:1;max-width:340px",
+    oninput:filterUsers,onkeydown:e=>{if(e.key==="Enter"){const q=search.value.trim();if(q)openUser(q,"profile");}}});
+  v.append(el("div",{class:"card"},el("div",{class:"row"},
+    el("span",{class:"small mut",style:"font-weight:700"},"VISITOR"),search,
+    el("button",{class:"primary",onclick:()=>{const q=$("#usearch").value.trim();if(q)openUser(q,"profile");}},"Open"),
+    el("span",{class:"small mut"},"type any id, or pick from the table"))));
+
+  // visitors table
+  if(users.length){
+    const tbl=el("table",{id:"utbl"});
+    tbl.append(el("tr",{},el("th",{},"visitor"),el("th",{},"segment"),el("th",{style:"width:90px"},"")));
+    for(const u of users){const p=u2c[u];
+      tbl.append(el("tr",{class:"urow","data-id":String(u).toLowerCase(),style:"cursor:pointer",onclick:()=>openUser(u,"profile")},
+        el("td",{},el("b",{},u)),
+        el("td",{},p?personaPill("Cluster "+p.cluster+(p.falk_hint?" · "+p.falk_hint:""),Object.keys(PERSONA_COLORS).find(k=>(p.falk_hint||"").startsWith(k))):el("span",{class:"mut small"},"—")),
+        el("td",{},el("button",{class:"userchip",onclick:e=>{e.stopPropagation();openUser(u,"profile");}},"open"))));
     }
-    g.append(card);
+    v.append(el("div",{class:"card"},cardhead(`Visitors (${users.length})`),tbl,
+      el("div",{id:"unone",class:"small mut",style:"margin-top:8px;display:none"},"no visitor matches the search.")));
+  }else{
+    v.append(el("div",{class:"empty"},"No known visitors yet — ingest events, or type an id above and Open."));
   }
-  v.append(g);
+
+  // learned segments
+  if(r&&r.profiles&&r.profiles.length){
+    const total=r.profiles.reduce((s,p)=>s+p.size,0)||1;
+    v.append(el("div",{class:"eyebrow",style:"margin-top:14px;display:block"},`Segments · method ${r.method||"kmeans"}`));
+    const g=el("div",{class:"grid",style:"grid-template-columns:repeat(auto-fill,minmax(260px,1fr))"});
+    for(const p of r.profiles){
+      const card=el("div",{class:"card lift",style:"margin:0"},
+        el("div",{class:"row",style:"justify-content:space-between"},el("h3",{class:"mont",style:"margin:0;font-size:15px"},"Cluster "+p.cluster),personaPill(p.falk_hint,Object.keys(PERSONA_COLORS).find(k=>(p.falk_hint||"").startsWith(k)))),
+        el("div",{class:"barwrap",style:"margin:11px 0 7px"},el("div",{class:"seg",style:`width:${100*p.size/total}%;background:var(--accent)`})),
+        el("div",{class:"small mut",style:"margin-bottom:8px"},`${p.size} visitors / breadth ${fmt(p.breadth)}`),
+        el("div",{},(p.top_tags||[]).map(t=>el("span",{class:"tag"},t.label))));
+      const mems=p.members||[];
+      if(mems.length){
+        const det=el("details",{class:"members"});
+        det.append(el("summary",{},`view ${mems.length} user${mems.length>1?"s":""}`));
+        const box=el("div",{class:"row",style:"gap:5px"});
+        for(const u of mems)box.append(el("button",{class:"userchip",title:"open this visitor",onclick:()=>openUser(u,"profile")},u));
+        det.append(box);card.append(det);
+      }
+      g.append(card);
+    }
+    v.append(g);
+  }else{
+    v.append(el("div",{class:"small mut",style:"margin-top:12px"},"No cluster model yet — train one (",el("code",{},"python explain/cluster_train.py --method fcm"),") and set ",el("code",{},"CLUSTER_MODEL_PATH")," to see segments."));
+  }
 }
-function loadUser(uid){$("#uid").value=uid;localStorage.setItem("ins_uid",uid);setTab("User model");}
+function filterUsers(){const q=($("#usearch").value||"").toLowerCase();let shown=0;
+  for(const tr of document.querySelectorAll("#utbl .urow")){const hit=tr.getAttribute("data-id").includes(q);tr.style.display=hit?"":"none";if(hit)shown++;}
+  const none=$("#unone");if(none)none.style.display=shown?"none":"";}
 async function renderPolicy(v){
   const p=await api("/api/policy");
   const h=p.health;
@@ -268,7 +528,7 @@ async function renderTraffic(v){
 }
 
 async function renderContent(v){
-  let r;try{r=await api("/api/content/stats");}catch(e){v.append(el("div",{class:"card err"},String(e)+"  (set X-API-Key if INGEST_API_KEY is on)"));return;}
+  let r;try{r=await api("/api/content/stats");}catch(e){failCard(v,e);return;}
   if(!r||!r.users){v.append(el("div",{class:"empty"},"No visitor data yet. Ingest some events first."));return;}
   v.append(el("div",{class:"row small mut",style:"margin-bottom:12px"},`${r.users} visitors / ${r.content.length} content items seen`));
   const tbl=el("table");
@@ -282,7 +542,7 @@ async function renderContent(v){
   v.append(el("div",{class:"card"},cardhead("Content seen across visitors (most popular first)"),tbl));
   if(r.themes&&r.themes.length)v.append(el("div",{class:"card"},cardhead("Popular themes across the cohort"),valueBars(r.themes)));
   if(r.clusters&&r.clusters.length){
-    v.append(el("div",{class:"eyebrow",style:"margin-top:8px"},"Content preferences by cluster"));
+    v.append(el("div",{class:"eyebrow",style:"margin-top:8px;display:block"},"Content preferences by cluster"));
     const g=el("div",{class:"grid",style:"grid-template-columns:repeat(auto-fill,minmax(265px,1fr))"});
     for(const cl of r.clusters)g.append(el("div",{class:"card",style:"margin:0"},
       el("h3",{class:"mont",style:"margin:0 0 9px;font-size:15px"},"Cluster "+cl.cluster),
@@ -298,7 +558,7 @@ async function renderContent(v){
 async function renderRequest(v){
   v.append(el("div",{class:"card"},el("div",{class:"row"},
     el("span",{class:"small mut"},"explaining ranking for"),el("b",{},$("#uid").value||"-"),
-    el("span",{class:"vsep"}),
+    el("span",{class:"vsep",style:"width:1px;height:22px;background:var(--line)"}),
     el("input",{id:"f_filter",class:"f",size:"15",placeholder:"filter tag (optional)"}),
     el("input",{id:"f_lat",class:"f",size:"6",placeholder:"lat"}),el("input",{id:"f_lon",class:"f",size:"6",placeholder:"lon"}),
     el("button",{class:"primary",onclick:runRecommend},"Recommend"))));
@@ -328,7 +588,9 @@ async function runRecommend(){
   }catch(e){out.append(el("div",{class:"card err"},String(e)));}
 }
 async function renderUser(v){
-  let exp;try{exp=await api(`/api/usermodel/explain?user_id=${encodeURIComponent($("#uid").value)}`);}catch(e){v.append(el("div",{class:"card err"},String(e)+"  (set X-API-Key if INGEST_API_KEY is on)"));return;}
+  await userBar(v);
+  if(!$("#uid").value.trim()){v.append(el("div",{class:"empty"},"Pick a visitor above."));return;}
+  let exp;try{exp=await api(`/api/usermodel/explain?user_id=${encodeURIComponent($("#uid").value)}`);}catch(e){failCard(v,e);return;}
   if(!exp){v.append(el("div",{class:"empty"},"No model for ",el("b",{},$("#uid").value),". Ingest some events for this user first."));return;}
   const vt=exp.visitor_type||{};
   v.append(el("div",{class:"card lift"},
@@ -349,7 +611,9 @@ async function renderUser(v){
 }
 
 async function renderHistory(v){
-  let h;try{h=await api(`/api/usermodel/history?user_id=${encodeURIComponent($("#uid").value)}`);}catch(e){v.append(el("div",{class:"card err"},String(e)+"  (set X-API-Key if INGEST_API_KEY is on)"));return;}
+  await userBar(v);
+  if(!$("#uid").value.trim()){v.append(el("div",{class:"empty"},"Pick a visitor above."));return;}
+  let h;try{h=await api(`/api/usermodel/history?user_id=${encodeURIComponent($("#uid").value)}`);}catch(e){failCard(v,e);return;}
   if(!h||!h.event_count){v.append(el("div",{class:"empty"},"No activity for ",el("b",{},$("#uid").value),". Ingest events for this user first."));return;}
   v.append(el("div",{class:"row small mut",style:"margin-bottom:12px"},`${h.event_count} events / ${h.aggregates.length} content items engaged`));
   const dwell=d=>d!=null?Math.round(d)+"s":"-";
@@ -425,7 +689,7 @@ async function renderPersonas(v){
       el("div",{style:"flex:1"},el("div",{},desc),el("div",{class:"small mut",style:"margin-top:2px"},"inferred from "+how)))));
     v.append(c);
   }
-  v.append(el("div",{class:"eyebrow",style:"margin-top:6px"},"Methods"));
+  v.append(el("div",{class:"eyebrow",style:"margin-top:6px;display:block"},"Methods"));
   for(const [title,rows] of Object.entries(METHODS)){
     const c=el("div",{class:"card"});c.append(cardhead(title));
     rows.forEach(([name,desc,key],i)=>c.append(el("div",{class:"row",style:`align-items:flex-start;gap:13px;padding:10px 0;${i?'border-top:1px solid var(--line)':''}`},
@@ -436,45 +700,172 @@ async function renderPersonas(v){
   }
 }
 
-/* ===== ADMIN: tenants ===== */
+/* ===== EVALUATION: synthetic visitors -> recommendation behaviour ===== */
+let _evalSpec=null, _evalPersona=null;
+async function postJSON(path,body){
+  const r=await fetch(base()+path,{method:"POST",headers:{...headers(),"Content-Type":"application/json"},body:JSON.stringify(body)});
+  if(!r.ok)throw new Error(r.status+" "+r.statusText+", "+path);
+  return (await r.json()).result;
+}
+function affinityCard(spec){
+  const aff=Object.entries(spec.tag_affinity||{}).sort((a,b)=>b[1]-a[1]);
+  const demo=Object.entries(spec.demographics||{});
+  return el("div",{class:"card"},cardhead("Synthetic user model"),
+    demo.length?el("div",{class:"row",style:"margin-bottom:8px"},demo.map(([k,val])=>el("span",{class:"pill neutral"},k+": "+val))):"",
+    aff.length?valueBars(aff.map(([k,w])=>[k.split(":").slice(1).join(":")||k,w]),{max:1})
+              :el("div",{class:"small mut"},"No matching tags — persona will fall back to cold/diverse content."));
+}
+function metricsGrid(m){
+  const g=el("div",{class:"grid"});
+  const mc=(label,val)=>el("div",{class:"metric-card"},el("div",{class:"metric num"},val==null?"–":String(val)),el("div",{class:"mut small"},label));
+  g.append(mc("items",m.n_items),mc("targets",m.n_targets),mc("avg score",m.avg_target_score),
+           mc("diversity",m.intra_list_diversity),mc("distinct tags",m.distinct_tags),
+           mc("distractor",m.distractor_present?"yes":"no"));
+  return g;
+}
+function scenarioCard(s){
+  const m=s.metrics||{}, c=el("div",{class:"card"});
+  c.append(el("div",{class:"row",style:"margin-bottom:6px"},
+    el("b",{},s.name),
+    el("span",{class:"pill "+(s.strategy||"warm")},s.strategy||""),
+    s.filter?el("span",{class:"pill neutral"},"filter: "+s.filter):"",
+    (s.diagnostics&&s.diagnostics.reason)?el("span",{class:"mut small"},s.diagnostics.reason):""));
+  c.append(metricsGrid(m));
+  const fs=Object.entries(m.facet_spread||{});
+  if(fs.length)c.append(el("div",{style:"margin-top:8px"},el("span",{class:"small mut"},"facet spread:  "),fs.map(([f,n])=>el("span",{class:"tag"},f+" ×"+n))));
+  if((s.items||[]).length){
+    const tbl=el("table",{style:"margin-top:10px"});
+    tbl.append(el("tr",{},el("th",{style:"width:44px"},"rank"),el("th",{},"id"),el("th",{},"score"),el("th",{style:"width:230px"},"breakdown"),el("th",{},"title")));
+    for(const it of s.items){const isD=it.role==="distractor";
+      tbl.append(el("tr",{},
+        el("td",{},el("b",{},String(it.rank)),isD?el("span",{class:"pill distractor",style:"margin-left:6px"},"distr"):""),
+        el("td",{class:"num"},it.id),el("td",{class:"num"},fmt(it.relevance_score)),
+        el("td",{},breakdownBar(it.breakdown||{})),
+        el("td",{class:"small mut"},(it.content&&it.content.title)||"")));}
+    c.append(tbl);
+  }else c.append(el("div",{class:"empty",style:"margin-top:8px"},"No items for this scenario."));
+  return c;
+}
+async function runEval(){
+  const out=$("#evalout");out.innerHTML="";
+  if(!_evalSpec){out.append(el("div",{class:"empty"},"Pick or build a persona first."));return;}
+  out.append(el("div",{class:"small mut"},"running…"));
+  const body={spec:_evalSpec,cold:$("#ev_cold").checked,scenarios:[{name:"open"}]};
+  const ft=$("#ev_filter").value.trim();
+  if(ft)body.scenarios.push({name:"filter: "+ft,filter:ft});
+  try{
+    const r=await postJSON("/api/eval/run",body);
+    out.innerHTML="";
+    out.append(affinityCard(r.user_model||_evalSpec));
+    for(const s of (r.scenarios||[]))out.append(scenarioCard(s));
+  }catch(e){out.innerHTML="";out.append(el("div",{class:"card err"},String(e)));}
+}
+async function buildFromPrompt(){
+  const p=$("#ev_prompt").value.trim();if(!p)return;
+  try{
+    _evalPersona=await postJSON("/api/eval/generate",{prompt:p});
+    _evalSpec=_evalPersona.spec;
+    $("#ev_personasel").value="__prompt__";
+    runEval();
+  }catch(e){$("#evalout").innerHTML="";$("#evalout").append(el("div",{class:"card err"},String(e)));}
+}
+async function renderEval(v){
+  let personas;
+  try{personas=await api("/api/eval/personas");}catch(e){failCard(v,e);return;}
+  const sel=el("select",{id:"ev_personasel",class:"f",style:"min-width:190px",onchange:e=>{
+    const i=e.target.value;
+    if(i==="__prompt__")return;
+    _evalPersona=personas[+i];_evalSpec=_evalPersona.spec;runEval();
+  }});
+  personas.forEach((p,i)=>sel.append(el("option",{value:String(i)},p.name+" — "+p.type)));
+  sel.append(el("option",{value:"__prompt__"},"(from prompt)"));
+  v.append(el("div",{class:"card"},cardhead("Pick a synthetic visitor"),
+    el("div",{class:"row"},sel,
+      el("input",{id:"ev_filter",class:"f",size:"16",placeholder:"location filter tag (optional)"}),
+      el("label",{class:"small mut",style:"display:flex;gap:5px;align-items:center"},el("input",{id:"ev_cold",type:"checkbox"}),"add cold-start"),
+      el("button",{class:"primary",onclick:runEval},"Run")),
+    el("div",{class:"row",style:"margin-top:9px"},
+      el("input",{id:"ev_prompt",class:"f",style:"flex:1;min-width:280px",placeholder:"…or describe a visitor: ‘a young student drawn to resistance and Barrack 3’"}),
+      el("button",{class:"userchip",onclick:buildFromPrompt},"Build from prompt")),
+    el("div",{class:"small mut",style:"margin-top:7px"},"Personas are grounded in this tenant's real tag vocabulary; recommendations come from the same engine path as live serving (no events needed). Metrics: list diversity, tag spread, distractor placement, cold vs warm.")));
+  v.append(el("div",{id:"evalout"}));
+  // auto-run the first persona so the page is never empty
+  if(personas.length){_evalPersona=personas[0];_evalSpec=personas[0].spec;runEval();}
+}
+
+/* ===== ADMIN: tenants (PVC-backed registry + API-key management) ===== */
+const splitKeys=s=>s.split(/[\s,]+/).map(x=>x.trim()).filter(Boolean);
+async function postTenant(body){
+  const r=await fetch(base()+"/api/tenants",{method:"POST",headers:{...headers(),"Content-Type":"application/json"},body:JSON.stringify(body)});
+  if(!r.ok){alert("tenant save failed: "+r.status);return null;}
+  return r.json().catch(()=>({}));
+}
 async function renderTenants(v){
   let rows;
   try{ rows=await api("/api/tenants"); }
-  catch(e){ v.append(el("div",{class:"card err"},String(e)+"  (set X-API-Key in the header)")); return; }
+  catch(e){failCard(v,e);return;}
   v.append(el("div",{class:"card"},cardhead("Add / update tenant"),
     el("div",{class:"row"},
-      el("input",{id:"t_id",class:"f",size:"18",placeholder:"tenant_id (e.g. westerbork-ar)"}),
-      el("input",{id:"t_col",class:"f",size:"18",placeholder:"Qdrant collection"}),
+      el("input",{id:"t_id",class:"f",size:"16",placeholder:"tenant_id"}),
+      el("input",{id:"t_col",class:"f",size:"16",placeholder:"Qdrant collection"}),
+      el("input",{id:"t_keys",class:"f",size:"22",placeholder:"api keys (space/comma sep, optional)"}),
+      el("label",{class:"small mut",style:"display:flex;gap:5px;align-items:center"},el("input",{id:"t_gen",type:"checkbox"}),"mint a key"),
       el("button",{class:"primary",onclick:saveTenant},"Save")),
-    el("div",{class:"small mut",style:"margin-top:7px"},"Registers the tenant slice at runtime (no redeploy): its own Qdrant collection + Redis namespace + bandit/clusters/config. Content must be ingested into the collection separately. Clients then send ",el("code",{},"X-Tenant-Id: <id>"),".")));
+    el("div",{class:"small mut",style:"margin-top:7px"},"Persisted to the tenant store on the PVC (",el("code",{},"TENANT_STORE_PATH"),") — no redeploy. Keys are hashed at rest; a minted key is shown once. Editing with the key box empty keeps existing keys.")));
   const tbl=el("table");
-  tbl.append(el("tr",{},el("th",{},"tenant"),el("th",{},"collection"),el("th",{},"content"),el("th",{},"source"),el("th",{},"")));
+  tbl.append(el("tr",{},el("th",{},"tenant"),el("th",{},"collection"),el("th",{},"content"),el("th",{},"api keys"),el("th",{},"source"),el("th",{},"actions")));
   for(const t of (rows||[])){
+    const n=t.api_keys_count||0, rt=t.source==="runtime";
     tbl.append(el("tr",{},
       el("td",{},el("b",{},t.tenant_id)),
       el("td",{},t.collection||el("span",{class:"mut"},"(default)")),
       el("td",{class:"num"},t.content_count==null?el("span",{class:"mut"},"-"):t.content_count),
-      el("td",{},el("span",{class:"pill "+(t.source==="runtime"?"warm":"neutral")},t.source||"runtime")),
+      el("td",{},el("span",{class:"pill "+(n?"warm":"neutral")},n+" key"+(n===1?"":"s"))),
+      el("td",{},el("span",{class:"pill "+(rt?"bandit":"neutral")},t.source||"runtime")),
       el("td",{},el("div",{class:"row",style:"gap:5px"},
-        el("button",{class:"userchip",title:"load this tenant into the header",onclick:()=>{$("#tenant").value=t.tenant_id;localStorage.setItem("ins_tenant",t.tenant_id);setTab("Cohort");}},"use"),
-        t.source==="runtime"?el("button",{class:"userchip",onclick:()=>delTenant(t.tenant_id)},"delete"):"" ))));
+        el("button",{class:"userchip",title:"use this tenant in the top-bar context",onclick:()=>{$("#tenant").value=t.tenant_id;localStorage.setItem("ins_tenant",t.tenant_id);setTab("Cohort");}},"use"),
+        el("button",{class:"userchip",title:"prefill the form",onclick:()=>{$("#t_id").value=t.tenant_id;$("#t_col").value=t.collection||"";$("#t_keys").value="";$("#t_id").scrollIntoView({block:"center"});}},"edit"),
+        el("button",{class:"userchip",title:"mint a new key for this tenant",onclick:()=>mintKey(t.tenant_id,t.collection)},"＋ key"),
+        n?el("button",{class:"userchip",title:"remove ALL keys",onclick:()=>clearKeys(t.tenant_id,t.collection)},"clear keys"):"",
+        rt?el("button",{class:"userchip",onclick:()=>delTenant(t.tenant_id)},"delete"):"" ))));
   }
-  v.append(el("div",{class:"card"},cardhead("Tenants"),tbl,
-    el("div",{class:"small mut",style:"margin-top:8px"},"config = from TENANTS_PATH (deploy baseline). runtime = created here (editable / deletable).")));
+  v.append(el("div",{class:"card"},cardhead("Tenants on the store"),tbl,
+    el("div",{class:"small mut",style:"margin-top:8px"},"source ",el("span",{class:"pill neutral"},"config")," = ",el("code",{},"TENANTS_PATH")," deploy baseline (read-only). ",el("span",{class:"pill bandit"},"runtime")," = created here, persisted to the PVC store (editable / deletable). A per-tenant key pins its tenant; the global key + the top-bar tenant acts on any.")));
 }
 async function saveTenant(){
-  const id=$("#t_id").value.trim(), col=$("#t_col").value.trim();
-  if(!id){ alert("tenant_id required"); return; }
-  const r=await fetch(base()+"/api/tenants",{method:"POST",headers:{...headers(),"Content-Type":"application/json"},
-    body:JSON.stringify({tenant_id:id,collection:col||null})});
-  if(!r.ok){ alert("save failed: "+r.status); return; }
-  $("#t_id").value=""; $("#t_col").value=""; render();
+  const id=$("#t_id").value.trim();
+  if(!id){alert("tenant_id required");return;}
+  const body={tenant_id:id,collection:$("#t_col").value.trim()||null};
+  const keys=splitKeys($("#t_keys").value); if(keys.length)body.api_keys=keys;
+  if($("#t_gen").checked)body.generate_api_key=true;
+  const j=await postTenant(body); if(!j)return;
+  $("#t_id").value="";$("#t_col").value="";$("#t_keys").value="";$("#t_gen").checked=false;
+  paint(); if(j.api_key)mintedToast(id,j.api_key);
+}
+async function mintKey(id,col){
+  const j=await postTenant({tenant_id:id,collection:col||null,generate_api_key:true});
+  if(j){paint(); if(j.api_key)mintedToast(id,j.api_key);}
+}
+async function clearKeys(id,col){
+  if(!confirm("Remove ALL API keys for '"+id+"'? Clients using them are locked out immediately."))return;
+  const j=await postTenant({tenant_id:id,collection:col||null,replace_keys:true}); if(j)paint();
 }
 async function delTenant(id){
-  if(!confirm("Delete tenant '"+id+"'? (its data keys stay in Redis until they expire)")) return;
+  if(!confirm("Delete tenant '"+id+"'? (its data keys stay in the store until they expire)")) return;
   const r=await fetch(base()+"/api/tenants/"+encodeURIComponent(id),{method:"DELETE",headers:headers()});
   if(!r.ok){ alert("delete failed: "+r.status); return; }
-  render();
+  paint();
+}
+// Toast lives on <body>, so it survives the page repaint that follows a mint.
+function mintedToast(id,key){
+  const host=$("#toast"); if(!host)return alert("New key for "+id+":\n"+key);
+  const card=el("div",{class:"card",style:"margin:0;border-color:var(--accent);box-shadow:0 8px 30px var(--shadow)"},
+    el("div",{class:"row",style:"justify-content:space-between"},el("b",{},"New key · "+id),
+      el("button",{class:"userchip",onclick:()=>card.remove()},"dismiss")),
+    el("div",{class:"small mut",style:"margin:6px 0"},"Shown once — only its hash is stored. Copy it now."),
+    el("code",{style:"display:block;word-break:break-all;padding:8px;margin-bottom:8px"},key),
+    el("button",{class:"primary",onclick:()=>{navigator.clipboard&&navigator.clipboard.writeText(key);}},"Copy key"));
+  host.append(card);
 }
 
 /* ===== ADMIN: runtime config (folded-in /settings) ===== */
@@ -489,7 +880,7 @@ function _cfgField(path,val){
   inp.dataset.path=path; row.append(inp); return row;
 }
 async function renderConfig(v){
-  let cfg; try{cfg=await api("/api/config");}catch(e){v.append(el("div",{class:"card err"},String(e)+"  (set X-API-Key)"));return;}
+  let cfg; try{cfg=await api("/api/config");}catch(e){failCard(v,e);return;}
   const t=$("#tenant").value.trim();
   const wrap=el("div",{class:"card"}); wrap.append(cardhead("Runtime config"+(t?(" / tenant "+t):" / default tenant")));
   const form=el("div",{id:"cfgform"});
@@ -521,30 +912,88 @@ function _collectConfig(){
 async function saveConfig(){
   let patch; try{patch=_collectConfig();}catch(e){$("#cfgstatus").textContent=e.message;return;}
   const r=await fetch(base()+"/api/config",{method:"PUT",headers:{...headers(),"Content-Type":"application/json"},body:JSON.stringify(patch)});
-  $("#cfgstatus").textContent=r.ok?"applied ✓":("error "+r.status); if(r.ok)setTimeout(render,400);
+  $("#cfgstatus").textContent=r.ok?"applied ✓":("error "+r.status); if(r.ok)setTimeout(paint,400);
 }
 async function resetConfig(){
   if(!confirm("Drop the runtime override and revert to the env/default baseline?"))return;
   const r=await fetch(base()+"/api/config/reset",{method:"POST",headers:headers()});
-  $("#cfgstatus").textContent=r.ok?"reset ✓":("error "+r.status); if(r.ok)setTimeout(render,400);
+  $("#cfgstatus").textContent=r.ok?"reset ✓":("error "+r.status); if(r.ok)setTimeout(paint,400);
 }
 
-/* boot */
+/* ===== sidebar nav ===== */
 function buildNav(){const nav=$("#tabs");nav.innerHTML="";
-  GROUPS.forEach((g,gi)=>{if(gi)nav.append(el("span",{class:"vsep"}));
-    const grp=el("div",{class:"navgroup"},el("span",{class:"grouplbl"},g.label));
-    for(const name of Object.keys(g.tabs)){const b=el("button",{class:"tab",onclick:()=>setTab(name)},name);b.dataset.t=name;grp.append(b);}
+  GROUPS.forEach(g=>{
+    const grp=el("div",{class:"navgroup"},el("div",{class:"grouplbl"},g.label));
+    for(const name of Object.keys(g.tabs)){
+      const ic=ICONS[ICON_OF[name]]||"";
+      const b=el("button",{class:"navitem",title:name,onclick:()=>setTab(name)},
+        el("span",{class:"ico",html:`<svg viewBox="0 0 24 24">${ic}</svg>`}).firstChild,
+        el("span",{class:"lbl"},name));
+      b.dataset.t=name;grp.append(b);
+    }
     nav.append(grp);});}
-$("#base").value=localStorage.getItem("ins_base")||window.location.origin||"http://localhost:8010";
-$("#key").value=localStorage.getItem("ins_key")||"";
+
+/* ===== API-key modal ===== */
+const overlay=$("#overlay"),mstatus=$("#mstatus");
+function openModal(){
+  $("#key").value=localStorage.getItem("ins_key")||"";
+  mstatus.textContent="";mstatus.className="mstatus";
+  overlay.classList.add("show");setTimeout(()=>$("#key").focus(),60);
+}
+function closeModal(){overlay.classList.remove("show");}
+async function connect(){
+  const k=$("#key").value.trim(),t=$("#tenant").value.trim();
+  localStorage.setItem("ins_key",k);
+  mstatus.textContent="connecting…";mstatus.className="mstatus";
+  let live=false;try{const r=await fetch(base()+"/health");live=r.ok;}catch(e){}
+  if(!live){mstatus.textContent="cannot reach server";mstatus.className="mstatus err";setConn(false);return;}
+  // if a key was given, validate it against a guarded route
+  if(k){
+    try{
+      const r=await fetch(base()+"/api/config",{headers:{"X-API-Key":k,...(t?{"X-Tenant-Id":t}:{})}});
+      if(r.status===401){mstatus.textContent="key rejected";mstatus.className="mstatus err";return;}
+    }catch(e){}
+  }
+  mstatus.textContent="connected ✓";mstatus.className="mstatus ok";
+  setConn(true);
+  setTimeout(()=>{closeModal();paint();},350);
+}
+function setConn(ok){const c=$("#conn");c.classList.toggle("ok",!!ok);$("span:last-child",c).textContent=ok?"connected":"not connected";}
+async function ping(){try{const r=await fetch(base()+"/health");setConn(r.ok);}catch(e){setConn(false);}}
+
+/* ===== routing & boot ===== */
+function applyHash(){
+  const h=location.hash||"";
+  const um=h.match(/^#\/user\/([^/]+)(?:\/([^/]+))?/);
+  if(um){userCtx={id:decodeURIComponent(um[1]),sub:um[2]||"profile"};$("#uid").value=userCtx.id;paint();return;}
+  userCtx=null;const s=h.replace(/^#\/?/,"");const n=BY_SLUG[s];
+  if(n){current=n;paint();}else{setTab(current);}
+}
+
 $("#uid").value=localStorage.getItem("ins_uid")||"u1";
 $("#tenant").value=localStorage.getItem("ins_tenant")||"";
+$("#key").value=localStorage.getItem("ins_key")||"";
 document.documentElement.dataset.theme=localStorage.getItem("ins_theme")||"light";
-$("#theme").textContent=document.documentElement.dataset.theme==="dark"?"☀":"☾";
-for(const b of ["base","key","uid","tenant"])$("#"+b).addEventListener("change",()=>{localStorage.setItem("ins_"+b,$("#"+b).value);if(b==="base")ping();if(b==="tenant")render();});
-$("#theme").onclick=()=>{const t=document.documentElement.dataset.theme==="dark"?"light":"dark";document.documentElement.dataset.theme=t;localStorage.setItem("ins_theme",t);$("#theme").textContent=t==="dark"?"☀":"☾";};
-async function ping(){try{await fetch(base()+"/health");$("#conn").textContent="● connected";$("#conn").style.color="#9cc090";}catch(e){$("#conn").textContent="● offline";$("#conn").style.color="#d89a8e";}}
-buildNav();ping();setTab("Cohort");
+if(localStorage.getItem("ins_navmin")==="1")document.body.classList.add("nav-min");
+
+for(const b of ["uid","tenant"])$("#"+b).addEventListener("change",()=>{localStorage.setItem("ins_"+b,$("#"+b).value);if(b==="tenant")paint();});
+$("#theme").onclick=()=>{const t=document.documentElement.dataset.theme==="dark"?"light":"dark";document.documentElement.dataset.theme=t;localStorage.setItem("ins_theme",t);};
+$("#navtoggle").onclick=()=>{document.body.classList.toggle("nav-min");localStorage.setItem("ins_navmin",document.body.classList.contains("nav-min")?"1":"0");};
+$("#openkey").onclick=openModal;
+$("#connect").onclick=connect;
+$("#cancelkey").onclick=closeModal;
+$("#keytoggle").onclick=()=>{const i=$("#key"),b=$("#keytoggle");const show=i.type==="password";
+  i.type=show?"text":"password";b.classList.toggle("off",!show);b.title=show?"hide key":"show key";i.focus();};
+$("#key").addEventListener("keydown",e=>{if(e.key==="Enter")connect();});
+overlay.addEventListener("click",e=>{if(e.target===overlay)closeModal();});
+window.addEventListener("hashchange",applyHash);
+
+buildNav();ping();
+// land on the requested page (deep-link) or default; show the key dialog first run.
+const startSlug=(location.hash||"").replace(/^#\/?/,"");
+if(BY_SLUG[startSlug])current=BY_SLUG[startSlug];
+if(!location.hash)location.hash="#/"+slug(current);else applyHash();
+if(!localStorage.getItem("ins_key")&&!localStorage.getItem("ins_seen")){localStorage.setItem("ins_seen","1");openModal();}
 </script>
 </body>
 </html>

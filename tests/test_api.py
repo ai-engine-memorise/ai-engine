@@ -222,10 +222,10 @@ def test_content_stats_aggregates_cohort():
     assert r["themes"]                                    # popular themes surfaced
 
 
-def test_inspector_page_served():
+def test_dashboard_page_served():
     client = _client()
-    r = client.get("/inspector")
-    assert r.status_code == 200 and "AI-Engine Inspector" in r.text
+    r = client.get("/dashboard")
+    assert r.status_code == 200 and "AI-Engine Dashboard" in r.text
 
 
 def test_ingest_requires_api_key_when_set(monkeypatch):

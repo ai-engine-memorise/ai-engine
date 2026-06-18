@@ -34,6 +34,13 @@ class PreviewSpec(BaseModel):
     limit: Optional[int] = None
 
 
+class EvalRun(BaseModel):
+    """Run a synthetic persona across scenarios (module-level so FastAPI reads it as a body)."""
+    spec: PreviewSpec = Field(default_factory=PreviewSpec)
+    scenarios: Optional[list[dict]] = None   # [{name, filter?, near_lat?, near_lon?, geo_radius_m?}]
+    cold: bool = False                        # also run an empty (cold-start) baseline
+
+
 def build_preview_signals(spec: PreviewSpec, content_store) -> UserSignals:
     taste = None
     if spec.like_items:
@@ -270,6 +277,7 @@ def make_router(components: Components) -> APIRouter:
     usermodel_routes = APIRouter(tags=["usermodel"], dependencies=[Depends(_require_api_key)])
     ops = APIRouter(tags=["ops"], dependencies=[Depends(_require_api_key)])           # policy/metrics/served/stats/clusters
     admin = APIRouter(tags=["admin"], dependencies=[Depends(_require_api_key)])       # runtime config
+    evalr = APIRouter(prefix="/eval", tags=["evaluation"], dependencies=[Depends(_require_api_key)])  # synthetic-visitor testing
     c = components
     # in-process counters for the inspector panel (v1; Prometheus /metrics is the prod upgrade)
     metrics = {"ingests": 0, "recommends": 0, "cold": 0, "warm": 0,
@@ -622,9 +630,60 @@ def make_router(components: Components) -> APIRouter:
         _apply_cfg(_build_config())
         return {"result": c.cfg.model_dump(), "status": "reset_to_baseline"}
 
-    for sub in (serving, write, usermodel_routes, ops, admin):
+    # ----- evaluation: synthetic visitors -> recommendation behaviour ------ #
+
+    @evalr.get("/personas")
+    def eval_personas() -> dict:
+        """Built-in synthetic personas, each grounded in this collection's real tag vocab."""
+        from .evaluation import BUILTIN_PERSONAS, persona_to_spec
+        vocab = _safe_vocab(c)
+        out = [{**p, "spec": persona_to_spec(p, vocab)} for p in BUILTIN_PERSONAS]
+        return {"result": out}
+
+    @evalr.get("/vocab")
+    def eval_vocab() -> dict:
+        """The tenant collection's tag vocabulary (facets -> labels) for building personas."""
+        return {"result": _safe_vocab(c)}
+
+    @evalr.post("/generate")
+    def eval_generate(body: dict = Body(...)) -> dict:
+        """Prompt -> persona, matched against the real tag vocabulary (deterministic)."""
+        from .evaluation import generate_persona
+        return {"result": generate_persona(str(body.get("prompt", "")), _safe_vocab(c))}
+
+    @evalr.post("/run")
+    def eval_run(body: EvalRun) -> dict:
+        """Score a synthetic persona across scenarios and report behaviour metrics."""
+        from .evaluation import list_metrics
+        signals = build_preview_signals(body.spec, c.content_store)
+        scenarios = body.scenarios or [{"name": "open"}]
+        if body.cold:
+            scenarios = scenarios + [{"name": "cold-start", "_cold": True}]
+        results = []
+        for sc in scenarios:
+            sig = UserSignals(user_id="eval") if sc.get("_cold") else signals
+            near = ((sc["near_lat"], sc["near_lon"])
+                    if sc.get("near_lat") is not None and sc.get("near_lon") is not None else None)
+            rec = c.recommender.recommend_for_signals(
+                sig, filter=sc.get("filter"), near=near, geo_radius_m=sc.get("geo_radius_m"))
+            items = _dump_items(rec.items, include_content=True)
+            vectors = c.content_store.get_vectors([it["id"] for it in items])
+            results.append({"name": sc.get("name", "scenario"), "filter": sc.get("filter"),
+                            "strategy": rec.strategy, "items": items,
+                            "metrics": list_metrics(items, vectors, rec.strategy),
+                            "diagnostics": rec.diagnostics})
+        return {"result": {"user_model": signals.model_dump(), "scenarios": results}}
+
+    for sub in (serving, write, usermodel_routes, ops, admin, evalr):
         router.include_router(sub)
     return router
+
+
+def _safe_vocab(c) -> dict:
+    try:
+        return c.content_store.vocab()
+    except Exception:
+        return {"facets": {}, "tags": [], "counts": {}}
 
 
 class TenantIn(BaseModel):
@@ -636,6 +695,7 @@ class TenantIn(BaseModel):
     config_overrides: dict = Field(default_factory=dict)
     api_keys: list[str] = Field(default_factory=list)        # operator-supplied plaintext keys (hashed before storage)
     generate_api_key: bool = False                           # server mints a key, returns it ONCE, stores only its hash
+    replace_keys: bool = False                               # rotate/clear: drop stored keys, keep only what this call sets
 
 
 def make_tenant_admin_router(manager) -> APIRouter:
@@ -728,26 +788,15 @@ def create_app(components: Optional[Components] = None) -> FastAPI:
     def health() -> dict:
         return {"status": "ok"}
 
-    @app.get("/inspector", tags=["Control panel"])
-    @app.get("/admin", tags=["Control panel"])
-    def control_panel():
-        # the holistic control panel (inspect + admin: tenants, config). Served at /admin and /inspector.
+    @app.get("/dashboard", tags=["Control panel"])
+    def dashboard():
+        # the holistic control panel (inspect + admin: tenants, config). Served at /dashboard.
+        # Inert HTML shell, no secrets: the operator pastes the API key in the page; its JS
+        # sends it as X-API-Key on the guarded calls, so no data is reachable without the key.
         from fastapi.responses import HTMLResponse
-        path = os.path.join(os.path.dirname(__file__), "static", "inspector.html")
+        path = os.path.join(os.path.dirname(__file__), "static", "dashboard.html")
         if not os.path.exists(path):
-            return HTMLResponse("<h1>inspector.html missing</h1>", status_code=404)
-        with open(path, encoding="utf-8") as fh:
-            return HTMLResponse(fh.read())
-
-    @app.get("/settings", tags=["Settings"])
-    def settings_page():
-        # Inert HTML shell: contains no secrets. The operator pastes the API key in
-        # the page; its JS sends it as X-API-Key on the guarded /config calls, so no
-        # data is reachable without the key.
-        from fastapi.responses import HTMLResponse
-        path = os.path.join(os.path.dirname(__file__), "static", "settings.html")
-        if not os.path.exists(path):
-            return HTMLResponse("<h1>settings.html missing</h1>", status_code=404)
+            return HTMLResponse("<h1>dashboard.html missing</h1>", status_code=404)
         with open(path, encoding="utf-8") as fh:
             return HTMLResponse(fh.read())
 

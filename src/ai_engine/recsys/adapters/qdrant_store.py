@@ -138,6 +138,39 @@ class QdrantContentStore:
                 break
         return out
 
+    def vocab(self, *, sample: int = 4000) -> dict:
+        """Distinct tag vocabulary (facet -> labels, "facet:label" -> count) for the collection.
+        Scrolls payloads once; used by the evaluation tool to build / validate synthetic personas."""
+        from collections import Counter
+        counts: Counter = Counter()
+        facets: dict[str, set] = {}
+        try:
+            points, off = [], None
+            fetched = 0
+            while fetched < sample:
+                page, off = self.client.scroll(
+                    collection_name=self.collection_name, offset=off,
+                    limit=min(512, sample - fetched), with_payload=["tags"], with_vectors=False,
+                )
+                if not page:
+                    break
+                points += page
+                fetched += len(page)
+                if off is None:
+                    break
+        except Exception as exc:
+            logger.warning("vocab scroll failed: %s", exc)
+            return {"facets": {}, "tags": [], "counts": {}}
+        for p in points:
+            for t in ((p.payload or {}).get("tags") or []):
+                facet, label = t.get("facet", "unknown"), t.get("label", "")
+                key = f"{facet}:{label}"
+                counts[key] += 1
+                facets.setdefault(facet, set()).add(label)
+        return {"facets": {f: sorted(ls) for f, ls in facets.items()},
+                "tags": [k for k, _ in counts.most_common()],
+                "counts": dict(counts)}
+
     def search_filter(self, value: str, *, limit: int, exclude=()) -> list[Candidate]:
         # filter candidates by an exact tag value (e.g. a location tag AiARLocationBarrack3).
         # If the collection has no `tag_values` keyword index (e.g. content ingested without

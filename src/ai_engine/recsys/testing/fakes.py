@@ -62,6 +62,17 @@ class FakeContentStore:
                 if cid not in ex and any(t.label.lower() == v for t in c.tags)]
         return [Candidate(content_id=cid, generated_by="filter") for cid in sorted(hits)[:limit]]
 
+    def vocab(self, *, sample: int = 4000) -> dict:
+        from collections import Counter
+        counts: Counter = Counter()
+        facets: dict[str, set] = {}
+        for c in self._contents.values():
+            for t in c.tags:
+                counts[f"{t.facet}:{t.label}"] += 1
+                facets.setdefault(t.facet, set()).add(t.label)
+        return {"facets": {f: sorted(ls) for f, ls in facets.items()},
+                "tags": [k for k, _ in counts.most_common()], "counts": dict(counts)}
+
     def search_geo(self, lat: float, lon: float, radius_m: float, *, limit: int, exclude=()) -> list[Candidate]:
         ex = {str(e) for e in exclude}
         hits = []
