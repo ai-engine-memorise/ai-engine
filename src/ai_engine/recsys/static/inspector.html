@@ -179,6 +179,7 @@ function valueBars(pairs,{signed=false,max=null}={}){
 const GROUPS=[
   {label:"Across users",tabs:{Cohort:renderCohort,Content:renderContent,Policy:renderPolicy,Traffic:renderTraffic}},
   {label:"Within user", tabs:{Request:renderRequest,"User model":renderUser,History:renderHistory}},
+  {label:"Admin",       tabs:{Tenants:renderTenants}},
   {label:"Reference",   tabs:{Personas:renderPersonas}},
 ];
 const ALL=Object.assign({},...GROUPS.map(g=>g.tabs));
@@ -432,6 +433,47 @@ async function renderPersonas(v){
       el("div",{style:"flex:1"},desc))));
     v.append(c);
   }
+}
+
+/* ===== ADMIN: tenants ===== */
+async function renderTenants(v){
+  let rows;
+  try{ rows=await api("/api/tenants"); }
+  catch(e){ v.append(el("div",{class:"card err"},String(e)+"  (set X-API-Key in the header)")); return; }
+  v.append(el("div",{class:"card"},cardhead("Add / update tenant"),
+    el("div",{class:"row"},
+      el("input",{id:"t_id",class:"f",size:"18",placeholder:"tenant_id (e.g. westerbork-ar)"}),
+      el("input",{id:"t_col",class:"f",size:"18",placeholder:"Qdrant collection"}),
+      el("button",{class:"primary",onclick:saveTenant},"Save")),
+    el("div",{class:"small mut",style:"margin-top:7px"},"Registers the tenant slice at runtime (no redeploy): its own Qdrant collection + Redis namespace + bandit/clusters/config. Content must be ingested into the collection separately. Clients then send ",el("code",{},"X-Tenant-Id: <id>"),".")));
+  const tbl=el("table");
+  tbl.append(el("tr",{},el("th",{},"tenant"),el("th",{},"collection"),el("th",{},"content"),el("th",{},"source"),el("th",{},"")));
+  for(const t of (rows||[])){
+    tbl.append(el("tr",{},
+      el("td",{},el("b",{},t.tenant_id)),
+      el("td",{},t.collection||el("span",{class:"mut"},"(default)")),
+      el("td",{class:"num"},t.content_count==null?el("span",{class:"mut"},"-"):t.content_count),
+      el("td",{},el("span",{class:"pill "+(t.source==="runtime"?"warm":"neutral")},t.source||"runtime")),
+      el("td",{},el("div",{class:"row",style:"gap:5px"},
+        el("button",{class:"userchip",title:"load this tenant into the header",onclick:()=>{$("#tenant").value=t.tenant_id;localStorage.setItem("ins_tenant",t.tenant_id);setTab("Cohort");}},"use"),
+        t.source==="runtime"?el("button",{class:"userchip",onclick:()=>delTenant(t.tenant_id)},"delete"):"" ))));
+  }
+  v.append(el("div",{class:"card"},cardhead("Tenants"),tbl,
+    el("div",{class:"small mut",style:"margin-top:8px"},"config = from TENANTS_PATH (deploy baseline). runtime = created here (editable / deletable).")));
+}
+async function saveTenant(){
+  const id=$("#t_id").value.trim(), col=$("#t_col").value.trim();
+  if(!id){ alert("tenant_id required"); return; }
+  const r=await fetch(base()+"/api/tenants",{method:"POST",headers:{...headers(),"Content-Type":"application/json"},
+    body:JSON.stringify({tenant_id:id,collection:col||null})});
+  if(!r.ok){ alert("save failed: "+r.status); return; }
+  $("#t_id").value=""; $("#t_col").value=""; render();
+}
+async function delTenant(id){
+  if(!confirm("Delete tenant '"+id+"'? (its data keys stay in Redis until they expire)")) return;
+  const r=await fetch(base()+"/api/tenants/"+encodeURIComponent(id),{method:"DELETE",headers:headers()});
+  if(!r.ok){ alert("delete failed: "+r.status); return; }
+  render();
 }
 
 /* boot */
