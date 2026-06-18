@@ -638,8 +638,10 @@ def create_app(components: Optional[Components] = None) -> FastAPI:
     def health() -> dict:
         return {"status": "ok"}
 
-    @app.get("/inspector", tags=["Inspector"])
-    def inspector():
+    @app.get("/inspector", tags=["Control panel"])
+    @app.get("/admin", tags=["Control panel"])
+    def control_panel():
+        # the holistic control panel (inspect + admin: tenants, config). Served at /admin and /inspector.
         from fastapi.responses import HTMLResponse
         path = os.path.join(os.path.dirname(__file__), "static", "inspector.html")
         if not os.path.exists(path):
