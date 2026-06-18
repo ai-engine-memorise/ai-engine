@@ -76,20 +76,35 @@ _BANDIT_LOCK = threading.Lock()
 
 
 def _require_api_key(x_api_key: Optional[str] = Header(default=None)) -> None:
-    """Guard write endpoints with a shared secret (env INGEST_API_KEY).
+    """Guard for write / inspection routes.
 
-    If INGEST_API_KEY is unset, requests are allowed (dev) but a warning is logged.
+    The tenant + auth were resolved at the TRUST BOUNDARY (TenantASGIMiddleware) into the
+    `auth_tenant` contextvar, which is:
+      - "*"        -> the global INGEST_API_KEY (superuser)
+      - "<tenant>" -> a valid per-tenant key, already PINNED to that tenant by the middleware
+      - None       -> no/invalid key
+    A per-tenant key therefore can only ever act on its OWN tenant (the middleware ignores a
+    spoofed X-Tenant-Id), which closes the cross-tenant write hole.
     """
     import hmac
+    from .tenancy import auth_tenant
+    if auth_tenant.get() is not None:           # middleware validated: global "*" or a per-tenant key
+        return
+    # auth_tenant is None either because no/invalid key was presented OR the middleware isn't
+    # installed (a fixed single-tenant app). Self-validate the global key directly so that path
+    # still works.
     expected = os.getenv("INGEST_API_KEY")
-    if not expected:
-        # fail closed in prod; only run unauthenticated when explicitly in dev
-        if os.getenv("AI_ENGINE_DEV") == "1":
-            logger.warning("INGEST_API_KEY unset (AI_ENGINE_DEV=1): write endpoints UNAUTHENTICATED")
+    if expected:
+        if x_api_key and hmac.compare_digest(x_api_key, expected):
             return
-        raise HTTPException(status_code=503, detail="server auth not configured (INGEST_API_KEY unset)")
-    if not x_api_key or not hmac.compare_digest(x_api_key, expected):
         raise HTTPException(status_code=401, detail="invalid or missing X-API-Key")
+    if x_api_key:                               # a key was sent but nothing to match it against
+        raise HTTPException(status_code=401, detail="invalid or missing X-API-Key")
+    # no key presented AND none configured: dev-only passthrough, else fail closed
+    if os.getenv("AI_ENGINE_DEV") == "1":
+        logger.warning("INGEST_API_KEY unset (AI_ENGINE_DEV=1): write endpoints UNAUTHENTICATED")
+        return
+    raise HTTPException(status_code=503, detail="server auth not configured (INGEST_API_KEY unset)")
 
 
 def _dump_items(items, include_content: bool) -> list:
@@ -246,7 +261,11 @@ def make_router(components: Components) -> APIRouter:
     # router-level auth dependency instead of repeating it on every route.
     # _tenant_doc surfaces the X-Tenant-Id header in OpenAPI/Swagger for every /api route.
     router = APIRouter(prefix="/api", dependencies=[Depends(_tenant_doc)])
-    serving = APIRouter(tags=["serving"])                                            # public, app-facing
+    # serving (recommend/search) is public by default so the UI sends only X-Tenant-Id.
+    # Set SERVING_REQUIRES_KEY=1 to also require a (per-tenant) key here, closing the
+    # cross-tenant READ hole — the UI then sends its tenant key too.
+    _serving_deps = [Depends(_require_api_key)] if os.getenv("SERVING_REQUIRES_KEY") == "1" else []
+    serving = APIRouter(tags=["serving"], dependencies=_serving_deps)                 # app-facing
     write = APIRouter(tags=["write"], dependencies=[Depends(_require_api_key)])       # ingest + preview
     usermodel_routes = APIRouter(tags=["usermodel"], dependencies=[Depends(_require_api_key)])
     ops = APIRouter(tags=["ops"], dependencies=[Depends(_require_api_key)])           # policy/metrics/served/stats/clusters
@@ -615,6 +634,7 @@ class TenantIn(BaseModel):
     bandit_state_path: Optional[str] = None
     cluster_model_path: Optional[str] = None
     config_overrides: dict = Field(default_factory=dict)
+    api_keys: list[str] = Field(default_factory=list)   # per-tenant keys; presenting one pins the request to this tenant
 
 
 def make_tenant_admin_router(manager) -> APIRouter:
@@ -674,7 +694,8 @@ def create_app(components: Optional[Components] = None) -> FastAPI:
         from .composition import ComponentManager
         manager = ComponentManager()
         c_or_proxy = TenantProxy(manager)
-        app.add_middleware(TenantASGIMiddleware)         # pure ASGI -> contextvar reaches the endpoint
+        # key_resolver -> derive tenant from a per-tenant key (trust boundary, not the raw header)
+        app.add_middleware(TenantASGIMiddleware, key_resolver=manager.tenant_for_key)
 
     app.include_router(make_router(c_or_proxy))
     if manager is not None:

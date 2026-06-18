@@ -15,14 +15,21 @@ A `TenantProxy` lets every endpoint keep using `c.recommender` / `c.cfg` etc. wh
 those resolve to the CURRENT request's tenant, so no per-endpoint changes are needed.
 """
 from __future__ import annotations
+import hmac
 import json
 import os
 from contextvars import ContextVar
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Callable, Optional
 
 # set per request from the X-Tenant-Id header; "default" preserves single-tenant behaviour.
 current_tenant: ContextVar[str] = ContextVar("current_tenant", default="default")
+
+# how the request authenticated (set by the middleware, read by the API-key guard):
+#   "*"        -> the global INGEST_API_KEY (superuser; may target any tenant via header)
+#   "<tenant>" -> a per-tenant key; the request is PINNED to that tenant (header ignored)
+#   None       -> no/invalid key (public reads only; guarded routes -> 401)
+auth_tenant: ContextVar[Optional[str]] = ContextVar("auth_tenant", default=None)
 
 
 @dataclass
@@ -34,6 +41,7 @@ class TenantSpec:
     bandit_state_path: Optional[str] = None
     cluster_model_path: Optional[str] = None
     config_overrides: dict = field(default_factory=dict)
+    api_keys: list[str] = field(default_factory=list)   # per-tenant keys; presenting one PINS the request to this tenant
 
     @property
     def prefix(self) -> str:
@@ -97,22 +105,47 @@ class TenantProxy:
 
 
 class TenantASGIMiddleware:
-    """Pure ASGI middleware that sets `current_tenant` from the X-Tenant-Id header.
+    """Pure ASGI middleware: the per-request TRUST BOUNDARY for tenant + auth.
 
-    A pure ASGI middleware runs in the SAME context as the request, so the contextvar
-    propagates into the (threadpool-run) endpoint — unlike BaseHTTPMiddleware, which
-    runs the endpoint in a separate task and would lose it.
+    Derives the tenant so it can't be spoofed by a client header:
+      - a valid per-tenant API key  -> tenant is taken FROM THE KEY (X-Tenant-Id ignored),
+        so a tenant's key can only ever read/write its own slice.
+      - the global INGEST_API_KEY    -> superuser; tenant from X-Tenant-Id (admin/ops).
+      - otherwise                    -> X-Tenant-Id (public reads; guarded routes 401 later).
+
+    `key_resolver(key) -> tenant_id | None` maps a per-tenant key to its tenant. A pure ASGI
+    middleware runs in the SAME context as the request, so both contextvars propagate into the
+    (threadpool-run) endpoint — unlike BaseHTTPMiddleware, which would lose them.
     """
-    def __init__(self, app):
+    def __init__(self, app, key_resolver: Optional[Callable[[str], Optional[str]]] = None):
         self.app = app
+        self.key_resolver = key_resolver
 
     async def __call__(self, scope, receive, send):
         if scope.get("type") != "http":
             await self.app(scope, receive, send)
             return
         headers = {k.decode("latin1").lower(): v.decode("latin1") for k, v in scope.get("headers", [])}
-        token = current_tenant.set(headers.get("x-tenant-id") or "default")
+        key = headers.get("x-api-key")
+        hdr_tenant = headers.get("x-tenant-id") or "default"
+
+        key_tenant = self.key_resolver(key) if (key and self.key_resolver) else None
+        if key_tenant is not None:                       # per-tenant key -> authoritative tenant
+            tenant, auth = key_tenant, key_tenant
+        elif key and _is_global_key(key):                # superuser key -> tenant from header
+            tenant, auth = hdr_tenant, "*"
+        else:                                            # no/unknown key -> header (public) , unauthenticated
+            tenant, auth = hdr_tenant, None
+
+        t1 = current_tenant.set(tenant)
+        t2 = auth_tenant.set(auth)
         try:
             await self.app(scope, receive, send)
         finally:
-            current_tenant.reset(token)
+            current_tenant.reset(t1)
+            auth_tenant.reset(t2)
+
+
+def _is_global_key(key: str) -> bool:
+    expected = os.getenv("INGEST_API_KEY")
+    return bool(expected) and hmac.compare_digest(key, expected)

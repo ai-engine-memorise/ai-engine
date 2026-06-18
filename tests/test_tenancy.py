@@ -42,6 +42,38 @@ def test_tenant_admin_runtime_crud():
     assert "westerbork-ar" not in ids2
 
 
+def test_per_tenant_key_pins_tenant_over_spoofed_header():
+    """A per-tenant API key derives the tenant; a spoofed X-Tenant-Id is ignored, so the
+    key can only ever write/read its OWN slice (cross-tenant write hole closed)."""
+    client = TestClient(create_app())
+    r = client.post("/api/tenants", json={"tenant_id": "alpha", "collection": "c_alpha",
+                                          "api_keys": ["alpha-secret"]})
+    assert r.status_code == 200
+
+    ts = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+    payload = [_ev("CONTENT_VIEW_STARTED", "u1", ts),
+               _ev("CONTENT_VIEW_ENDED", "u1", ts, reason="next_button", dwell=120)]
+    # present alpha's key but SPOOF the header as beta -> must land in ALPHA, not beta
+    r = client.post("/api/ingest", json=payload,
+                    headers={"X-API-Key": "alpha-secret", "X-Tenant-Id": "beta"})
+    assert r.json()["ingested"] == 2
+
+    # the key pins to alpha regardless of the header -> alpha has the model
+    a = client.get("/api/usermodel", params={"user_id": "u1"},
+                   headers={"X-API-Key": "alpha-secret", "X-Tenant-Id": "beta"}).json()["result"]
+    assert a is not None
+    # nothing leaked into beta
+    b = client.get("/api/usermodel", params={"user_id": "u1"}, headers={"X-Tenant-Id": "beta"}).json()["result"]
+    assert b is None
+
+
+def test_unknown_api_key_rejected():
+    """A key that matches neither a per-tenant key nor the global key is 401, even in dev."""
+    client = TestClient(create_app())
+    r = client.post("/api/ingest", json=[], headers={"X-API-Key": "bogus", "X-Tenant-Id": "default"})
+    assert r.status_code == 401
+
+
 def test_user_models_isolated_by_tenant():
     client = TestClient(create_app())                    # no fixed components -> tenant manager + X-Tenant-Id
     ts = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()

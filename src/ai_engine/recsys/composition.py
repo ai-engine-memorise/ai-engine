@@ -286,16 +286,40 @@ class ComponentManager:
         return self._cache[spec.tenant_id]
 
     def list_tenants(self) -> list[dict]:
-        """All tenants: config baseline + runtime-created, runtime wins. For the admin UI."""
+        """All tenants: config baseline + runtime-created, runtime wins. For the admin UI.
+        API keys are NEVER returned raw — only a count, so the admin view can't leak secrets."""
         out: dict[str, dict] = {}
         for tid in self.registry.ids():
             s = self.registry.get(tid)
             out[tid] = {"tenant_id": tid, "collection": s.collection, "source": "config",
                         "bandit_state_path": s.bandit_state_path,
-                        "cluster_model_path": s.cluster_model_path}
+                        "cluster_model_path": s.cluster_model_path,
+                        "api_keys_count": len(s.api_keys or [])}
         for d in self.tenant_store.all():
-            out[d["tenant_id"]] = {**d, "source": "runtime"}
+            row = {k: v for k, v in d.items() if k != "api_keys"}
+            row["api_keys_count"] = len(d.get("api_keys") or [])
+            out[d["tenant_id"]] = {**row, "source": "runtime"}
         return sorted(out.values(), key=lambda t: t["tenant_id"])
+
+    def tenant_for_key(self, key: Optional[str]) -> Optional[str]:
+        """Resolve a per-tenant API key to its tenant_id (runtime store first, then baseline).
+        Constant-time compare; returns None for the global key / unknown keys."""
+        if not key:
+            return None
+        import hmac
+        seen: set[str] = set()
+        for d in self.tenant_store.all():
+            seen.add(d["tenant_id"])
+            for k in (d.get("api_keys") or []):
+                if hmac.compare_digest(key, k):
+                    return d["tenant_id"]
+        for tid in self.registry.ids():
+            if tid in seen:
+                continue
+            for k in (self.registry.get(tid).api_keys or []):
+                if hmac.compare_digest(key, k):
+                    return tid
+        return None
 
     def upsert_tenant(self, spec: dict) -> None:
         self.tenant_store.set(spec)
