@@ -112,10 +112,14 @@ class QdrantContentStore:
         if not tag_keys:
             return []
         flt = Filter(should=[FieldCondition(key="tag_labels", match=MatchAny(any=list(tag_keys)))])
-        points, _ = self.client.scroll(
-            collection_name=self.collection_name,
-            scroll_filter=flt, limit=limit, with_payload=False, with_vectors=False,
-        )
+        try:
+            points, _ = self.client.scroll(
+                collection_name=self.collection_name,
+                scroll_filter=flt, limit=limit, with_payload=False, with_vectors=False,
+            )
+        except Exception as exc:  # collection has no `tag_labels` keyword index
+            logger.warning("tag search failed (no `tag_labels` keyword index?): %s", exc)
+            return []
         return [Candidate(content_id=str(p.id), generated_by="tag", base_score=0.0) for p in points]
 
     def sample(self, *, limit: int, exclude=()) -> list[Candidate]:
@@ -135,12 +139,18 @@ class QdrantContentStore:
         return out
 
     def search_filter(self, value: str, *, limit: int, exclude=()) -> list[Candidate]:
-        # filter candidates by an exact tag value (e.g. a location tag AiARLocationBarrack3)
+        # filter candidates by an exact tag value (e.g. a location tag AiARLocationBarrack3).
+        # If the collection has no `tag_values` keyword index (e.g. content ingested without
+        # the tag schema), Qdrant raises -> degrade to empty instead of 500ing the request.
         flt = Filter(must=[FieldCondition(key="tag_values", match=MatchAny(any=[value.lower()]))])
-        points, _ = self.client.scroll(
-            collection_name=self.collection_name,
-            scroll_filter=flt, limit=limit + len(exclude), with_payload=False, with_vectors=False,
-        )
+        try:
+            points, _ = self.client.scroll(
+                collection_name=self.collection_name,
+                scroll_filter=flt, limit=limit + len(exclude), with_payload=False, with_vectors=False,
+            )
+        except Exception as exc:  # missing index / unindexed field
+            logger.warning("tag filter %r failed (no `tag_values` keyword index?): %s", value, exc)
+            return []
         ex = {str(e) for e in exclude}
         return [Candidate(content_id=str(p.id), generated_by="filter")
                 for p in points if str(p.id) not in ex][:limit]
