@@ -7,24 +7,25 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=Roboto+Mono&display=swap');
 /* MEMORISE brand, sober archival greige: warm gray + parchment, muted bronze accent. */
 :root[data-theme="light"]{
-  --bg:#FAF8F4; --panel:#ffffff; --line:#E6DFD2; --fg:#2A2823; --mut:#8C8475;
-  --primary:#6B6457; --primary-dark:#423D34; --accent:#A8895B; --accent-t:rgba(168,137,91,.12);
-  --link:#8A6F3F; --code:#F2EFE9; --track:#EDE8DE; --shadow:rgba(107,100,87,.13);
-  --sidebar:#2F2B24; --sidebar-fg:#E8E1D3; --sidebar-mut:#A79C88; --sidebar-line:#46413708;
+  --bg:#FAF8F4; --panel:#ffffff; --line:#E0D8C9; --fg:#2B2820; --mut:#7A7464;
+  --primary:#6B6457; --primary-dark:#423D34; --accent:#A8895B; --accent-t:rgba(168,137,91,.13);
+  --link:#8A6F3F; --code:#F2EFE9; --track:#EDE8DE; --shadow:rgba(107,100,87,.16);
+  --sidebar:#2F2B24; --sidebar-fg:#E8E1D3; --sidebar-mut:#A79C88; --sidebar-line:#ffffff12;
 }
 :root[data-theme="dark"]{
-  --bg:#1C1B18; --panel:#252320; --line:#3A372F; --fg:#E8E4DC; --mut:#9C9384;
-  --primary:#8A8273; --primary-dark:#2A2823; --accent:#CDB78C; --accent-t:rgba(205,183,140,.14);
-  --link:#CDB78C; --code:#211F1B; --track:#201E1A; --shadow:rgba(0,0,0,.45);
+  --bg:#1C1B18; --panel:#26241F; --line:#3A372F; --fg:#E8E4DC; --mut:#A89F8E;
+  --primary:#8A8273; --primary-dark:#26241F; --accent:#CDB78C; --accent-t:rgba(205,183,140,.14);
+  --link:#CDB78C; --code:#26241F; --track:#201E1A; --shadow:rgba(0,0,0,.4);
   --sidebar:#16150F; --sidebar-fg:#E8E1D3; --sidebar-mut:#8E8472; --sidebar-line:#ffffff10;
 }
+:root{--serif:'Source Serif 4',Georgia,serif}
 :root{--c-semantic:#4F6276;--c-affinity:#5E7355;--c-tag:#A8895B;--c-recency:#7A5C6E;--c-aversion:#9C5B4F;--c-geo:#4E7E78;--maxw:1040px;--rad:12px;--side-w:248px;--side-w-min:64px}
 *{box-sizing:border-box}
-body{margin:0;font-family:Montserrat,system-ui,Segoe UI,sans-serif;font-size:14px;line-height:1.55;background:var(--bg);color:var(--fg);-webkit-font-smoothing:antialiased}
-h1,h2,h3,.mont{font-family:Montserrat,Inter,sans-serif;font-weight:600;letter-spacing:-.015em}
+body{margin:0;font-family:var(--serif);font-size:14.5px;line-height:1.55;background:var(--bg);color:var(--fg);-webkit-font-smoothing:antialiased}
+h1,h2,h3,.mont{font-family:Montserrat,sans-serif;font-weight:600;letter-spacing:-.015em}
 
 /* ===== app shell ===== */
 .layout{display:flex;min-height:100vh}
@@ -58,29 +59,23 @@ body.nav-min .grouplbl{text-align:center;font-size:8px;padding:6px 0 4px;letter-
   margin:1px 0;transition:.13s;white-space:nowrap;position:relative}
 .navitem svg{flex:0 0 18px;width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;opacity:.82}
 .navitem:hover{background:#ffffff10}
-.navitem.on{background:var(--accent);color:#1c160a}
+.navitem.on{background:var(--accent);color:#221a0c}
+[data-theme="dark"] .navitem.on{color:#1c1b18}
 .navitem.on svg{opacity:1}
 body.nav-min .navitem{justify-content:center;padding:10px 0}
 body.nav-min .navitem .lbl{display:none}
 body.nav-min .navitem.on::after{content:"";position:absolute;right:-10px;top:8px;bottom:8px;width:3px;border-radius:3px;background:var(--accent)}
 
-.side-foot{flex:0 0 auto;border-top:1px solid var(--sidebar-line);padding:11px 12px;display:flex;flex-direction:column;gap:8px}
-.ctx{display:flex;flex-direction:column;gap:3px}
-.ctx label{font-size:9.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--sidebar-mut);font-weight:700}
-.ctx input{background:#ffffff10;color:var(--sidebar-fg);border:1px solid #ffffff1f;border-radius:7px;padding:6px 9px;font:inherit;font-size:13px}
-.ctx input::placeholder{color:#ffffff55}
-.ctx input:focus{outline:none;border-color:var(--accent);background:#ffffff16}
-.foot-row{display:flex;align-items:center;gap:7px}
-.foot-btn{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;background:#ffffff10;border:1px solid #ffffff1f;
-  color:var(--sidebar-fg);border-radius:8px;padding:7px 8px;font:inherit;font-size:12px;font-weight:600;cursor:pointer;line-height:1}
-.foot-btn:hover{border-color:var(--accent)}
-.foot-btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8}
-.conn{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--mut)}
-.conn .dot{width:8px;height:8px;border-radius:50%;background:#9C5B4F;flex:0 0 auto}
+.side-foot{flex:0 0 auto;border-top:1px solid var(--sidebar-line);padding:13px 14px;display:flex;align-items:center;gap:8px}
+.foot-tenant{font-family:'Roboto Mono',monospace;font-weight:400;font-size:11px;color:var(--sidebar-mut);
+  letter-spacing:.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.side-foot .conn{margin-left:auto;flex:0 0 auto}
+.conn{display:flex;align-items:center}
+.conn .dot{width:9px;height:9px;border-radius:50%;background:#9C5B4F;flex:0 0 auto}
 .conn.ok .dot{background:#7fae6e;box-shadow:0 0 0 3px #7fae6e30}
-body.nav-min .side-foot .ctx,body.nav-min .side-foot .conn span,body.nav-min .foot-btn .lbl{display:none}
-body.nav-min .side-foot{align-items:center}
-body.nav-min .foot-row{flex-direction:column}
+body.nav-min .side-foot{justify-content:center;padding:13px 0}
+body.nav-min .foot-lbl,body.nav-min .foot-tenant{display:none}
+body.nav-min .side-foot .conn{margin:0}
 
 /* ===== main ===== */
 main{flex:1 1 auto;min-width:0}
@@ -102,11 +97,50 @@ main{flex:1 1 auto;min-width:0}
 .tb-field input{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 9px;font:inherit;font-size:13px;color:var(--fg);width:130px}
 .tb-field input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-t)}
 .tb-spacer{flex:1}
-.tb-btn{background:var(--panel);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:7px 9px;cursor:pointer;line-height:0;display:flex;align-items:center}
-.tb-btn:hover{border-color:var(--accent);color:var(--accent)}
-.tb-btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8}
-.tb-btn .ic-sun{display:none}.tb-btn .ic-moon{display:block}
-[data-theme="dark"] .tb-btn .ic-sun{display:block}[data-theme="dark"] .tb-btn .ic-moon{display:none}
+/* borderless key icon (Qdrant style) */
+.tb-icon{background:transparent;border:0;color:var(--mut);cursor:pointer;line-height:0;padding:6px;border-radius:8px;display:flex;align-items:center}
+.tb-icon:hover{color:var(--accent);background:var(--accent-t)}
+.tb-icon svg{width:19px;height:19px}
+/* light/dark slider — both icons present, knob slides */
+.themeswitch{position:relative;width:58px;height:28px;border-radius:999px;border:1px solid var(--line);
+  background:var(--bg);cursor:pointer;padding:0;display:flex;align-items:center;justify-content:space-between;flex:0 0 auto}
+.themeswitch svg{width:15px;height:15px;margin:0 7px;z-index:1}
+.themeswitch .ic-sun{color:#C99A4E}.themeswitch .ic-moon{color:#8C8475}
+.themeswitch .knob{position:absolute;top:2px;left:2px;width:24px;height:24px;border-radius:50%;
+  background:var(--panel);box-shadow:0 1px 3px var(--shadow);transition:transform .2s ease;z-index:0}
+[data-theme="dark"] .themeswitch .knob{transform:translateX(30px)}
+
+/* visitor search + drill-down */
+.searchwrap{position:relative;margin-bottom:16px}
+.searchicon{position:absolute;left:15px;top:50%;transform:translateY(-50%);color:var(--mut);line-height:0;pointer-events:none}
+.searchicon svg{width:18px;height:18px}
+.searchbar{width:100%;background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:12px 15px 12px 44px;font:inherit;font-size:15px;color:var(--fg)}
+.searchbar:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-t)}
+.searchbar::placeholder{color:var(--mut)}
+.urow:hover{background:var(--accent-t)}
+.subtabs{display:flex;gap:4px;margin:0 0 18px;border-bottom:1px solid var(--line)}
+.subtab{border:0;background:transparent;color:var(--mut);font:inherit;font-weight:600;font-size:13.5px;
+  padding:9px 16px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:.13s}
+.subtab:hover{color:var(--fg)}
+.subtab.on{color:var(--accent);border-bottom-color:var(--accent)}
+.backlink{background:transparent;border:0;color:var(--mut);font:inherit;font-size:12px;font-weight:600;
+  cursor:pointer;padding:0;margin-bottom:7px;display:block}
+.backlink:hover{color:var(--accent)}
+
+/* config page */
+.cfgbar{position:sticky;top:48px;z-index:15}
+.cfgrow{display:grid;grid-template-columns:1fr 210px;gap:18px;align-items:center;padding:11px 0}
+.cfgrow+.cfgrow{border-top:1px solid var(--line)}
+.cfglabel{font-family:Montserrat,sans-serif;font-weight:600;font-size:13.5px}
+.cfghelp{font-size:12.5px;color:var(--mut);margin-top:2px;line-height:1.45}
+.cfgpath{font-family:'Roboto Mono',monospace;font-size:10.5px;color:var(--mut);opacity:.55;margin-top:3px}
+.cfgctl{justify-self:end;width:100%;display:flex;justify-content:flex-end;align-items:center}
+.cfgctl input.f,.cfgctl select.f{width:100%;max-width:200px}
+.cfgctl input[type=checkbox]{width:18px;height:18px;cursor:pointer}
+
+/* key icon rotated −45° for a hanging-key look */
+.tb-icon svg,.keyglyph svg{transform:rotate(-45deg)}
 
 .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--rad);padding:16px 18px;margin-bottom:14px;
       transition:border-color .2s,box-shadow .2s,transform .2s}
@@ -159,7 +193,8 @@ input.f:focus,select.f:focus{outline:none;border-color:var(--accent);box-shadow:
 button.primary{background:var(--accent);color:#221a0c;border:1px solid transparent;border-radius:8px;padding:7px 16px;font:inherit;font-weight:600;cursor:pointer}
 [data-theme="dark"] button.primary{color:#1c1b18}
 button.primary:hover{filter:brightness(1.05)}
-.err{color:#9C5B4F} code{background:var(--code);padding:1px 6px;border-radius:5px;font-size:12px}
+.err{color:#9C5B4F} code{background:var(--code);padding:1px 6px;border-radius:5px;font-size:12px;font-family:'Roboto Mono',monospace}
+.num{font-family:'Roboto Mono',monospace}
 .empty{padding:26px;text-align:center;color:var(--mut);border:1px dashed var(--line);border-radius:var(--rad)}
 .userchip{background:var(--code);border:1px solid var(--line);border-radius:7px;padding:3px 9px;font-size:12px;cursor:pointer;color:var(--fg);font-family:inherit;font-variant-numeric:tabular-nums}
 .userchip:hover{border-color:var(--accent);color:var(--accent)}
@@ -195,7 +230,7 @@ pre{white-space:pre-wrap;word-break:break-word}
 .eye:hover{color:var(--accent);background:var(--accent-t)}
 .eye svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8}
 .eye.off svg .slash{display:none}
-.mfoot{display:flex;align-items:center;gap:10px;padding:14px 22px 20px;border-top:1px solid var(--line);margin-top:10px}
+.mfoot{display:flex;align-items:center;gap:10px;padding:6px 22px 20px}
 .mfoot .mstatus{font-size:12.5px;font-weight:600;margin-right:auto}
 .mfoot .mstatus.ok{color:#5E7355}.mfoot .mstatus.err{color:#9C5B4F}
 button.ghost{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:7px 16px;font:inherit;font-weight:600;cursor:pointer}
@@ -218,20 +253,24 @@ button.ghost:hover{border-color:var(--accent)}
       </button>
     </div>
     <nav class="side-nav" id="tabs"></nav>
+    <div class="side-foot">
+      <span class="foot-tenant" id="tenantname" title="active tenant">—</span>
+      <span class="conn" id="conn" title="not connected"><span class="dot"></span></span>
+    </div>
   </aside>
 
   <main>
     <header class="topbar">
-      <div class="tb-field"><label>tenant</label><input id="tenant" placeholder="default"/></div>
+      <input id="tenant" type="hidden"/>
       <input id="uid" type="hidden"/>
       <div class="tb-spacer"></div>
-      <div class="conn" id="conn"><span class="dot"></span><span>not connected</span></div>
-      <button class="tb-btn" id="openkey" title="API key / connection" aria-label="API key">
-        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="12" r="3.7"/><circle cx="7" cy="12" r="1" fill="currentColor" stroke="none"/><path d="M10.7 12H21M18 12v3.4M14.7 12v2.6"/></svg>
+      <button class="tb-icon" id="openkey" title="API key / connection" aria-label="API key">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="12" r="3.7"/><circle cx="7" cy="12" r="1" fill="currentColor" stroke="none"/><path d="M10.7 12H21M18 12v3.4M14.7 12v2.6"/></svg>
       </button>
-      <button class="tb-btn" id="theme" title="toggle theme" aria-label="toggle theme">
-        <svg class="ic-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
-        <svg class="ic-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8"/></svg>
+      <button class="themeswitch" id="theme" title="toggle light / dark" aria-label="toggle theme">
+        <svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.2 5.2l1.6 1.6M17.2 17.2l1.6 1.6M18.8 5.2l-1.6 1.6M6.8 17.2l-1.6 1.6"/></svg>
+        <svg class="ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <span class="knob"></span>
       </button>
     </header>
     <div class="page" id="view"></div>
@@ -245,9 +284,10 @@ button.ghost:hover{border-color:var(--accent)}
   <div class="modal">
     <div class="mhead">
       <svg class="ring" viewBox="0 0 24 24"><circle class="r" cx="12" cy="12" r="9"/><circle class="c" cx="12" cy="12" r="3.4"/></svg>
-      <h2>Connect to AI&#8209;Engine</h2>
+      <h2>Set API Key</h2>
     </div>
     <div class="mbody">
+      <p>This instance of AI&#8209;Engine might be protected by an API key. If so, enter it to continue. It is stored only in this browser.</p>
       <div class="field">
         <div class="keywrap">
           <input id="key" type="password" placeholder="API key" autocomplete="off"/>
@@ -255,7 +295,6 @@ button.ghost:hover{border-color:var(--accent)}
             <svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/><line class="slash" x1="3" y1="3" x2="21" y2="21"/></svg>
           </button>
         </div>
-        <div class="hint">Stays in this browser, sent as <code>X-API-Key</code>. A per-tenant key scopes itself; empty = public serving only.</div>
       </div>
     </div>
     <div class="mfoot">
@@ -301,26 +340,6 @@ async function discoverUsers(){
   try{const sv=await api("/api/served/recent?n=200");(sv||[]).forEach(r=>r.user_id&&set.add(r.user_id));}catch(e){}
   return [...set].sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true}));
 }
-// Visitor selector shown at the top of every within-user page.
-async function userBar(v){
-  const cur=$("#uid").value.trim();
-  const users=await discoverUsers();
-  const apply=val=>{val=String(val).trim();if(!val)return;$("#uid").value=val;localStorage.setItem("ins_uid",val);paint();};
-  let picker;
-  if(users.length){
-    picker=el("select",{class:"f",style:"min-width:150px",onchange:e=>apply(e.target.value)},
-      el("option",{value:""},`— pick visitor (${users.length}) —`),
-      ...users.map(u=>{const o=el("option",{value:u},u);if(u===cur)o.selected=true;return o;}));
-  }else{
-    picker=el("span",{class:"small mut"},"no known visitors yet — type an id");
-  }
-  const free=el("input",{class:"f",size:"12",value:cur,placeholder:"user_id",
-    onchange:e=>apply(e.target.value),onkeydown:e=>{if(e.key==="Enter")apply(e.target.value);}});
-  v.append(el("div",{class:"card"},el("div",{class:"row"},
-    el("span",{class:"small mut",style:"font-weight:700"},"VISITOR"),picker,
-    el("span",{class:"small mut"},"or"),free,
-    cur?el("span",{class:"pill neutral"},"current: "+cur):"")));
-}
 
 function breakdownBar(bd){
   const wrap=el("div",{class:"barwrap"});
@@ -363,9 +382,9 @@ const ICONS={
 const slug=n=>n.toLowerCase().replace(/\s+/g,"-");
 
 const GROUPS=[
-  {label:"Overview",   tabs:{Cohort:renderCohort,Content:renderContent,Policy:renderPolicy,Traffic:renderTraffic}},
+  {label:"Overview",   tabs:{Cohort:renderCohort,Content:renderContent,Traffic:renderTraffic}},
   {label:"Evaluation", tabs:{"Synthetic users":renderEval}},
-  {label:"Admin",      tabs:{Tenants:renderTenants,Config:renderConfig}},
+  {label:"Admin",      tabs:{Policy:renderPolicy,Tenants:renderTenants,Config:renderConfig}},
   {label:"Reference",  tabs:{Personas:renderPersonas}},
 ];
 const ICON_OF={Cohort:"cohort",Content:"content",Policy:"policy",Traffic:"traffic","Synthetic users":"evaluate",Tenants:"tenants",Config:"config",Personas:"personas"};
@@ -396,8 +415,7 @@ function paint(){
   const v=$("#view");v.innerHTML="";
   if(userCtx){renderUserDetail(v);return;}
   v.append(el("div",{class:"pagehead"},
-    el("div",{},el("div",{class:"eyebrow"},SCOPE[current]),el("h1",{},current),
-      SUBTITLE[current]?el("div",{class:"sub"},SUBTITLE[current]):""),
+    el("div",{},el("div",{class:"eyebrow"},SCOPE[current]),el("h1",{},current)),
     el("button",{class:"iconbtn",title:"refresh",onclick:paint},"↻")));
   const host=el("div");v.append(host);
   ALL[current](host).catch(e=>failCard(host,e));
@@ -423,13 +441,11 @@ async function renderCohort(v){
   const u2c={};                                  // visitor id -> its cluster profile
   if(r&&r.profiles)r.profiles.forEach(p=>(p.members||[]).forEach(u=>u2c[u]=p));
 
-  // search / open
-  const search=el("input",{class:"f",id:"usearch",placeholder:"search visitor id…",style:"flex:1;max-width:340px",
+  // search (wide, full-width, magnifier icon; Enter or row-click opens)
+  const search=el("input",{class:"searchbar",id:"usearch",placeholder:"Search visitor id…",
     oninput:filterUsers,onkeydown:e=>{if(e.key==="Enter"){const q=search.value.trim();if(q)openUser(q,"profile");}}});
-  v.append(el("div",{class:"card"},el("div",{class:"row"},
-    el("span",{class:"small mut",style:"font-weight:700"},"VISITOR"),search,
-    el("button",{class:"primary",onclick:()=>{const q=$("#usearch").value.trim();if(q)openUser(q,"profile");}},"Open"),
-    el("span",{class:"small mut"},"type any id, or pick from the table"))));
+  const icon=el("span",{class:"searchicon",html:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20.5 20.5l-4.2-4.2"/></svg>'});
+  v.append(el("div",{class:"searchwrap"},icon,search));
 
   // visitors table
   if(users.length){
@@ -588,8 +604,6 @@ async function runRecommend(){
   }catch(e){out.append(el("div",{class:"card err"},String(e)));}
 }
 async function renderUser(v){
-  await userBar(v);
-  if(!$("#uid").value.trim()){v.append(el("div",{class:"empty"},"Pick a visitor above."));return;}
   let exp;try{exp=await api(`/api/usermodel/explain?user_id=${encodeURIComponent($("#uid").value)}`);}catch(e){failCard(v,e);return;}
   if(!exp){v.append(el("div",{class:"empty"},"No model for ",el("b",{},$("#uid").value),". Ingest some events for this user first."));return;}
   const vt=exp.visitor_type||{};
@@ -611,8 +625,6 @@ async function renderUser(v){
 }
 
 async function renderHistory(v){
-  await userBar(v);
-  if(!$("#uid").value.trim()){v.append(el("div",{class:"empty"},"Pick a visitor above."));return;}
   let h;try{h=await api(`/api/usermodel/history?user_id=${encodeURIComponent($("#uid").value)}`);}catch(e){failCard(v,e);return;}
   if(!h||!h.event_count){v.append(el("div",{class:"empty"},"No activity for ",el("b",{},$("#uid").value),". Ingest events for this user first."));return;}
   v.append(el("div",{class:"row small mut",style:"margin-bottom:12px"},`${h.event_count} events / ${h.aggregates.length} content items engaged`));
@@ -823,7 +835,7 @@ async function renderTenants(v){
       el("td",{},el("span",{class:"pill "+(n?"warm":"neutral")},n+" key"+(n===1?"":"s"))),
       el("td",{},el("span",{class:"pill "+(rt?"bandit":"neutral")},t.source||"runtime")),
       el("td",{},el("div",{class:"row",style:"gap:5px"},
-        el("button",{class:"userchip",title:"use this tenant in the top-bar context",onclick:()=>{$("#tenant").value=t.tenant_id;localStorage.setItem("ins_tenant",t.tenant_id);setTab("Cohort");}},"use"),
+        el("button",{class:"userchip",title:"act on this tenant (global key only)",onclick:()=>{$("#tenant").value=t.tenant_id;localStorage.setItem("ins_tenant",t.tenant_id);loadWhoami();setTab("Cohort");}},"use"),
         el("button",{class:"userchip",title:"prefill the form",onclick:()=>{$("#t_id").value=t.tenant_id;$("#t_col").value=t.collection||"";$("#t_keys").value="";$("#t_id").scrollIntoView({block:"center"});}},"edit"),
         el("button",{class:"userchip",title:"mint a new key for this tenant",onclick:()=>mintKey(t.tenant_id,t.collection)},"＋ key"),
         n?el("button",{class:"userchip",title:"remove ALL keys",onclick:()=>clearKeys(t.tenant_id,t.collection)},"clear keys"):"",
@@ -868,34 +880,105 @@ function mintedToast(id,key){
   host.append(card);
 }
 
-/* ===== ADMIN: runtime config (folded-in /settings) ===== */
-function _cfgField(path,val){
-  const row=el("div",{class:"row",style:"margin:5px 0"});
-  row.append(el("div",{class:"small",style:"width:240px;color:var(--mut)"},path));
+/* ===== ADMIN: runtime config — categorized + explained ===== */
+const CFG_CATS=[
+  {title:"Fusion weights",desc:"How much each scorer contributes to the final relevance score (each scorer outputs 0–1; aversion is a penalty).",
+   fields:["fusion.semantic","fusion.affinity","fusion.tag","fusion.recency","fusion.aversion","fusion.geo"]},
+  {title:"Engagement signals",desc:"How raw behaviour becomes a continuous like / dislike strength.",
+   fields:["engagement.dwell","engagement.completion","engagement.revisit","engagement.survey","positive_threshold","negative_threshold","dwell_cap_ratio"]},
+  {title:"Reading-time model",desc:"Estimates expected reading time, which dwell is measured against.",
+   fields:["reading_speed_wps","img_extra_time"]},
+  {title:"Recency & decay",desc:"How fast old signals fade, and the penalty for ignored impressions.",
+   fields:["half_life_days","soft_negative_weight"]},
+  {title:"Candidate generation & diversity",desc:"Pool size, how many results, and how varied they are.",
+   fields:["pool_per_generator","final_limit","mmr_lambda","cold_start_min_positives","filter_reshow_when_exhausted"]},
+  {title:"Geo",desc:"Location proximity scoring and radius — independent of tag filters.",
+   fields:["geo_scale_m","geo_radius_m"]},
+  {title:"Distractor / novelty",desc:"One deliberately off-profile item for exploration and serendipity.",
+   fields:["distractor_enabled","distractor_strategy","distractor_probability","distractor_slots"]},
+  {title:"Ranking policy",desc:"Static weighted fusion, or a learned LinUCB bandit whose prior is the fusion weights.",
+   fields:["ranking_mode","bandit_alpha","bandit_ridge","bandit_explore","bandit_online"]},
+];
+const CFG_HELP={
+  "fusion.semantic":["Semantic","Similarity to the visitor's whole-history taste centroid."],
+  "fusion.affinity":["Affinity","Max similarity to any single liked item (sharp for multi-interest)."],
+  "fusion.tag":["Tag","Affinity-weighted overlap of visitor tags with the item's expert tags."],
+  "fusion.recency":["Recency","Similarity to the most-recent view (sequence awareness)."],
+  "fusion.aversion":["Aversion","Penalty (negative) for overlap with abandoned themes."],
+  "fusion.geo":["Geo","Proximity to the request location; scored only when one is given."],
+  "engagement.dwell":["Dwell","Weight of time-on-content vs the reading-time estimate."],
+  "engagement.completion":["Completion","Weight of finishing the content."],
+  "engagement.revisit":["Revisit","Weight of returning to the same content."],
+  "engagement.survey":["Survey","Weight of an explicit survey rating."],
+  "positive_threshold":["Positive threshold","Strength above this becomes a positive (liked) signal."],
+  "negative_threshold":["Negative threshold","Strength below this becomes a negative (disliked) signal."],
+  "dwell_cap_ratio":["Dwell cap","dwell ÷ estimate is clipped here before normalising (tames outliers)."],
+  "reading_speed_wps":["Reading speed (wps)","Words per second for the estimate (~4.2 ≈ 250 wpm)."],
+  "img_extra_time":["Image time (s)","Seconds added to the estimate for an image."],
+  "half_life_days":["Half-life (days)","Exponential decay of a signal's weight over time."],
+  "soft_negative_weight":["Soft-negative","Penalty for content shown but not viewed (impressions)."],
+  "pool_per_generator":["Pool / generator","Candidates each generator contributes before ranking."],
+  "final_limit":["Result count","How many items the final ranking returns."],
+  "mmr_lambda":["MMR λ","Relevance (1) vs diversity (0) in the diversity re-rank."],
+  "cold_start_min_positives":["Cold-start min likes","Positives needed before a visitor is treated as warm."],
+  "filter_reshow_when_exhausted":["Reshow when exhausted","Within a filter/location, re-show seen content rather than return empty."],
+  "geo_scale_m":["Geo scale (m)","Distance falloff exp(−d/scale); ~camp-sized."],
+  "geo_radius_m":["Geo radius (m)","Default radius when a geo filter is requested."],
+  "distractor_enabled":["Enabled","Inject one off-profile novelty item."],
+  "distractor_strategy":["Strategy","How the novelty item is chosen."],
+  "distractor_probability":["Probability","1.0 = every request; 0.5 = every other."],
+  "distractor_slots":["Slots","1-based positions; one picked at random (e.g. [3,4])."],
+  "ranking_mode":["Mode","static = weighted fusion; bandit = learned LinUCB."],
+  "bandit_alpha":["Alpha","UCB exploration strength (0 = greedy)."],
+  "bandit_ridge":["Ridge","Prior strength — how tightly θ holds the fusion weights."],
+  "bandit_explore":["Explore","Add the UCB bonus when serving with the bandit."],
+  "bandit_online":["Online","Update weights live as reward events arrive (vs offline batch)."],
+};
+const CFG_ENUMS={distractor_strategy:["max_dissimilar","unexplored_theme","random"],ranking_mode:["static","bandit"]};
+function _cfgCtl(path,val){
   let inp;
-  if(typeof val==="boolean"){inp=el("input",{type:"checkbox"});inp.checked=val;inp.dataset.t="bool";}
+  if(CFG_ENUMS[path]){inp=el("select",{class:"f"});CFG_ENUMS[path].forEach(o=>{const op=el("option",{value:o},o);if(o===val)op.selected=true;inp.append(op);});inp.dataset.t="str";}
+  else if(typeof val==="boolean"){inp=el("input",{type:"checkbox"});inp.checked=val;inp.dataset.t="bool";}
   else if(typeof val==="number"){inp=el("input",{class:"f",type:"number",step:Number.isInteger(val)?"1":"any",value:String(val)});inp.dataset.t="num";}
-  else if(Array.isArray(val)||(val&&typeof val==="object")){inp=el("input",{class:"f",value:JSON.stringify(val),size:"20"});inp.dataset.t="json";}
+  else if(Array.isArray(val)||(val&&typeof val==="object")){inp=el("input",{class:"f",value:JSON.stringify(val)});inp.dataset.t="json";}
   else{inp=el("input",{class:"f",value:val??""});inp.dataset.t="str";}
-  inp.dataset.path=path; row.append(inp); return row;
+  inp.dataset.path=path;return inp;
+}
+function cfgRow(path,val){
+  const m=CFG_HELP[path]||[path,""];
+  return el("div",{class:"cfgrow"},
+    el("div",{},el("div",{class:"cfglabel"},m[0]),
+      m[1]?el("div",{class:"cfghelp"},m[1]):"",
+      el("div",{class:"cfgpath"},path)),
+    el("div",{class:"cfgctl"},_cfgCtl(path,val)));
 }
 async function renderConfig(v){
   let cfg; try{cfg=await api("/api/config");}catch(e){failCard(v,e);return;}
   const t=$("#tenant").value.trim();
-  const wrap=el("div",{class:"card"}); wrap.append(cardhead("Runtime config"+(t?(" / tenant "+t):" / default tenant")));
+  const flat={};
+  for(const [k,val] of Object.entries(cfg)){
+    if(val&&typeof val==="object"&&!Array.isArray(val))for(const [k2,v2] of Object.entries(val))flat[k+"."+k2]=v2;
+    else flat[k]=val;
+  }
+  // sticky toolbar: scope + actions + status
+  v.append(el("div",{class:"card cfgbar"},el("div",{class:"row",style:"justify-content:space-between;width:100%"},
+    el("div",{},cardhead("Runtime config"),el("div",{class:"small mut",style:"margin-top:-8px"},(t?("tenant "+t):"default tenant")+" · applies live, persists as an override")),
+    el("div",{class:"row"},el("span",{id:"cfgstatus",class:"small mut"},""),
+      el("button",{class:"userchip",onclick:resetConfig},"Reset to baseline"),
+      el("button",{class:"primary",onclick:saveConfig},"Save & apply")))));
   const form=el("div",{id:"cfgform"});
-  const scalars=[],groups={};
-  for(const [k,val] of Object.entries(cfg)){ if(val&&typeof val==="object"&&!Array.isArray(val))groups[k]=val; else scalars.push([k,val]); }
-  const eyebrow=t=>el("div",{class:"small mut",style:"text-transform:uppercase;letter-spacing:.07em;font-weight:700;margin:10px 0 4px"},t);
-  if(scalars.length){const g=el("div");scalars.forEach(([k,val])=>g.append(_cfgField(k,val)));form.append(eyebrow("general"),g);}
-  for(const [grp,obj] of Object.entries(groups)){const g=el("div");Object.entries(obj).forEach(([k,val])=>g.append(_cfgField(grp+"."+k,val)));form.append(eyebrow(grp),g);}
-  wrap.append(form);
-  wrap.append(el("div",{class:"row",style:"margin-top:14px"},
-    el("button",{class:"primary",onclick:saveConfig},"Save & apply"),
-    el("button",{class:"userchip",onclick:resetConfig},"Reset to baseline"),
-    el("span",{id:"cfgstatus",class:"small mut"},"")));
-  wrap.append(el("div",{class:"small mut",style:"margin-top:8px"},"Applies live to this tenant (no redeploy), persists to the Redis override. Reset drops the override -> env/default baseline."));
-  v.append(wrap);
+  const used=new Set();
+  for(const cat of CFG_CATS){
+    const present=cat.fields.filter(f=>f in flat);
+    if(!present.length)continue;
+    const card=el("div",{class:"card"});
+    card.append(cardhead(cat.title),el("div",{class:"small mut",style:"margin:-7px 0 6px"},cat.desc));
+    present.forEach(f=>{used.add(f);card.append(cfgRow(f,flat[f]));});
+    form.append(card);
+  }
+  const leftover=Object.keys(flat).filter(f=>!used.has(f));
+  if(leftover.length){const card=el("div",{class:"card"});card.append(cardhead("Other"));leftover.forEach(f=>card.append(cfgRow(f,flat[f])));form.append(card);}
+  v.append(form);
 }
 function _collectConfig(){
   const patch={};
@@ -955,11 +1038,19 @@ async function connect(){
     }catch(e){}
   }
   mstatus.textContent="connected ✓";mstatus.className="mstatus ok";
-  setConn(true);
+  setConn(true);loadWhoami();
   setTimeout(()=>{closeModal();paint();},350);
 }
-function setConn(ok){const c=$("#conn");c.classList.toggle("ok",!!ok);$("span:last-child",c).textContent=ok?"connected":"not connected";}
-async function ping(){try{const r=await fetch(base()+"/health");setConn(r.ok);}catch(e){setConn(false);}}
+function setConn(ok){const c=$("#conn");c.classList.toggle("ok",!!ok);c.title=ok?"connected":"not connected";}
+async function ping(){try{const r=await fetch(base()+"/health");setConn(r.ok);if(r.ok)loadWhoami();}catch(e){setConn(false);}}
+// Tenant is key-derived (never spoofable). Show the resolved name + scope in the sidebar.
+async function loadWhoami(){
+  try{const w=await api("/api/whoami");
+    $("#tenantname").textContent=w.tenant||"default";
+    const sc=w.scope==="global"?"global key":w.scope==="tenant"?"tenant key":"public";
+    $("#conn").title="connected · "+sc;
+  }catch(e){$("#tenantname").textContent=($("#tenant").value.trim()||"default");}
+}
 
 /* ===== routing & boot ===== */
 function applyHash(){

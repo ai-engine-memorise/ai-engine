@@ -336,9 +336,15 @@ class ComponentManager:
     def upsert_tenant(self, spec: dict) -> None:
         from .tenancy import hash_key
         spec = dict(spec)
-        # never persist plaintext keys: fold any provided api_keys into api_key_hashes
+        # never persist plaintext keys: fold any provided api_keys into api_key_hashes.
+        # Editing other fields (e.g. collection) must NOT drop existing keys, so when the
+        # caller sends no keys at all we preserve whatever is already stored for this tenant.
+        replace = bool(spec.pop("replace_keys", False))   # rotate/clear: ignore stored keys
         plain = spec.pop("api_keys", None) or []
-        hashes = list(spec.get("api_key_hashes") or [])
+        hashes = [] if replace else list(spec.get("api_key_hashes") or [])
+        if not replace and not plain and not hashes:
+            prev = self.tenant_store.get(spec["tenant_id"]) or {}
+            hashes = list(prev.get("api_key_hashes") or [])
         hashes += [hash_key(k) for k in plain]
         spec["api_key_hashes"] = sorted(set(hashes))
         self.tenant_store.set(spec)

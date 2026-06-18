@@ -336,6 +336,15 @@ def make_router(components: Components) -> APIRouter:
         _record(out)
         return {"result": out}
 
+    @serving.get("/whoami")
+    def whoami() -> dict:
+        """The tenant + auth scope resolved from the request (key-derived, never spoofable).
+        Public so the dashboard can label the active tenant without exposing any data."""
+        from .tenancy import current_tenant, auth_tenant
+        a = auth_tenant.get()
+        scope = "global" if a == "*" else ("tenant" if a else "public")
+        return {"result": {"tenant": current_tenant.get() or "default", "scope": scope}}
+
     @usermodel_routes.get("/usermodel")
     def usermodel(user_id: str = Query(..., examples=["u1"])) -> dict:
         # debug/inspection endpoint — exposes demographics (PII), so it is guarded
