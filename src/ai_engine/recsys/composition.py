@@ -234,13 +234,18 @@ class ComponentManager:
 
     @property
     def tenant_store(self):
-        """Runtime tenant registry (Redis), merged over the TENANTS_PATH baseline."""
+        """Runtime tenant registry, merged over the TENANTS_PATH baseline. Backing preference:
+        durable file on the PVC (TENANT_STORE_PATH) > Redis > in-memory. File store keeps
+        /admin-added tenants permanent (no redeploy, survives a Redis wipe)."""
         if not self._ts_init:
             self._ts_init = True
-            rc = self.redis_client
-            if rc is not None:
+            path = os.getenv("TENANT_STORE_PATH")
+            if path:
+                from .adapters.tenant_store import FileTenantStore
+                self._tenant_store = FileTenantStore(path)
+            elif self.redis_client is not None:
                 from .adapters.tenant_store import RedisTenantStore
-                self._tenant_store = RedisTenantStore(rc)
+                self._tenant_store = RedisTenantStore(self.redis_client)
             else:
                 from .adapters.tenant_store import InMemoryTenantStore
                 self._tenant_store = InMemoryTenantStore()

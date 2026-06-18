@@ -32,7 +32,21 @@ an edge concern (`tenancy.py` + `composition.ComponentManager`).
 
 ## Registering tenants
 
-Set `TENANTS_PATH` to a JSON file:
+Two paths, both durable — pick by how fixed the tenant is:
+
+| Path | How | Redeploy? | Durability |
+|---|---|---|---|
+| **Runtime** (normal) | `/admin` → Tenants → Add, or `POST /api/tenants` | **No** | PVC file `TENANT_STORE_PATH` — survives pod restarts + a Redis wipe |
+| **Baseline** (fixed) | add to `TENANTS_PATH` JSON, commit | Yes | git-backed configmap |
+
+New clients are onboarded at **runtime** (no redeploy). The baseline holds only the truly-fixed
+tenants (`default`). They're merged at request time — the runtime store wins on conflicts.
+
+> The runtime store backing is chosen by env: `TENANT_STORE_PATH` (durable PVC file) → Redis →
+> in-memory. On the SDU deploy `recsys-redis` is intentionally ephemeral (`--save ""` + LRU), so
+> the **file store** is what makes `/admin` tenants permanent.
+
+### Baseline file (`TENANTS_PATH`)
 
 ```json
 {
@@ -50,9 +64,8 @@ Set `TENANTS_PATH` to a JSON file:
 - **No `TENANTS_PATH`** → a single `default` tenant built from the existing env
   (`COLLECTION_NAME`, `BANDIT_STATE_PATH`, `CLUSTER_MODEL_PATH`). Existing deployments are
   unchanged.
-- **Unknown tenant id** → an auto-isolated slice (its own Redis prefix, inheriting the
-  default catalogue). When `TENANTS_PATH` is set the registry is `strict` (you can reject
-  unknown ids at the edge to bound the in-memory cache).
+- **Unknown tenant id** (not in baseline or runtime store) → an auto-isolated slice (its own
+  Redis prefix, inheriting the default catalogue).
 
 ## The contract each UI must honour
 
