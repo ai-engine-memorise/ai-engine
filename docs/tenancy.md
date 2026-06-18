@@ -73,6 +73,46 @@ tenants (`default`). They're merged at request time — the runtime store wins o
 tenant's collection. So every UI must send a consistent `X-Tenant-Id` (and agree on the
 `user_id` / `content_id` namespaces for that tenant).
 
+## Authentication & per-tenant keys
+
+The `TenantASGIMiddleware` is the **trust boundary**: it resolves the tenant so it can't be
+spoofed by a client header.
+
+- A valid **per-tenant key** (`X-API-Key`) → tenant is taken **from the key**; a client
+  `X-Tenant-Id` is ignored. So a tenant's key can only ever read/write its **own** slice.
+- The global **`INGEST_API_KEY`** → superuser; tenant from `X-Tenant-Id` (admin / ops).
+- No / unknown key → public reads only; guarded routes return `401`.
+
+| Route group | Guard |
+|---|---|
+| `/api/recommend` | public by default; set **`SERVING_REQUIRES_KEY=1`** to require a (per-tenant) key — then the key alone identifies the tenant and `X-Tenant-Id` is not needed |
+| `/api/ingest`, `/api/usermodel`, `/api/metrics`, `/api/config`, `/api/tenants` | always require a key |
+| `/api/search*` | public (separate router; not affected by `SERVING_REQUIRES_KEY`) |
+
+**Keys at rest.** Stored as **sha256 hashes** (`api_key_hashes`), never plaintext — in the
+durable tenant store (`TENANT_STORE_PATH`), not git, not Redis. `GET /api/tenants` returns a
+**count only** (`api_keys_count`), never the key or hash.
+
+**Issuing a key** (two ways):
+
+```bash
+# 1) server mints it, returns it ONCE, stores only the hash (recommended)
+curl -X POST $API/api/tenants -H "X-API-Key: $GLOBAL_KEY" -H "Content-Type: application/json" \
+  -d '{"tenant_id":"westerbork-ar-ai","collection":"westerbork-ar-ai","generate_api_key":true}'
+# -> { "result": {...}, "api_key": "<256-bit token>", "note": "store now — only its hash is kept" }
+
+# 2) bring your own (hashed on the way in)
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+#   POST {... "api_keys": ["<that token>"]}
+```
+
+In **locked** mode (`SERVING_REQUIRES_KEY=1`) the UI sends **only** its per-tenant key on
+serving calls; the tenant is derived from it:
+
+```js
+fetch(`${API}/api/recommend?user_id=${uid}`, { headers: { "X-API-Key": TENANT_KEY } })
+```
+
 ## Configuring a client (what developers must do)
 
 The `X-Tenant-Id` header is documented on every `/api/*` operation in **Swagger / OpenAPI**
