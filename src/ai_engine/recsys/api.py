@@ -133,6 +133,50 @@ def _served_record(request_id: str, user_id: str, items: list, out: dict, filter
     }
 
 
+def _log_base(c) -> Optional[str]:
+    """The CURRENT tenant's event-log directory (where served/ + date=*/ live).
+    Per-tenant ParquetEventLog has `.base`; fall back to the global env for single-tenant."""
+    base = getattr(getattr(c, "event_log", None), "base", None)
+    return str(base) if base else os.getenv("EVENT_LOG_DIR")
+
+
+def _durable_metrics(base: str) -> Optional[dict]:
+    """Counts from the DURABLE Parquet log (survive restarts), not the in-process counters."""
+    import glob
+    try:
+        import pyarrow.parquet as pq
+    except ImportError:
+        return None
+    recs = cold = distr = items_total = 0
+    for f in glob.glob(os.path.join(base, "served", "**", "*.parquet"), recursive=True):
+        try:
+            t = pq.read_table(f).to_pylist()
+        except Exception:
+            continue
+        for r in t:
+            recs += 1
+            if r.get("strategy") == "cold":
+                cold += 1
+            if r.get("distractor_id"):
+                distr += 1
+            it = r.get("items")
+            if isinstance(it, str):
+                import json as _j
+                try:
+                    it = _j.loads(it)
+                except Exception:
+                    it = []
+            items_total += len(it or [])
+    ingests = 0
+    for f in glob.glob(os.path.join(base, "date=*", "*.parquet")):
+        try:
+            ingests += pq.read_table(f).num_rows
+        except Exception:
+            continue
+    return {"ingests": ingests, "recommends": recs, "cold": cold, "warm": recs - cold,
+            "distractor_placed": distr, "items_total": items_total}
+
+
 def _load_cluster_model(path: Optional[str] = None) -> Optional[dict]:
     """Lazily load the offline-trained cluster model (per-tenant path, else env)."""
     import json
@@ -445,21 +489,33 @@ def make_router(components: Components) -> APIRouter:
 
     @ops.get("/metrics")
     def metrics_endpoint() -> dict:
-        """In-process serving counters for the inspector (not Prometheus)."""
-        recs = metrics["recommends"] or 1
+        """Serving counters. Prefers the DURABLE per-tenant log (survives restarts);
+        the in-process counters (since this process started) ride along under `session`."""
+        base = _log_base(c)
+        durable = _durable_metrics(base) if base else None
+        sess_recs = metrics["recommends"] or 1
+        session = {**metrics,
+                   "cold_rate": round(metrics["cold"] / sess_recs, 4),
+                   "avg_pool": round(metrics["pool_total"] / sess_recs, 2),
+                   "distractor_rate": round(metrics["distractor_placed"] / (metrics["distractor_requested"] or 1), 4)}
+        if not durable:
+            return {"result": {**session, "source": "session"}}
+        recs = durable["recommends"] or 1
         return {"result": {
-            **metrics,
-            "cold_rate": round(metrics["cold"] / recs, 4),
-            "avg_pool": round(metrics["pool_total"] / recs, 2),
-            "distractor_rate": round(metrics["distractor_placed"] / (metrics["distractor_requested"] or 1), 4),
+            "ingests": durable["ingests"], "recommends": durable["recommends"],
+            "cold": durable["cold"], "warm": durable["warm"], "distractor_placed": durable["distractor_placed"],
+            "cold_rate": round(durable["cold"] / recs, 4),
+            "avg_pool": round(durable["items_total"] / recs, 2),
+            "distractor_rate": round(durable["distractor_placed"] / recs, 4),
+            "source": "durable", "session": session,
         }}
 
     @ops.get("/served/recent")
     def served_recent(n: int = Query(default=50, ge=1, le=500)) -> dict:
-        """Tail of the durable served-impression log (PII -> guarded). Needs EVENT_LOG_DIR."""
+        """Tail of the durable served-impression log (PII -> guarded). Per-tenant log dir."""
         import glob
         import json
-        base = os.getenv("EVENT_LOG_DIR")
+        base = _log_base(c)
         if not base:
             return {"result": [], "detail": "EVENT_LOG_DIR not set"}
         try:
