@@ -188,10 +188,20 @@ def _online_bandit_update(c: Components, events) -> int:
     return updated
 
 
+def _tenant_doc(x_tenant_id: Optional[str] = Header(
+        default=None, alias="X-Tenant-Id",
+        description="SaaS tenant id. Selects an isolated slice: its own Qdrant collection, "
+                    "Redis namespace (user models / events / impressions / config), bandit policy, "
+                    "clusters and event log. Omit to use the 'default' tenant. Resolution happens in "
+                    "the ASGI tenant middleware; this declaration only documents the header.")) -> Optional[str]:
+    return x_tenant_id
+
+
 def make_router(components: Components) -> APIRouter:
     # Grouped by concern under one /api prefix. Guarded groups carry a single
     # router-level auth dependency instead of repeating it on every route.
-    router = APIRouter(prefix="/api")
+    # _tenant_doc surfaces the X-Tenant-Id header in OpenAPI/Swagger for every /api route.
+    router = APIRouter(prefix="/api", dependencies=[Depends(_tenant_doc)])
     serving = APIRouter(tags=["serving"])                                            # public, app-facing
     write = APIRouter(tags=["write"], dependencies=[Depends(_require_api_key)])       # ingest + preview
     usermodel_routes = APIRouter(tags=["usermodel"], dependencies=[Depends(_require_api_key)])
