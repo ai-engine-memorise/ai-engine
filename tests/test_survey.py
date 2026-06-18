@@ -89,6 +89,22 @@ def test_survey_event_seeds_user_model():
     assert sig.demographics.get("age") == "25_34"  # stored -> retrievable via /usermodel
 
 
+def test_province_maps_to_place_where_facet():
+    a = survey_affinity({"q:province": "Utrecht"})
+    assert a["place_where.province_netherlands:Utrecht"] == 0.5
+    b = survey_affinity({"province": "Zuid-Holland"})            # hyphen preserved (matters)
+    assert "place_where.province_netherlands:Zuid-Holland" in b
+    assert extract_demographics({"q:province": "Gelderland"})["province"] == "Gelderland"
+
+
+def test_province_seeds_affinity_matching_content_tags():
+    # a Utrecht visitor's model carries the SAME key content tagged Utrecht uses
+    ev = InteractionEvent(user_id="u", event="SURVEY_SUBMITTED", ts=NOW,
+                          survey_answers={"q:province": "Utrecht"})
+    sig = build_user_signals(user_id="u", events=[ev], contents={}, vectors={}, now=NOW, cfg=CFG)
+    assert "place_where.province_netherlands:utrecht" in sig.tag_affinity   # lowercased fold
+
+
 def test_identify_payload_normalizes_to_demographic_event():
     raw = {"type": "identify", "userId": "u9", "timestamp": "2026-06-11T10:00:00Z",
            "traits": {"age": 30, "gender": "female", "country": "netherlands"}}

@@ -252,6 +252,9 @@ def _demographic_affinity(demographics: dict) -> dict[str, float]:
     nat = demographics.get("nationality")
     if nat:
         out[f"person_who.city_village_country:From: {str(nat).capitalize()}"] = 0.4
+    prov = demographics.get("province")
+    if prov:   # matches the content's place_where.province_netherlands:<Province> tags
+        out[f"place_where.province_netherlands:{str(prov).strip()}"] = 0.5
     return out
 
 

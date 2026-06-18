@@ -30,6 +30,7 @@ _GENDER = {"female": "female", "male": "Male", "non_binary": "non-binary"}
 _AGE_QIDS = ("q:age", "age_group", "age")
 _GENDER_QIDS = ("q:gender", "gender")
 _NAT_QIDS = ("q:nationality", "nationality", "country")
+_PROVINCE_QIDS = ("q:province", "province", "region")   # NL province the visitor is from
 _CONN_QIDS = ("q:ww2_connection", "personal_connection")
 
 # personalization questions: answer value = canonical taxonomy label -> facet
@@ -88,7 +89,8 @@ def extract_demographics(answers: dict) -> dict:
     """Raw survey answers -> demographics dict (for storage / inspection)."""
     out = {}
     for field, qids in (("age", _AGE_QIDS), ("gender", _GENDER_QIDS),
-                        ("nationality", _NAT_QIDS), ("personal_connection", _CONN_QIDS)):
+                        ("nationality", _NAT_QIDS), ("province", _PROVINCE_QIDS),
+                        ("personal_connection", _CONN_QIDS)):
         vals = _vals(answers, *qids)
         if vals:
             out[field] = vals[0]
@@ -107,6 +109,11 @@ def survey_affinity(answers: dict) -> dict[str, float]:
             out[f"person_who.gender_and_age:{_GENDER[v]}"] = 0.3
     for v in _vals(answers, *_NAT_QIDS):
         out[f"person_who.city_village_country:From: {str(v).replace('_', ' ').title()}"] = 0.4
+    # visitor's NL province -> the SAME facet the content province tags use, so score_tag
+    # boosts same-province stories. Keep the label as-is (hyphens matter: "Zuid-Holland").
+    for v in _vals(answers, *_PROVINCE_QIDS):
+        if v:
+            out[f"place_where.province_netherlands:{str(v).strip()}"] = 0.5
 
     # explicit preference questions: value IS the taxonomy label -> strong weight.
     # canonicalize the value so slug/underscore/spelling variants still match content.
