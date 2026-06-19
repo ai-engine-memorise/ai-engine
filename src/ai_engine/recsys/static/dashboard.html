@@ -50,9 +50,6 @@ body.nav-min aside.sidebar{width:var(--side-w-min);flex-basis:var(--side-w-min)}
 .side-brand .name{font-family:Montserrat,sans-serif;font-weight:700;font-size:14.5px}
 .side-brand .name span{color:var(--accent)}
 .side-brand .brand-logo{width:27px;height:27px;object-fit:contain;flex:0 0 auto}
-.side-brand .brand-dark{display:none}
-[data-theme="dark"] .side-brand .brand-light{display:none}
-[data-theme="dark"] .side-brand .brand-dark{display:inline-block}
 body.nav-min .side-brand .name{display:none}
 .side-toggle{margin-left:auto;background:transparent;border:0;color:var(--sidebar-mut);cursor:pointer;padding:5px;border-radius:7px;line-height:0}
 .side-toggle:hover{background:#ffffff12;color:var(--sidebar-fg)}
@@ -293,8 +290,7 @@ button.ghost:hover{border-color:var(--accent)}
 <div class="layout">
   <aside class="sidebar">
     <div class="side-brand">
-      <img class="brand-logo brand-light" src="/static/favicon/ai-engine-search-black-512.png" alt="AI-Engine"/>
-      <img class="brand-logo brand-dark" src="/static/favicon/ai-engine-search-white-512.png" alt=""/>
+      <img class="brand-logo" src="/static/favicon/ai-engine-search-white-512.png" alt="AI-Engine"/>
       <span class="name">AI&#8209;Engine&nbsp;<span>Dashboard</span></span>
       <button class="side-toggle" id="navtoggle" title="collapse sidebar">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 6l-6 6 6 6"/></svg>
