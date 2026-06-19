@@ -495,7 +495,7 @@ async function renderCohort(v){
       el("th",{class:"num"},"views"),el("th",{class:"num"},"liked"),el("th",{},"last seen"),el("th",{style:"width:80px"},"")));
     for(const u of rowIds){const p=u2c[u], s=ustat[u]||{};
       tbl.append(el("tr",{class:"urow","data-id":String(u).toLowerCase(),style:"cursor:pointer",onclick:()=>openUser(u,"profile")},
-        el("td",{},el("b",{},u),s.cold?el("span",{class:"pill cold",style:"margin-left:6px"},"cold"):""),
+        el("td",{},el("b",{},u)),
         el("td",{},p?personaPill("Cluster "+p.cluster+(p.falk_hint?" · "+p.falk_hint:""),Object.keys(PERSONA_COLORS).find(k=>(p.falk_hint||"").startsWith(k))):el("span",{class:"mut small"},"—")),
         el("td",{class:"num"},s.n_interactions!=null?s.n_interactions:"—"),
         el("td",{class:"num",style:s.n_liked?"color:var(--c-affinity);font-weight:600":""},s.n_liked||"—"),
