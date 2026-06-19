@@ -423,6 +423,57 @@ def make_router(components: Components) -> APIRouter:
             return {"result": None, "detail": "CLUSTER_MODEL_PATH not set / file missing"}
         return {"result": {"method": model.get("method", "kmeans"), "profiles": model.get("profiles", [])}}
 
+    @ops.get("/users")
+    def users_list(limit: int = Query(default=500, ge=1, le=5000)) -> dict:
+        """Per-visitor summary for the cohort table: interaction count, last interaction,
+        liked / seen totals, cold flag, and segment. Enumerated from the durable served log
+        + cluster members; counts/timestamps from the event buffer (PII -> guarded)."""
+        import glob
+        ids: set = set()
+        served_last: dict[str, str] = {}
+        seg: dict[str, str] = {}
+        model = _load_cluster_model(getattr(c, "cluster_model_path", None))
+        if model:
+            for p in model.get("profiles", []):
+                label = f"Cluster {p.get('cluster')}" + (f" · {p['falk_hint']}" if p.get("falk_hint") else "")
+                for u in (p.get("members") or []):
+                    ids.add(u); seg[u] = label
+        base = _log_base(c)
+        if base:
+            try:
+                import pyarrow.parquet as pq
+                for f in glob.glob(os.path.join(base, "served", "**", "*.parquet"), recursive=True):
+                    try:
+                        for r in pq.read_table(f, columns=["user_id", "ts"]).to_pylist():
+                            u, ts = r.get("user_id"), r.get("ts")
+                            if u:
+                                ids.add(u)
+                                if ts and ts > served_last.get(u, ""):
+                                    served_last[u] = ts
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+        rows = []
+        for uid in ids:
+            try:
+                evs = c.event_buffer.fetch_events(uid)
+            except Exception:
+                evs = []
+            last = max((e.ts for e in evs if e.ts), default=None)
+            sig = c.model_store.get_signals(uid)
+            rows.append({
+                "user_id": uid,
+                "n_interactions": len(evs),
+                "last_interaction": last.isoformat() if last else served_last.get(uid),
+                "n_liked": len(sig.positives) if sig else 0,
+                "n_seen": len(getattr(sig, "viewed", []) or []) if sig else 0,
+                "cold": bool(sig.is_cold) if sig else True,
+                "segment": seg.get(uid),
+            })
+        rows.sort(key=lambda r: r["last_interaction"] or "", reverse=True)
+        return {"result": rows[:limit]}
+
     @ops.get("/content/stats")
     def content_stats(limit: int = Query(default=30, ge=1, le=200)) -> dict:
         """Cohort-wide content engagement: which items are seen / liked / abandoned across
