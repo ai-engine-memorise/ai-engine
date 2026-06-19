@@ -10,6 +10,20 @@ def test_normalize_content_id_strips_prefix():
     assert normalize_content_id(None) is None
 
 
+def test_content_and_candidates_as_bare_strings():
+    """RudderStack/clients may send `content` (and context.candidates) as the bare
+    content_id string instead of a {content_id:...} dict — must not 500."""
+    raw = {
+        "event": "CONTENT_VIEW_ENDED", "userId": "u1", "timestamp": "2026-06-19T10:00:00Z",
+        "properties": {"content": "content_2669",
+                       "details": {"reason": "next_button", "dwell_seconds": 12},
+                       "context": {"candidates": ["101", "content_102"]}},
+    }
+    ev = normalize_event(raw)
+    assert ev.content_id == "2669"
+    assert ev.impressions == ["101", "102"]
+
+
 def test_normalize_content_view_ended():
     raw = {
         "event": "CONTENT_VIEW_ENDED",

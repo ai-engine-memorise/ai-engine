@@ -76,12 +76,17 @@ def normalize_event(raw: dict) -> Optional[InteractionEvent]:
     details = props.get("details") or {}
     context = props.get("context") or {}
 
-    content_id = normalize_content_id(content.get("content_id"))
+    # `content` / candidates may arrive as a dict ({content_id: ...}) OR as the bare
+    # content_id string — RudderStack/clients send either. Accept both.
+    def _cid(x):
+        return x.get("content_id") if isinstance(x, dict) else x
+
+    content_id = normalize_content_id(_cid(content))
 
     impressions = [
-        normalize_content_id(c.get("content_id"))
+        normalize_content_id(_cid(c))
         for c in (context.get("candidates") or [])
-        if c.get("content_id")
+        if _cid(c)
     ]
     impressions = [i for i in impressions if i]
 
