@@ -850,7 +850,15 @@ function _contentModal({title,img,text,tags,metaRows,src,raw}){
     body.append(el("h2",{class:"id-title"},title));
     const dl=el("dl",{class:"id-meta"});(metaRows||[]).forEach(([k,val])=>{dl.append(el("dt",{},k),el("dd",{},val));});body.append(dl);
     body.append(text?el("p",{class:"id-text"},text):el("div",{class:"small mut"},"No description."));
-    if(tags&&tags.length)body.append(el("div",{class:"id-tags"},tags.map(t=>el("span",{class:"tag"},(t.facet?t.facet+":":"")+(t.label||t)))));
+    if(tags&&tags.length){
+      const byFacet={};
+      tags.forEach(t=>{const f=(typeof t==="object"&&t.facet)?t.facet:"other";(byFacet[f]=byFacet[f]||[]).push((t&&t.label)||t);});
+      const grp=el("div",{style:"margin-top:8px"});
+      Object.keys(byFacet).sort().forEach(f=>grp.append(el("div",{style:"display:flex;gap:8px;align-items:baseline;padding:3px 0;flex-wrap:wrap"},
+        el("span",{class:"small mut",style:"min-width:160px;flex-shrink:0"},f),
+        el("div",{style:"display:flex;flex-wrap:wrap;gap:4px"},byFacet[f].map(l=>el("span",{class:"tag"},l))))));
+      body.append(grp);
+    }
     if(src)body.append(el("a",{class:"id-link",href:src,target:"_blank",rel:"noopener"},"Open source ↗"));
   }
   function showJson(){
