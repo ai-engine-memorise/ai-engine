@@ -550,6 +550,21 @@ def make_router(components: Components) -> APIRouter:
         return {"result": {"users": len(sigs), "content": content[:limit],
                            "themes": themes, "clusters": clusters}}
 
+    @ops.get("/content/{content_id}")
+    def content_detail(content_id: str) -> dict:
+        """One item: the parsed Content + its raw Qdrant payload (for the detail card +
+        metadata/JSON view)."""
+        cont = c.content_store.get([content_id]).get(content_id)
+        try:
+            payload = c.content_store.raw_payloads([content_id]).get(content_id)
+        except Exception:
+            payload = None
+        if cont is None and not payload:
+            raise HTTPException(status_code=404, detail="content not found")
+        return {"result": {"content_id": content_id,
+                           "content": cont.model_dump() if cont else None,
+                           "payload": payload}}
+
     @ops.get("/policy")
     def policy() -> dict:
         """The ranking policy: mode + bandit theta vs its prior + TRAINING HEALTH

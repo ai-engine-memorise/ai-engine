@@ -581,7 +581,8 @@ async function renderTraffic(v){
       tbl.append(el("tr",{},el("th",{},"time"),el("th",{},"user"),el("th",{},"strategy"),el("th",{},"ranking"),el("th",{},"items"),el("th",{},"distractor")));
       for(const r of rows)tbl.append(el("tr",{},
         el("td",{class:"small mut num"},(r.ts||"").replace("T"," ").slice(0,19)),
-        el("td",{},r.user_id),el("td",{},el("span",{class:"pill "+(r.strategy||"warm")},r.strategy||"")),
+        el("td",{},el("button",{class:"userchip",title:"open visitor",onclick:()=>openUser(r.user_id,"profile")},r.user_id)),
+        el("td",{},el("span",{class:"pill "+(r.strategy||"warm")},r.strategy||"")),
         el("td",{class:"small mut"},r.ranking||""),el("td",{class:"num"},(r.items||[]).length),
         el("td",{class:"small mut"},r.distractor_id||"-")));
       v.append(el("div",{class:"card"},cardhead("Recent served impressions"),tbl));
@@ -596,7 +597,7 @@ async function renderContent(v){
   const tbl=el("table");
   tbl.append(el("tr",{},el("th",{},"content"),el("th",{class:"num"},"views"),el("th",{class:"num"},"users"),
     el("th",{class:"num"},"avg dwell"),el("th",{style:"width:180px"},"positive rate")));
-  for(const x of r.content)tbl.append(el("tr",{},
+  for(const x of r.content)tbl.append(el("tr",{style:"cursor:pointer",title:"open content card",onclick:()=>openContentDetail(x.content_id)},
     el("td",{},el("div",{},x.title||x.content_id),x.title?el("div",{class:"small mut num"},x.content_id):""),
     el("td",{class:"num"},x.views),
     el("td",{class:"num"},x.users),
@@ -840,30 +841,59 @@ function _latlon(p){
   return find(p.locations)||find(p.geo_metadata)||find(p.location)||find({lat:p.lat,lon:p.lon});
 }
 // item detail modal — styled to match the memorial UI content card
-function openItemDetail(it){
-  const p=it.payload||{}, cnt=it.content||{};
-  const title=cnt.title||p.title||"(No title)", text=cnt.text||p.text||"";
-  const img=p.image_url||p.imageUrl||"", src=p.public_url||p.publicUrl||"";
-  const tags=(cnt.tags||p.tags||[]);
-  const coords=_latlon(p), created=p.time_metadata&&p.time_metadata.dates_of_creation;
-  const meta=el("dl",{class:"id-meta"});
-  const row=(k,val)=>{meta.append(el("dt",{},k),el("dd",{},val));};
-  row("Creator",p.creator||cnt.creator||"Unknown");
-  if(cnt.content_type||p.content_type)row("Type",cnt.content_type||p.content_type);
-  if(coords)row("Location",coords.lat.toFixed(5)+", "+coords.lon.toFixed(5));
-  if(created)row("Date",Array.isArray(created)?created.join(", "):String(created));
-  if(it.relevance_score!=null)row("Score",fmt(it.relevance_score));
-  row("ID",String(it.id));
+// shared content detail modal with sub-tabs: Content view | Metadata (JSON)
+function _contentModal({title,img,text,tags,metaRows,src,raw}){
+  const body=el("div");
+  function showContent(){
+    body.innerHTML="";
+    if(img)body.append(el("img",{class:"id-img",src:img,alt:"",loading:"lazy"}));
+    body.append(el("h2",{class:"id-title"},title));
+    const dl=el("dl",{class:"id-meta"});(metaRows||[]).forEach(([k,val])=>{dl.append(el("dt",{},k),el("dd",{},val));});body.append(dl);
+    body.append(text?el("p",{class:"id-text"},text):el("div",{class:"small mut"},"No description."));
+    if(tags&&tags.length)body.append(el("div",{class:"id-tags"},tags.map(t=>el("span",{class:"tag"},(t.facet?t.facet+":":"")+(t.label||t)))));
+    if(src)body.append(el("a",{class:"id-link",href:src,target:"_blank",rel:"noopener"},"Open source ↗"));
+  }
+  function showJson(){
+    body.innerHTML="";
+    body.append(el("pre",{style:"white-space:pre-wrap;word-break:break-word;font-size:12px;background:var(--code);border:1px solid var(--line);border-radius:8px;padding:12px;max-height:62vh;overflow:auto;margin:0"},JSON.stringify(raw||{},null,2)));
+  }
+  const tabC=el("button",{class:"seg on"},"Content view"), tabJ=el("button",{class:"seg"},"Metadata");
+  tabC.onclick=()=>{tabC.classList.add("on");tabJ.classList.remove("on");showContent();};
+  tabJ.onclick=()=>{tabJ.classList.add("on");tabC.classList.remove("on");showJson();};
+  showContent();
   const card=el("div",{class:"idcard"},
     el("button",{class:"id-close",title:"close",onclick:closeItemDetail},"✕"),
-    img?el("img",{class:"id-img",src:img,alt:"",loading:"lazy"}):"",
-    el("h2",{class:"id-title"},title),
-    meta,
-    text?el("p",{class:"id-text"},text):el("div",{class:"small mut"},"No description."),
-    tags.length?el("div",{class:"id-tags"},tags.map(t=>el("span",{class:"tag"},(t.facet?t.facet+":":"")+(t.label||t)))):"",
-    src?el("a",{class:"id-link",href:src,target:"_blank",rel:"noopener"},"Open source ↗"):"");
+    el("div",{style:"display:flex;gap:6px;margin:0 0 12px"},tabC,tabJ),
+    body);
   const ov=el("div",{class:"overlay show",id:"itemOverlay",onclick:e=>{if(e.target===ov)closeItemDetail();}},card);
   closeItemDetail(); document.body.append(ov);
+}
+function _metaRows(p,cnt,extra){
+  const coords=_latlon(p), created=p.time_metadata&&p.time_metadata.dates_of_creation;
+  const rows=[["Creator",p.creator||cnt.creator||"Unknown"]];
+  if(cnt.content_type||p.content_type)rows.push(["Type",cnt.content_type||p.content_type]);
+  if(coords)rows.push(["Location",coords.lat.toFixed(5)+", "+coords.lon.toFixed(5)]);
+  if(created)rows.push(["Date",Array.isArray(created)?created.join(", "):String(created)]);
+  (extra||[]).forEach(r=>rows.push(r));
+  return rows;
+}
+function _showContentCard(p,cnt,extra){
+  _contentModal({title:cnt.title||p.title||"(No title)",img:p.image_url||p.imageUrl||"",
+    text:cnt.text||p.text||"",tags:cnt.tags||p.tags||[],metaRows:_metaRows(p,cnt,extra),
+    src:p.public_url||p.publicUrl||"",raw:(p&&Object.keys(p).length)?p:cnt});
+}
+function openItemDetail(it){
+  const p=it.payload||{}, cnt=it.content||{};
+  const extra=[];
+  if(it.relevance_score!=null)extra.push(["Score",fmt(it.relevance_score)]);
+  extra.push(["ID",String(it.id)]);
+  _showContentCard(p,cnt,extra);
+}
+async function openContentDetail(cid){
+  try{
+    const r=await api("/api/content/"+encodeURIComponent(cid));
+    _showContentCard(r.payload||{}, r.content||{}, [["ID",String(cid)]]);
+  }catch(e){alert("content load failed: "+e);}
 }
 function closeItemDetail(){const o=$("#itemOverlay");if(o)o.remove();}
 async function runEval(){
