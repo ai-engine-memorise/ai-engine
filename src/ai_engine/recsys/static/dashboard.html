@@ -476,6 +476,11 @@ async function renderCohort(v){
   const users=await discoverUsers();
   const u2c={};                                  // visitor id -> its cluster profile
   if(r&&r.profiles)r.profiles.forEach(p=>(p.members||[]).forEach(u=>u2c[u]=p));
+  // per-visitor activity (interactions / last seen / liked) for the table
+  const stats=await api("/api/users").catch(()=>[]);
+  const ustat={}; (stats||[]).forEach(s=>ustat[s.user_id]=s);
+  const rowIds=(stats&&stats.length)?stats.map(s=>s.user_id):users;   // /api/users is sorted by last seen
+  const tsShort=t=>t?String(t).replace("T"," ").slice(0,16):"—";
 
   // search (wide, full-width, magnifier icon; Enter or row-click opens)
   const search=el("input",{class:"searchbar",id:"usearch",placeholder:"Search visitor id…",
@@ -484,17 +489,22 @@ async function renderCohort(v){
   v.append(el("div",{class:"searchwrap"},icon,search));
 
   // visitors table
-  if(users.length){
+  if(rowIds.length){
     const tbl=el("table",{id:"utbl"});
-    tbl.append(el("tr",{},el("th",{},"visitor"),el("th",{},"segment"),el("th",{style:"width:90px"},"")));
-    for(const u of users){const p=u2c[u];
+    tbl.append(el("tr",{},el("th",{},"visitor"),el("th",{},"segment"),
+      el("th",{class:"num"},"views"),el("th",{class:"num"},"liked"),el("th",{},"last seen"),el("th",{style:"width:80px"},"")));
+    for(const u of rowIds){const p=u2c[u], s=ustat[u]||{};
       tbl.append(el("tr",{class:"urow","data-id":String(u).toLowerCase(),style:"cursor:pointer",onclick:()=>openUser(u,"profile")},
-        el("td",{},el("b",{},u)),
+        el("td",{},el("b",{},u),s.cold?el("span",{class:"pill cold",style:"margin-left:6px"},"cold"):""),
         el("td",{},p?personaPill("Cluster "+p.cluster+(p.falk_hint?" · "+p.falk_hint:""),Object.keys(PERSONA_COLORS).find(k=>(p.falk_hint||"").startsWith(k))):el("span",{class:"mut small"},"—")),
+        el("td",{class:"num"},s.n_interactions!=null?s.n_interactions:"—"),
+        el("td",{class:"num",style:s.n_liked?"color:var(--c-affinity);font-weight:600":""},s.n_liked||"—"),
+        el("td",{class:"small mut num"},tsShort(s.last_interaction)),
         el("td",{},el("button",{class:"userchip",onclick:e=>{e.stopPropagation();openUser(u,"profile");}},"open"))));
     }
-    v.append(el("div",{class:"card"},cardhead(`Visitors (${users.length})`),tbl,
-      el("div",{id:"unone",class:"small mut",style:"margin-top:8px;display:none"},"no visitor matches the search.")));
+    v.append(el("div",{class:"card"},cardhead(`Visitors (${rowIds.length})`),tbl,
+      el("div",{id:"unone",class:"small mut",style:"margin-top:8px;display:none"},"no visitor matches the search."),
+      el("div",{class:"small mut",style:"margin-top:8px"},"views = interactions in the event buffer · liked = positive signals · last seen = latest interaction or served impression.")));
   }else{
     v.append(el("div",{class:"empty"},"No known visitors yet — ingest events, or type an id above and Open."));
   }
