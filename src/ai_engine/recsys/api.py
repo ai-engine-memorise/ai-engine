@@ -478,31 +478,48 @@ def make_router(components: Components) -> APIRouter:
     def content_stats(limit: int = Query(default=30, ge=1, le=200)) -> dict:
         """Cohort-wide content engagement: which items are seen / liked / abandoned across
         all visitors, popular themes, and each cluster's content preferences. PII-guarded."""
+        from .signals.signal_builder import aggregate_views
         sigs = c.model_store.iter_signals() if hasattr(c.model_store, "iter_signals") else []
-        views: dict[str, int] = {}
-        likes: dict[str, int] = {}
-        dislikes: dict[str, int] = {}
+        sigs = list(sigs)
+        visits: dict[str, int] = {}          # total view events (times viewed)
+        dwell: dict[str, float] = {}         # summed dwell seconds
+        exposed: dict[str, set] = {}         # unique users who saw it
+        positive: dict[str, int] = {}        # users with a positive outcome
         theme: dict[str, float] = {}
         for s in sigs:
-            for cid in s.viewed:
-                views[cid] = views.get(cid, 0) + 1
+            try:
+                aggs = aggregate_views(c.event_buffer.fetch_events(s.user_id))
+            except Exception:
+                aggs = {}
+            for cid, a in aggs.items():
+                visits[cid] = visits.get(cid, 0) + (a.visits or 0)
+                dwell[cid] = dwell.get(cid, 0.0) + (a.dwell_seconds or 0.0)
+                exposed.setdefault(cid, set()).add(s.user_id)
+            for cid in s.viewed:             # served/seen even without a dwell event
+                exposed.setdefault(cid, set()).add(s.user_id)
             for cid in s.positives:
-                likes[cid] = likes.get(cid, 0) + 1
-            for cid in s.negatives:
-                dislikes[cid] = dislikes.get(cid, 0) + 1
+                positive[cid] = positive.get(cid, 0) + 1
             for k, w in s.tag_affinity.items():
                 theme[k] = theme.get(k, 0.0) + w
 
-        all_cids = list(set(views) | set(likes) | set(dislikes))
+        all_cids = list(set(visits) | set(exposed) | set(positive))
         titles = {k: v.title for k, v in c.content_store.get(all_cids).items()} if all_cids else {}
         lbl = lambda k: k.split(":", 1)[1] if ":" in k else k
 
-        content = [{
-            "content_id": cid, "title": titles.get(cid, ""),
-            "views": views.get(cid, 0), "likes": likes.get(cid, 0), "dislikes": dislikes.get(cid, 0),
-            "like_rate": round(likes.get(cid, 0) / views[cid], 3) if views.get(cid) else 0.0,
-        } for cid in all_cids]
-        content.sort(key=lambda r: (r["views"], r["likes"]), reverse=True)
+        content = []
+        for cid in all_cids:
+            v_ = visits.get(cid, 0)
+            users_n = len(exposed.get(cid, ()))
+            pos = positive.get(cid, 0)
+            content.append({
+                "content_id": cid, "title": titles.get(cid, ""),
+                "views": v_,                                          # times viewed (events)
+                "users": users_n,                                    # unique users exposed
+                "avg_dwell": round(dwell.get(cid, 0.0) / v_, 1) if v_ else 0.0,
+                "positive": pos,
+                "positive_rate": round(pos / users_n, 3) if users_n else 0.0,   # positive vs others
+            })
+        content.sort(key=lambda r: (r["views"], r["users"]), reverse=True)
 
         themes = sorted(([lbl(k), round(w, 3)] for k, w in theme.items()),
                         key=lambda kv: kv[1], reverse=True)[:15]

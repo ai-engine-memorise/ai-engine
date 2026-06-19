@@ -594,14 +594,18 @@ async function renderContent(v){
   if(!r||!r.users){v.append(el("div",{class:"empty"},"No visitor data yet. Ingest some events first."));return;}
   v.append(el("div",{class:"row small mut",style:"margin-bottom:12px"},`${r.users} visitors / ${r.content.length} content items seen`));
   const tbl=el("table");
-  tbl.append(el("tr",{},el("th",{},"content"),el("th",{},"views"),el("th",{},"liked"),el("th",{},"disliked"),el("th",{style:"width:200px"},"like rate")));
+  tbl.append(el("tr",{},el("th",{},"content"),el("th",{class:"num"},"views"),el("th",{class:"num"},"users"),
+    el("th",{class:"num"},"avg dwell"),el("th",{style:"width:180px"},"positive rate")));
   for(const x of r.content)tbl.append(el("tr",{},
     el("td",{},el("div",{},x.title||x.content_id),x.title?el("div",{class:"small mut num"},x.content_id):""),
     el("td",{class:"num"},x.views),
-    el("td",{class:"num",style:x.likes?"color:var(--c-affinity);font-weight:600":""},x.likes||""),
-    el("td",{class:"num",style:x.dislikes?"color:var(--c-aversion);font-weight:600":""},x.dislikes||""),
-    el("td",{},el("div",{class:"barwrap",style:"max-width:200px"},el("div",{class:"seg",style:`width:${100*x.like_rate}%;background:var(--c-affinity)`})))));
-  v.append(el("div",{class:"card"},cardhead("Content seen across visitors (most popular first)"),tbl));
+    el("td",{class:"num"},x.users),
+    el("td",{class:"num small mut"},x.avg_dwell?x.avg_dwell+"s":"—"),
+    el("td",{},el("div",{class:"row",style:"gap:8px;align-items:center"},
+      el("div",{class:"barwrap",style:"flex:1;max-width:130px"},el("div",{class:"seg",style:`width:${100*(x.positive_rate||0)}%;background:var(--c-affinity)`})),
+      el("span",{class:"small mut num"},Math.round(100*(x.positive_rate||0))+"%")))));
+  v.append(el("div",{class:"card"},cardhead("Content engagement across visitors (most viewed first)"),tbl,
+    el("div",{class:"small mut",style:"margin-top:8px"},"views = total view events · users = unique visitors exposed · avg dwell = mean seconds per view · positive rate = share of exposed users with a positive interaction.")));
   if(r.themes&&r.themes.length)v.append(el("div",{class:"card"},cardhead("Popular themes across the cohort"),valueBars(r.themes)));
   if(r.clusters&&r.clusters.length){
     v.append(el("div",{class:"eyebrow",style:"margin-top:8px;display:block"},"Content preferences by cluster"));

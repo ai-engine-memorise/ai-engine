@@ -217,8 +217,9 @@ def test_content_stats_aggregates_cohort():
     r = client.get("/api/content/stats").json()["result"]
     assert r["users"] >= 1
     by = {x["content_id"]: x for x in r["content"]}
-    assert by["101"]["views"] >= 1 and by["101"]["likes"] >= 1
-    assert by["201"]["dislikes"] >= 1
+    assert by["101"]["views"] >= 1 and by["101"]["users"] >= 1
+    assert by["101"]["positive"] >= 1 and by["101"]["avg_dwell"] > 0   # engaged view
+    assert by["201"]["positive"] == 0                                  # abandoned -> not positive
     assert r["themes"]                                    # popular themes surfaced
 
 
