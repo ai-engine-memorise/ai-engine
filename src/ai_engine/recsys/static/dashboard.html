@@ -137,6 +137,23 @@ main{flex:1 1 auto;min-width:0}
 .evthumb.ph{background:var(--code);border:1px solid var(--line)}
 .evtitle{flex:1;min-width:0;font-weight:600;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
+/* item detail card — memorial UI styling */
+.idcard{width:min(620px,100%);max-height:90vh;overflow-y:auto;background:var(--panel);border:1px solid var(--line);
+  border-radius:20px;padding:22px;display:flex;flex-direction:column;gap:13px;position:relative;box-shadow:0 30px 80px var(--shadow)}
+.id-close{position:absolute;top:12px;right:14px;border:0;background:transparent;color:var(--mut);font-size:19px;cursor:pointer;line-height:1;z-index:1}
+.id-close:hover{color:var(--accent)}
+.id-img{width:100%;max-height:320px;object-fit:cover;border-radius:14px;border:1px solid var(--line);background:var(--code)}
+.id-title{margin:0;font-size:21px;color:var(--primary-dark);padding-right:26px;line-height:1.25}
+[data-theme="dark"] .id-title{color:var(--fg)}
+.id-meta{display:grid;grid-template-columns:max-content 1fr;gap:5px 16px;margin:0;font-size:13px}
+.id-meta dt{font-weight:700;color:var(--fg)}
+.id-meta dd{margin:0;color:var(--mut);font-family:'Roboto Mono',monospace;font-size:12.5px;word-break:break-word}
+.id-text{margin:0;line-height:1.65;color:var(--fg);white-space:pre-wrap}
+.id-tags{display:flex;flex-wrap:wrap;gap:5px}
+.id-link{align-self:flex-start;border-radius:999px;padding:9px 17px;border:1px solid var(--line);color:var(--fg);
+  text-decoration:none;background:var(--code);font-weight:600;font-size:13px;font-family:Montserrat,sans-serif}
+.id-link:hover{border-color:var(--accent);color:var(--accent)}
+
 /* config page */
 .cfgbar{position:sticky;top:48px;z-index:15}
 .cfgrow{display:grid;grid-template-columns:1fr 210px;gap:18px;align-items:center;padding:11px 0}
@@ -796,27 +813,41 @@ function scenarioCard(s){
   c.append(host);
   return c;
 }
-// item detail modal — memorial-UI card logic (image / title / text / meta / tags / source)
+// recursively pull a {lat,lon} out of a payload's location-ish fields (memorial-UI parity)
+function _latlon(p){
+  const find=o=>{
+    if(!o||typeof o!=="object")return null;
+    if(Array.isArray(o)){for(const x of o){const r=find(x);if(r)return r;}return null;}
+    const lat=o.lat??o.latitude, lon=o.lon??o.lng??o.longitude;
+    if(typeof lat==="number"&&typeof lon==="number")return{lat,lon};
+    for(const k in o){const r=find(o[k]);if(r)return r;}
+    return null;
+  };
+  return find(p.locations)||find(p.geo_metadata)||find(p.location)||find({lat:p.lat,lon:p.lon});
+}
+// item detail modal — styled to match the memorial UI content card
 function openItemDetail(it){
   const p=it.payload||{}, cnt=it.content||{};
   const title=cnt.title||p.title||"(No title)", text=cnt.text||p.text||"";
   const img=p.image_url||p.imageUrl||"", src=p.public_url||p.publicUrl||"";
   const tags=(cnt.tags||p.tags||[]);
-  const meta=el("div",{class:"row",style:"flex-wrap:wrap;gap:6px;margin:8px 0"});
-  if(p.creator)meta.append(el("span",{class:"pill neutral"},"creator: "+p.creator));
-  if(cnt.content_type||p.content_type)meta.append(el("span",{class:"pill neutral"},cnt.content_type||p.content_type));
-  meta.append(el("span",{class:"pill neutral"},"id "+it.id));
-  if(it.relevance_score!=null)meta.append(el("span",{class:"pill warm"},"score "+fmt(it.relevance_score)));
-  const card=el("div",{class:"modal",style:"max-width:560px;max-height:86vh;overflow:auto"},
-    el("div",{class:"row",style:"justify-content:space-between;align-items:center"},
-      el("h2",{style:"margin:0;font-size:18px"},title),
-      el("button",{class:"iconbtn",onclick:closeItemDetail},"✕")),
-    img?el("img",{src:img,alt:"",style:"width:100%;border-radius:10px;margin:10px 0;object-fit:cover;max-height:300px"}):"",
+  const coords=_latlon(p), created=p.time_metadata&&p.time_metadata.dates_of_creation;
+  const meta=el("dl",{class:"id-meta"});
+  const row=(k,val)=>{meta.append(el("dt",{},k),el("dd",{},val));};
+  row("Creator",p.creator||cnt.creator||"Unknown");
+  if(cnt.content_type||p.content_type)row("Type",cnt.content_type||p.content_type);
+  if(coords)row("Location",coords.lat.toFixed(5)+", "+coords.lon.toFixed(5));
+  if(created)row("Date",Array.isArray(created)?created.join(", "):String(created));
+  if(it.relevance_score!=null)row("Score",fmt(it.relevance_score));
+  row("ID",String(it.id));
+  const card=el("div",{class:"idcard"},
+    el("button",{class:"id-close",title:"close",onclick:closeItemDetail},"✕"),
+    img?el("img",{class:"id-img",src:img,alt:"",loading:"lazy"}):"",
+    el("h2",{class:"id-title"},title),
     meta,
-    text?el("p",{style:"line-height:1.6;margin:6px 0"},text):el("div",{class:"small mut"},"No text."),
-    tags.length?el("div",{style:"margin-top:8px"},el("div",{class:"small mut",style:"margin-bottom:4px"},"tags"),
-      el("div",{class:"row",style:"flex-wrap:wrap;gap:4px"},tags.map(t=>el("span",{class:"tag"},(t.facet?t.facet+":":"")+(t.label||""))))):"",
-    src?el("div",{style:"margin-top:12px"},el("a",{class:"linkbtn",href:src,target:"_blank",rel:"noopener"},"Open source ↗")):"");
+    text?el("p",{class:"id-text"},text):el("div",{class:"small mut"},"No description."),
+    tags.length?el("div",{class:"id-tags"},tags.map(t=>el("span",{class:"tag"},(t.facet?t.facet+":":"")+(t.label||t)))):"",
+    src?el("a",{class:"id-link",href:src,target:"_blank",rel:"noopener"},"Open source ↗"):"");
   const ov=el("div",{class:"overlay show",id:"itemOverlay",onclick:e=>{if(e.target===ov)closeItemDetail();}},card);
   closeItemDetail(); document.body.append(ov);
 }
