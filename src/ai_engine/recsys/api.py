@@ -899,6 +899,20 @@ def create_app(components: Optional[Components] = None) -> FastAPI:
         with open(path, encoding="utf-8") as fh:
             return HTMLResponse(fh.read())
 
+    # static assets for the dashboard (favicons / icons). Inert public files.
+    try:
+        from fastapi.staticfiles import StaticFiles
+        static_dir = os.path.join(os.path.dirname(__file__), "static")
+        app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+        @app.get("/favicon.ico", include_in_schema=False)
+        def favicon():
+            from fastapi.responses import FileResponse, Response
+            ico = os.path.join(static_dir, "favicon", "favicon.ico")
+            return FileResponse(ico) if os.path.exists(ico) else Response(status_code=404)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"static mount failed: {e}")
+
     return app
 
 

@@ -4,6 +4,14 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>AI-Engine Dashboard, MEMORISE</title>
+<!-- ai-engine favicon (Memorise) -->
+<link rel="icon" href="/favicon.ico" sizes="any"/>
+<link rel="icon" type="image/svg+xml" href="/static/favicon/ai-engine-search.svg"/>
+<link rel="icon" type="image/svg+xml" href="/static/favicon/ai-engine-search-white.svg" media="(prefers-color-scheme: dark)"/>
+<link rel="icon" type="image/png" sizes="32x32" href="/static/favicon/png-light/favicon-32.png"/>
+<link rel="icon" type="image/png" sizes="16x16" href="/static/favicon/png-light/favicon-16.png"/>
+<link rel="apple-touch-icon" sizes="180x180" href="/static/favicon/apple-touch-icon.png"/>
+<link rel="manifest" href="/static/favicon/site.webmanifest"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <style>
@@ -41,6 +49,10 @@ body.nav-min aside.sidebar{width:var(--side-w-min);flex-basis:var(--side-w-min)}
 @keyframes spin{to{transform:rotate(360deg)}}@keyframes pulse{0%,100%{opacity:.45}50%{opacity:1}}
 .side-brand .name{font-family:Montserrat,sans-serif;font-weight:700;font-size:14.5px}
 .side-brand .name span{color:var(--accent)}
+.side-brand .brand-logo{width:27px;height:27px;object-fit:contain;flex:0 0 auto}
+.side-brand .brand-dark{display:none}
+[data-theme="dark"] .side-brand .brand-light{display:none}
+[data-theme="dark"] .side-brand .brand-dark{display:inline-block}
 body.nav-min .side-brand .name{display:none}
 .side-toggle{margin-left:auto;background:transparent;border:0;color:var(--sidebar-mut);cursor:pointer;padding:5px;border-radius:7px;line-height:0}
 .side-toggle:hover{background:#ffffff12;color:var(--sidebar-fg)}
@@ -281,7 +293,8 @@ button.ghost:hover{border-color:var(--accent)}
 <div class="layout">
   <aside class="sidebar">
     <div class="side-brand">
-      <svg class="ring" viewBox="0 0 24 24"><circle class="r" cx="12" cy="12" r="9"/><circle class="c" cx="12" cy="12" r="3.4"/></svg>
+      <img class="brand-logo brand-light" src="/static/favicon/ai-engine-search-black-512.png" alt="AI-Engine"/>
+      <img class="brand-logo brand-dark" src="/static/favicon/ai-engine-search-white-512.png" alt=""/>
       <span class="name">AI&#8209;Engine&nbsp;<span>Dashboard</span></span>
       <button class="side-toggle" id="navtoggle" title="collapse sidebar">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 6l-6 6 6 6"/></svg>

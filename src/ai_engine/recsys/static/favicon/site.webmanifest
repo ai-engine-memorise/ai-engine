@@ -1,0 +1,11 @@
+{
+  "name": "AI-Engine Dashboard",
+  "short_name": "ai-engine",
+  "icons": [
+    { "src": "/static/favicon/png-light/favicon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/static/favicon/png-light/favicon-512.png", "sizes": "512x512", "type": "image/png" }
+  ],
+  "theme_color": "#111111",
+  "background_color": "#ffffff",
+  "display": "standalone"
+}
