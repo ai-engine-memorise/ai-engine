@@ -7,6 +7,7 @@ import math
 from typing import Optional
 
 from ..contracts.models import Content, UserSignals, Vector
+from ..taxonomy import normalize_key
 
 
 def cosine(a: Optional[Vector], b: Optional[Vector]) -> float:
@@ -80,14 +81,15 @@ def score_tag(signals: UserSignals, content: Optional[Content]) -> float:
     """
     if content is None or not signals.tag_affinity:
         return 0.0
-    # match case-insensitively: taxonomy casing (e.g. "female", "Photograph") must
-    # line up with constructed keys (e.g. demographic "...:Female").
-    cand_weights = {t.key.lower(): t.weight for t in content.tags}
+    # match on canonical form: survey-derived keys and content keys must agree
+    # despite casing/whitespace/accents/separators/typos. normalize_key is the
+    # single source of truth, applied symmetrically to both sides.
+    cand_weights = {normalize_key(t.key): t.weight for t in content.tags}
     total = sum(signals.tag_affinity.values())
     if total <= 0:
         return 0.0
     matched = sum(
-        aff * cand_weights.get(key.lower(), 0.0)
+        aff * cand_weights.get(normalize_key(key), 0.0)
         for key, aff in signals.tag_affinity.items()
     )
     return max(0.0, min(matched / total, 1.0))
@@ -99,12 +101,12 @@ def score_aversion(signals: UserSignals, content: Optional[Content]) -> float:
     sharing themes with abandoned content is pushed down."""
     if content is None or not signals.tag_aversion:
         return 0.0
-    cand_weights = {t.key.lower(): t.weight for t in content.tags}
+    cand_weights = {normalize_key(t.key): t.weight for t in content.tags}
     total = sum(signals.tag_aversion.values())
     if total <= 0:
         return 0.0
     matched = sum(
-        av * cand_weights.get(key.lower(), 0.0)
+        av * cand_weights.get(normalize_key(key), 0.0)
         for key, av in signals.tag_aversion.items()
     )
     return max(0.0, min(matched / total, 1.0))

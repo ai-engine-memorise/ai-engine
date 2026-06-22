@@ -15,6 +15,7 @@ from .contracts.models import (
     UserSignals,
 )
 from .contracts.ports import ContentStore, UserModelStore
+from .taxonomy import normalize_key
 from .ranking.scorers import (
     score_semantic, score_affinity, score_tag, score_recency, score_aversion, score_geo,
 )
@@ -93,7 +94,8 @@ class Recommender:
                 for c in self.content_store.search_vector(signals.taste_vector, limit=cfg.pool_per_generator):
                     pool.setdefault(c.content_id, c)
             top_tag_keys = [
-                k for k, _ in sorted(signals.tag_affinity.items(), key=lambda kv: kv[1], reverse=True)
+                normalize_key(k)
+                for k, _ in sorted(signals.tag_affinity.items(), key=lambda kv: kv[1], reverse=True)
             ][:20]
             if top_tag_keys:
                 for c in self.content_store.search_tags(top_tag_keys, limit=cfg.pool_per_generator):

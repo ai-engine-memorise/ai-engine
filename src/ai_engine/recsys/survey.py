@@ -11,6 +11,10 @@ canonical taxonomy label (e.g. "Forced Labor") so it matches content tags 1:1.
 from __future__ import annotations
 from typing import Optional
 
+# Origins with their own country-specific content tags. Any other nationality rolls
+# up to the `International` tag (see survey_affinity). Compared casefolded.
+CORE_COUNTRIES = {"netherlands", "germany", "poland"}
+
 SURVEY_EVENTS = ("SURVEY_SUBMITTED", "SURVEY_ANSWERED")
 # events whose answers/traits seed demographics + persona affinity. IDENTIFY is the
 # RudderStack identify call the app sends AFTER the survey (traits = persona).
@@ -97,6 +101,21 @@ def extract_demographics(answers: dict) -> dict:
     return out
 
 
+def split_survey_answers(answers: dict) -> dict:
+    """Group raw survey answers by origin survey for the holistic visitor profile:
+    demographic (presurvey) vs personalization vs anything else. Keys are the raw
+    question ids; values are the raw answers."""
+    demo_qids = set(_AGE_QIDS) | set(_GENDER_QIDS) | set(_NAT_QIDS) | set(_PROVINCE_QIDS) | set(_CONN_QIDS)
+    pers_qids = set(_PERSONALIZATION)
+    demographic: dict = {}
+    personalization: dict = {}
+    other: dict = {}
+    for k, v in (answers or {}).items():
+        bucket = demographic if k in demo_qids else personalization if k in pers_qids else other
+        bucket[k] = v
+    return {"demographic": demographic, "personalization": personalization, "other": other}
+
+
 def survey_affinity(answers: dict) -> dict[str, float]:
     """Survey answers -> {tag_key: weight} in the content taxonomy (the persona)."""
     out: dict[str, float] = {}
@@ -108,12 +127,18 @@ def survey_affinity(answers: dict) -> dict[str, float]:
         if v in _GENDER:
             out[f"person_who.gender_and_age:{_GENDER[v]}"] = 0.3
     for v in _vals(answers, *_NAT_QIDS):
-        out[f"person_who.city_village_country:From: {str(v).replace('_', ' ').title()}"] = 0.4
-    # visitor's NL province -> the SAME facet the content province tags use, so score_tag
-    # boosts same-province stories. Keep the label as-is (hyphens matter: "Zuid-Holland").
+        country = str(v).replace("_", " ").title()
+        out[f"person_who.city_village_country:From: {country}"] = 0.4
+        # rollup: visitors whose origin is not one of the prominently-tagged
+        # countries also match content tagged `International` (the complement set).
+        if country.strip().casefold() not in CORE_COUNTRIES:
+            out["person_who.city_village_country:International"] = 0.3
+    # visitor's NL province -> person_who.province_netherlands, the facet the content
+    # province tags use per the authoritative taxonomy (tags.json). score_tag boosts
+    # same-province stories. Keep the label as-is (hyphens matter: "Zuid-Holland").
     for v in _vals(answers, *_PROVINCE_QIDS):
         if v:
-            out[f"place_where.province_netherlands:{str(v).strip()}"] = 0.5
+            out[f"person_who.province_netherlands:{str(v).strip()}"] = 0.5
 
     # explicit preference questions: value IS the taxonomy label -> strong weight.
     # canonicalize the value so slug/underscore/spelling variants still match content.

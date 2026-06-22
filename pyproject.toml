@@ -23,6 +23,9 @@ dependencies = [
     "redis (>=5.0.0,<7.0.0)",
     "requests (>=2.32.0,<3.0.0)",
     "pyarrow (>=17.0.0,<22.0.0)",
+    # shared tag taxonomy / match normalization (single source of truth).
+    # local dev: `pip install -e ../memorise-taxonomy`
+    "memorise-taxonomy",
 ]
 
 [tool.poetry]
