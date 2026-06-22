@@ -12,6 +12,7 @@ from qdrant_client.models import Filter, FieldCondition, MatchAny, GeoRadius, Ge
 
 from ..contracts.enums import ContentType
 from ..contracts.models import Content, Tag, Candidate, Vector
+from ..taxonomy import normalize_filter_value
 
 logger = logging.getLogger(__name__)
 
@@ -189,7 +190,7 @@ class QdrantContentStore:
         # filter candidates by an exact tag value (e.g. a location tag AiARLocationBarrack3).
         # If the collection has no `tag_values` keyword index (e.g. content ingested without
         # the tag schema), Qdrant raises -> degrade to empty instead of 500ing the request.
-        flt = Filter(must=[FieldCondition(key="tag_values", match=MatchAny(any=[value.lower()]))])
+        flt = Filter(must=[FieldCondition(key="tag_values", match=MatchAny(any=[normalize_filter_value(value)]))])
         try:
             points, _ = self.client.scroll(
                 collection_name=self.collection_name,

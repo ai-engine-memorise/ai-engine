@@ -98,6 +98,16 @@ def _decode_aiar(tag: str) -> str:
     return tag
 
 
+def normalize_filter_value(value: str) -> str:
+    """Normalize a ?filter= query value the same way tag_values are stored.
+
+    Decodes AiAR machine tags (AiARLocationBarrack3 -> barrack 3) before
+    normalizing, so the filter matches content tagged by either the AR app or
+    curators by hand.
+    """
+    return normalize_label(_decode_aiar(str(value)))
+
+
 # --- facet taxonomy, loaded from the authoritative tags.json ---------------------
 
 # dimension+group -> facet key, aligned with the survey side (ai_engine.recsys.survey)

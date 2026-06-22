@@ -9,6 +9,7 @@ from typing import Optional, Sequence
 
 from ..contracts.models import Content, InteractionEvent, UserSignals, Candidate, Vector
 from ..ranking.scorers import cosine, haversine_m
+from ..taxonomy import normalize_filter_value
 
 
 class FakeContentStore:
@@ -57,9 +58,9 @@ class FakeContentStore:
 
     def search_filter(self, value: str, *, limit: int, exclude=()) -> list[Candidate]:
         ex = {str(e) for e in exclude}
-        v = value.lower()
+        v = normalize_filter_value(value)
         hits = [cid for cid, c in self._contents.items()
-                if cid not in ex and any(t.label.lower() == v for t in c.tags)]
+                if cid not in ex and any(normalize_filter_value(t.label) == v for t in c.tags)]
         return [Candidate(content_id=cid, generated_by="filter") for cid in sorted(hits)[:limit]]
 
     def raw_payloads(self, ids):
