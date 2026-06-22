@@ -1054,7 +1054,9 @@ def create_app(components: Optional[Components] = None) -> FastAPI:
 
     @app.get("/health", tags=["Health"])
     def health() -> dict:
-        return {"status": "ok"}
+        # APP_VERSION is set from the deployed image tag via the Flux imagepolicy
+        # setter (see deployment.yaml), so this reports the running release.
+        return {"status": "ok", "version": os.getenv("APP_VERSION", "unknown")}
 
     @app.get("/dashboard", tags=["Control panel"])
     def dashboard():
