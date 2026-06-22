@@ -151,6 +151,8 @@ def _served_record(request_id: str, user_id: str, items: list, out: dict, filter
         "ranking": (out.get("diagnostics") or {}).get("ranking"),
         "distractor_id": distractor,
         "items": [{"id": it["id"], "rank": it["rank"], "role": it["role"],
+                   "relevance_score": it.get("relevance_score"),
+                   "breakdown": it.get("breakdown", {}),
                    "features": it.get("features", [])} for it in items],
     }
 
@@ -377,6 +379,71 @@ def make_router(components: Components) -> APIRouter:
             out["cluster"] = (assign_fuzzy(sig, model) if model.get("method") == "fcm"
                               else assign(sig, model))
         return {"result": out}
+
+    @usermodel_routes.get("/usermodel/extras")
+    def usermodel_extras(user_id: str = Query(..., examples=["u1"])) -> dict:
+        """Holistic visitor profile extras that complement /usermodel/explain:
+        demographics, the raw survey answers (presurvey + personalization), and the
+        dynamic user model (tag affinities/aversions, engagement behaviour, and the
+        content the visitor engaged with positively together with that content's
+        tags — i.e. *why* we think the visitor likes certain things)."""
+        from .survey import extract_demographics, split_survey_answers
+
+        sig = c.model_store.get_signals(user_id)
+        if sig is None:
+            return {"result": None}
+
+        # Raw survey answers, merged across all of this visitor's events (latest wins).
+        answers: dict = {}
+        for ev in (c.event_buffer.fetch_events(user_id) or []):
+            for k, val in (getattr(ev, "survey_answers", None) or {}).items():
+                if val is not None and val != "":
+                    answers[k] = val
+        grouped = split_survey_answers(answers)
+        surveys = {
+            "demographic": grouped["demographic"],
+            "personalization": grouped["personalization"],
+            "other": grouped["other"],
+            "completed_demographic": bool(grouped["demographic"]),
+            "completed_personalization": bool(grouped["personalization"]),
+            "answer_count": len(answers),
+        }
+
+        demographics = dict(sig.demographics or {}) or extract_demographics(answers)
+
+        # Dynamic model: content the visitor liked, with that content's tags.
+        positives = sig.positives or {}
+        liked_ids = sorted(positives, key=lambda k: positives[k], reverse=True)[:15]
+        contents = c.content_store.get(liked_ids) if liked_ids else {}
+        liked_content = []
+        for cid in liked_ids:
+            ct = contents.get(cid)
+            liked_content.append({
+                "id": cid,
+                "title": getattr(ct, "title", None) if ct else None,
+                "weight": round(float(positives.get(cid, 0.0)), 3),
+                "tags": [t.key for t in getattr(ct, "tags", [])] if ct else [],
+            })
+
+        def _top(d, n=12):
+            d = d or {}
+            ranked = sorted(d.items(), key=lambda kv: abs(kv[1]), reverse=True)[:n]
+            return [{"key": k, "weight": round(float(v), 3)} for k, v in ranked]
+
+        model = {
+            "tag_affinity": _top(sig.tag_affinity),
+            "tag_aversion": _top(sig.tag_aversion),
+            "behavior": dict(sig.behavior or {}),
+            "liked_content": liked_content,
+            "counts": {
+                "positives": len(sig.positives or {}),
+                "negatives": len(sig.negatives or {}),
+                "viewed": len(sig.viewed or []),
+            },
+            "is_cold": bool(getattr(sig, "is_cold", False) or not (sig.viewed)),
+        }
+
+        return {"result": {"demographics": demographics, "surveys": surveys, "model": model}}
 
     @usermodel_routes.get("/usermodel/history")
     def usermodel_history(
@@ -658,6 +725,108 @@ def make_router(components: Components) -> APIRouter:
                     items = []
             out.append({**r, "items": items})
         return {"result": out}
+
+    @ops.get("/served/explain")
+    def served_explain(request_id: str = Query(..., description="served impression request_id")) -> dict:
+        """Explain a past recommendation: the served items, the visitor's current tag
+        model, and — per item — the overlap between the visitor's tag affinities and the
+        content's tags, plus the stored per-scorer breakdown (the other reasons it was
+        ranked). Impressions logged before the breakdown was persisted ('legacy') still
+        return live-computed tag overlap; has_breakdown flags that case for the UI."""
+        import glob
+        import json
+        base = _log_base(c)
+        if not base:
+            return {"result": None, "detail": "EVENT_LOG_DIR not set"}
+        try:
+            import pyarrow.parquet as pq
+        except ImportError:
+            return {"result": None, "detail": "pyarrow not installed"}
+        rec = None
+        for f in glob.glob(os.path.join(base, "served", "**", "*.parquet"), recursive=True):
+            try:
+                for r in pq.read_table(f).to_pylist():
+                    if r.get("request_id") == request_id:
+                        rec = r
+                        break
+            except Exception:
+                continue
+            if rec is not None:
+                break
+        if rec is None:
+            return {"result": None, "detail": "request_id not found"}
+
+        items = rec.get("items")
+        if isinstance(items, str):
+            try:
+                items = json.loads(items)
+            except Exception:
+                items = []
+        items = items or []
+
+        user_id = rec.get("user_id")
+        sig = c.model_store.get_signals(user_id) if user_id else None
+        affinity = (getattr(sig, "tag_affinity", None) or {}) if sig else {}
+        # The tag scorer matches user affinity to content tags on NORMALIZED keys
+        # (casing/whitespace/synonyms), so the overlap shown here must normalize the
+        # same way — otherwise "theme_what:Family" (raw tag) would miss
+        # "theme_what:family" (affinity). Single source of truth: taxonomy.normalize_key.
+        from .taxonomy import normalize_key
+        aff_norm = {}
+        for k, val in affinity.items():
+            aff_norm[normalize_key(k)] = float(val)
+
+        ids = [it.get("id") for it in items if it.get("id")]
+        contents = c.content_store.get(ids) if ids else {}
+        has_breakdown = any(it.get("breakdown") for it in items)
+
+        out_items = []
+        for it in items:
+            cid = it.get("id")
+            ct = contents.get(cid)
+            content_tags = [t.key for t in getattr(ct, "tags", [])] if ct else []
+            overlap = [
+                {"key": k, "user_weight": round(aff_norm[normalize_key(k)], 3)}
+                for k in content_tags if normalize_key(k) in aff_norm
+            ]
+            overlap.sort(key=lambda o: o["user_weight"], reverse=True)
+            out_items.append({
+                "id": cid,
+                "title": getattr(ct, "title", None) if ct else None,
+                "rank": it.get("rank"),
+                "role": it.get("role"),
+                "relevance_score": it.get("relevance_score"),
+                "breakdown": it.get("breakdown") or {},
+                "content_tags": content_tags,
+                "tag_overlap": overlap,
+            })
+
+        # Persona-level view of the same user model (so the UI can speak the same language).
+        user_model = None
+        if sig is not None:
+            from .explain.persona import explain_user
+            contents_seen = c.content_store.get(sig.viewed or [])
+            user_model = explain_user(sig, contents_seen).model_dump()
+
+        user_tag_affinity = [
+            {"key": k, "weight": round(float(v), 3)}
+            for k, v in sorted(affinity.items(), key=lambda kv: kv[1], reverse=True)[:15]
+        ]
+
+        return {"result": {
+            "request_id": request_id,
+            "user_id": user_id,
+            "ts": rec.get("ts"),
+            "strategy": rec.get("strategy"),
+            "filter": rec.get("filter"),
+            "cold_start": rec.get("cold_start"),
+            "ranking": rec.get("ranking"),
+            "distractor_id": rec.get("distractor_id"),
+            "has_breakdown": bool(has_breakdown),
+            "user_model": user_model,
+            "user_tag_affinity": user_tag_affinity,
+            "items": out_items,
+        }}
 
     @write.post("/recommend/preview")
     def recommend_preview(

@@ -446,18 +446,20 @@ const SCOPE={};GROUPS.forEach(g=>Object.keys(g.tabs).forEach(t=>SCOPE[t]=g.label
 const BY_SLUG={};Object.keys(ALL).forEach(n=>BY_SLUG[slug(n)]=n);
 let current="Cohort";
 let userCtx=null;            // {id, sub} when drilled into a single visitor (from the Cohort table)
+let recCtx=null;             // request_id when drilled into a single recommendation (from the Traffic table)
 let cfgTab=null;             // active Config category subtab
 let cfgEdit=false;           // Config is read-only until Edit is clicked
 const USER_SUBS=[["profile","Profile",renderUser],["history","History",renderHistory],["recommend","Recommend",renderRequest]];
 
-function setTab(n){if(!ALL[n])return;userCtx=null;cfgEdit=false;current=n;const s=slug(n);if(location.hash!=="#/"+s)location.hash="#/"+s;else paint();}
-function openUser(id,sub){id=String(id).trim();if(!id)return;sub=sub||"profile";cfgEdit=false;
+function setTab(n){if(!ALL[n])return;userCtx=null;recCtx=null;cfgEdit=false;current=n;const s=slug(n);if(location.hash!=="#/"+s)location.hash="#/"+s;else paint();}
+function openUser(id,sub){id=String(id).trim();if(!id)return;sub=sub||"profile";cfgEdit=false;recCtx=null;
   $("#uid").value=id;localStorage.setItem("ins_uid",id);
   const h=`#/user/${encodeURIComponent(id)}/${sub}`;if(location.hash!==h)location.hash=h;else paint();}
 function paint(){
-  const navActive=userCtx?"Cohort":current;
+  const navActive=recCtx?"Traffic":userCtx?"Cohort":current;
   for(const b of document.querySelectorAll(".navitem"))b.classList.toggle("on",b.dataset.t===navActive);
   const v=$("#view");v.innerHTML="";
+  if(recCtx){renderRecDetail(v);return;}
   if(userCtx){renderUserDetail(v);return;}
   v.append(el("div",{class:"pagehead"},
     el("div",{},el("div",{class:"eyebrow"},SCOPE[current]),el("h1",{},current)),
@@ -478,6 +480,76 @@ function renderUserDetail(v){
   const host=el("div");v.append(host);
   fn(host).catch(e=>failCard(host,e));
 }
+
+function openRec(rid){
+  rid=String(rid||"").trim();if(!rid)return;userCtx=null;cfgEdit=false;
+  const h=`#/rec/${encodeURIComponent(rid)}`;
+  if(location.hash!==h)location.hash=h;else paint();
+}
+async function renderRecDetail(v){
+  v.append(el("div",{class:"pagehead"},
+    el("div",{},el("div",{class:"eyebrow"},"Traffic"),el("h1",{},"Recommendation")),
+    el("button",{class:"iconbtn",title:"back to traffic",onclick:()=>{location.hash="#/traffic";}},"←")));
+  const host=el("div");v.append(host);
+  let d;
+  try{d=await api(`/api/served/explain?request_id=${encodeURIComponent(recCtx)}`);}catch(e){failCard(host,e);return;}
+  if(!d){host.append(el("div",{class:"empty"},"Recommendation ",el("b",{},recCtx)," not found in the served log."));return;}
+  // ----- meta: why served -----
+  const meta=el("div",{class:"card"},cardhead("Why this was served"));
+  meta.append(el("div",{class:"row",style:"gap:7px;flex-wrap:wrap;margin-bottom:6px"},
+    el("span",{class:"pill "+(d.strategy||"warm")},"strategy: "+(d.strategy||"?")),
+    d.ranking?el("span",{class:"pill neutral"},"ranking: "+d.ranking):"",
+    d.cold_start?el("span",{class:"pill cold"},"cold start"):"",
+    d.filter?el("span",{class:"pill neutral"},"filter: "+d.filter):""));
+  meta.append(el("div",{class:"small mut"},
+    "visitor ",el("button",{class:"userchip",title:"open visitor",onclick:()=>openUser(d.user_id,"profile")},d.user_id||"?"),
+    "   ·   "+((d.ts||"").replace("T"," ").slice(0,19))));
+  if(!d.has_breakdown)meta.append(el("div",{class:"small mut",style:"margin-top:8px;font-style:italic"},
+    "Legacy impression: the per-scorer breakdown was not recorded at serve time. Tag overlap below is computed against the visitor's current model."));
+  host.append(meta);
+  // ----- the user model -----
+  if(d.user_model){
+    const um=d.user_model,vt=um.visitor_type||{};
+    const umc=el("div",{class:"card"},cardhead("Visitor model"));
+    umc.append(el("div",{class:"row",style:"gap:7px;flex-wrap:wrap"},
+      personaPill("Falk: "+(vt.type||"?"),vt.type),
+      el("span",{class:"pill neutral"},"Pekarik: "+(um.experience_preference||"?")),
+      el("span",{class:"pill neutral"},"Style: "+(um.engagement_style||"?"))));
+    if(um.summary)umc.append(el("p",{class:"small",style:"margin:.5rem 0 0;line-height:1.55",html:mdInline(um.summary)}));
+    host.append(umc);
+  }
+  if(d.user_tag_affinity&&d.user_tag_affinity.length){
+    host.append(el("div",{class:"card"},cardhead("Visitor tag model"),
+      valueBars(d.user_tag_affinity.map(t=>[t.key,t.weight]))));
+  }
+  // ----- recommended items + explanation -----
+  const items=d.items||[];
+  host.append(el("div",{class:"eyebrow",style:"display:block;margin:14px 0 6px"},`Recommended items (${items.length})`));
+  for(const it of items){
+    const card=el("div",{class:"card"});
+    card.append(el("div",{class:"row",style:"gap:8px;align-items:baseline"},
+      el("b",{},`#${it.rank} `,it.title||it.id),
+      el("span",{class:"pill "+(it.role==="distractor"?"cold":"warm"),style:"font-size:11px"},it.role||"target"),
+      it.relevance_score!=null?el("span",{class:"small num mut"},"score "+fmt(it.relevance_score)):""));
+    const ov=it.tag_overlap||[];
+    card.append(el("div",{class:"eyebrow",style:"display:block;margin:9px 0 4px"},`Tag overlap visitor ↔ content (${ov.length})`));
+    if(ov.length)card.append(el("div",{class:"row",style:"gap:5px;flex-wrap:wrap"},
+      ...ov.map(o=>el("span",{class:"pill",style:"background:#5E735522;color:#5E7355;border-color:#5E735566;font-size:11px"},`${o.key}  ·  ${fmt(o.user_weight)}`))));
+    else card.append(el("div",{class:"small mut"},"no matching tags — recommended for other reasons (semantic similarity, exploration, geo, recency)"));
+    const others=(it.content_tags||[]).filter(t=>!ov.some(o=>o.key===t));
+    if(others.length)card.append(el("div",{class:"row",style:"gap:5px;flex-wrap:wrap;margin-top:5px"},
+      el("span",{class:"small mut",style:"margin-right:4px"},"other content tags:"),
+      ...others.map(t=>el("span",{class:"pill neutral",style:"font-size:11px;opacity:.6"},t))));
+    const bd=it.breakdown||{};
+    if(Object.keys(bd).length){
+      card.append(el("div",{class:"eyebrow",style:"display:block;margin:10px 0 4px"},"Why ranked here (score breakdown)"));
+      card.append(breakdownBar(bd));
+      card.append(legend());
+    }
+    host.append(card);
+  }
+}
+
 
 /* ===== COHORT: visitor search + table, segments below ===== */
 async function renderCohort(v){
@@ -588,9 +660,9 @@ async function renderTraffic(v){
     if(rows&&rows.length){
       const tbl=el("table");
       tbl.append(el("tr",{},el("th",{},"time"),el("th",{},"user"),el("th",{},"strategy"),el("th",{},"ranking"),el("th",{},"items"),el("th",{},"distractor")));
-      for(const r of rows)tbl.append(el("tr",{},
+      for(const r of rows)tbl.append(el("tr",{style:"cursor:pointer",title:"explain this recommendation",onclick:()=>openRec(r.request_id)},
         el("td",{class:"small mut num"},(r.ts||"").replace("T"," ").slice(0,19)),
-        el("td",{},el("button",{class:"userchip",title:"open visitor",onclick:()=>openUser(r.user_id,"profile")},r.user_id)),
+        el("td",{},el("button",{class:"userchip",title:"open visitor",onclick:(e)=>{e.stopPropagation();openUser(r.user_id,"profile");}},r.user_id)),
         el("td",{},el("span",{class:"pill "+(r.strategy||"warm")},r.strategy||"")),
         el("td",{class:"small mut"},r.ranking||""),el("td",{class:"num"},(r.items||[]).length),
         el("td",{class:"small mut"},r.distractor_id||"-")));
@@ -664,24 +736,82 @@ async function runRecommend(){
   }catch(e){out.append(el("div",{class:"card err"},String(e)));}
 }
 async function renderUser(v){
-  let exp;try{exp=await api(`/api/usermodel/explain?user_id=${encodeURIComponent($("#uid").value)}`);}catch(e){failCard(v,e);return;}
-  if(!exp){v.append(el("div",{class:"empty"},"No model for ",el("b",{},$("#uid").value),". Ingest some events for this user first."));return;}
+  const uid=$("#uid").value;
+  let exp,extra;
+  try{
+    exp=await api(`/api/usermodel/explain?user_id=${encodeURIComponent(uid)}`);
+    extra=await api(`/api/usermodel/extras?user_id=${encodeURIComponent(uid)}`).catch(()=>null);
+  }catch(e){failCard(v,e);return;}
+  if(!exp){v.append(el("div",{class:"empty"},"No model for ",el("b",{},uid),". Ingest some events for this user first."));return;}
   const vt=exp.visitor_type||{};
+  const model=(extra&&extra.model)||{}, surv=(extra&&extra.surveys)||{}, demo=(extra&&extra.demographics)||{};
+  // ----- persona header -----
   v.append(el("div",{class:"card lift"},
-    el("div",{class:"row"},personaPill("Falk: "+(vt.type||"?"),vt.type),
-      el("span",{class:"pill neutral"},"Pekarik: "+exp.experience_preference),
-      el("span",{class:"pill neutral"},exp.engagement_style),
-      exp.is_cold?el("span",{class:"pill cold"},"cold"):el("span",{class:"pill warm"},"warm")),
-    vt.rationale?el("p",{class:"mut small",style:"margin:.6rem 0 0"},"“"+vt.rationale+"” / confidence "+fmt(vt.confidence)):"",
-    el("p",{style:"margin:.55rem 0 0;line-height:1.6",html:mdInline(exp.summary)})));
-  if(exp.trajectory&&exp.trajectory.length)v.append(el("div",{class:"card"},el("b",{},"Trajectory   "),el("span",{class:"mut"},exp.trajectory.join("   then   "))));
-  if(exp.interests&&exp.interests.length)v.append(el("div",{class:"card"},cardhead("Interests"),valueBars(exp.interests.map(i=>[i.label+(i.evidence&&i.evidence.length?` / ${i.evidence.length} read`:""),i.weight]))));
-  if(exp.aversions&&exp.aversions.length)v.append(el("div",{class:"card"},cardhead("Aversions"),valueBars(exp.aversions.map(i=>[i.label,i.weight]),{signed:true})));
-  if(exp.cluster){const cl=exp.cluster;
-    v.append(el("div",{class:"card"},cardhead("Segment"),
-      el("div",{class:"small"},"dominant cluster "+(cl.dominant??cl.cluster)),
-      cl.membership?valueBars(Object.entries(cl.membership).map(([k,p])=>["cluster "+k,p]),{max:1}):"",
-      el("div",{class:"small mut",style:"margin-top:6px"},"shares: "+(cl.shared_tags||[]).map(t=>t.label).join(", "))));}
+    el("div",{class:"row",style:"gap:7px;flex-wrap:wrap"},
+      personaPill("Falk: "+(vt.type||"?"),vt.type),
+      el("span",{class:"pill neutral"},"Pekarik: "+(exp.experience_preference||"?")),
+      el("span",{class:"pill neutral"},"Style: "+(exp.engagement_style||"?")),
+      el("span",{class:"pill "+(exp.is_cold?"cold":"warm")},exp.is_cold?"cold":"warm")),
+    vt.rationale?el("div",{class:"small mut",style:"margin-top:8px"},vt.rationale):"",
+    exp.summary?el("p",{style:"margin:.55rem 0 0;line-height:1.6",html:mdInline(exp.summary)}):""));
+  // ----- demographics -----
+  const demoPairs=Object.entries(demo).filter(([,x])=>x!=null&&x!=="");
+  if(demoPairs.length)v.append(el("div",{class:"card"},cardhead("Demographics"),
+    el("div",{},...demoPairs.map(([k,x])=>el("div",{class:"row",style:"gap:8px;margin:3px 0"},
+      el("span",{class:"small mut",style:"width:160px"},k),
+      el("span",{class:"small"},Array.isArray(x)?x.join(", "):String(x)))))));
+  // ----- surveys (pre-survey + personalization) -----
+  const surveyRows=obj=>Object.entries(obj||{}).map(([q,a])=>el("div",{class:"row",style:"gap:8px;margin:3px 0"},
+    el("span",{class:"small mut",style:"width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap",title:q},q.replace(/^q:/,"")),
+    el("span",{class:"small"},Array.isArray(a)?a.join(", "):String(a))));
+  const sc=el("div",{class:"card"},cardhead("Surveys"));
+  sc.append(el("div",{class:"eyebrow",style:"display:block;margin-bottom:4px"},"Pre-survey / demographics "+(surv.completed_demographic?"✓ completed":"— not completed")));
+  sc.append((surv.demographic&&Object.keys(surv.demographic).length)?el("div",{},...surveyRows(surv.demographic)):el("div",{class:"small mut"},"no answers recorded"));
+  sc.append(el("div",{class:"eyebrow",style:"display:block;margin:12px 0 4px"},"Personalization survey "+(surv.completed_personalization?"✓ completed":"— not completed")));
+  sc.append((surv.personalization&&Object.keys(surv.personalization).length)?el("div",{},...surveyRows(surv.personalization)):el("div",{class:"small mut"},"no answers recorded"));
+  if(surv.other&&Object.keys(surv.other).length){
+    sc.append(el("div",{class:"eyebrow",style:"display:block;margin:12px 0 4px"},"Other survey answers"));
+    sc.append(el("div",{},...surveyRows(surv.other)));
+  }
+  v.append(sc);
+  // ----- dynamic user model -----
+  const dm=el("div",{class:"card"},cardhead("Dynamic user model"));
+  if(model.counts)dm.append(el("div",{class:"small mut",style:"margin-bottom:9px"},
+    `${model.counts.viewed||0} viewed · ${model.counts.positives||0} liked · ${model.counts.negatives||0} disliked`+(model.is_cold?"  (cold start)":"")));
+  if(model.tag_affinity&&model.tag_affinity.length){
+    dm.append(el("div",{class:"eyebrow",style:"display:block;margin-bottom:4px"},"Tag affinities — what the visitor leans toward"));
+    dm.append(valueBars(model.tag_affinity.map(t=>[t.key,t.weight])));
+  }
+  if(model.tag_aversion&&model.tag_aversion.length){
+    dm.append(el("div",{class:"eyebrow",style:"display:block;margin:12px 0 4px"},"Tag aversions — what to avoid"));
+    dm.append(valueBars(model.tag_aversion.map(t=>[t.key,t.weight]),{signed:true}));
+  }
+  const beh=Object.entries(model.behavior||{}).filter(([,x])=>typeof x==="number");
+  if(beh.length){
+    dm.append(el("div",{class:"eyebrow",style:"display:block;margin:12px 0 4px"},"Engagement behaviour"));
+    dm.append(el("div",{class:"row",style:"gap:16px;flex-wrap:wrap"},...beh.map(([k,x])=>
+      el("span",{class:"small"},el("span",{class:"mut"},k+": "),fmt(x)))));
+  }
+  v.append(dm);
+  // ----- content engaged positively, with its tags (basis for inferred interest) -----
+  if(model.liked_content&&model.liked_content.length){
+    const lc=el("div",{class:"card"},cardhead("Engaged positively with"),
+      el("div",{class:"small mut",style:"margin-bottom:8px"},"content the visitor liked and the tags it carries — the basis for the inferred interests"));
+    for(const it of model.liked_content){
+      lc.append(el("div",{style:"padding:7px 0;border-top:1px solid var(--line)"},
+        el("div",{class:"row",style:"gap:8px"},el("b",{class:"small"},it.title||it.id),el("span",{class:"small num mut"},"weight "+fmt(it.weight))),
+        el("div",{class:"row",style:"gap:5px;flex-wrap:wrap;margin-top:5px"},
+          ...((it.tags||[]).length?it.tags.map(t=>el("span",{class:"pill neutral",style:"font-size:11px"},t)):[el("span",{class:"small mut"},"no tags")]))));
+    }
+    v.append(lc);
+  }
+  // ----- trajectory + evidence interests/aversions (kept from the original profile) -----
+  if(exp.trajectory&&exp.trajectory.length)v.append(el("div",{class:"card"},cardhead("Trajectory"),
+    el("div",{class:"small"},exp.trajectory.join("   →   "))));
+  if(exp.interests&&exp.interests.length)v.append(el("div",{class:"card"},cardhead("Interests (with evidence)"),
+    valueBars(exp.interests.map(i=>[i.label+(i.evidence&&i.evidence.length?`  ·  ${i.evidence.length} item(s)`:""),i.weight]))));
+  if(exp.aversions&&exp.aversions.length)v.append(el("div",{class:"card"},cardhead("Aversions"),
+    valueBars(exp.aversions.map(i=>[i.label,i.weight]),{signed:true})));
 }
 
 async function renderHistory(v){
@@ -1240,8 +1370,10 @@ function applyHash(){
   const h=location.hash||"";
   cfgEdit=false;                              // leaving (or re-entering) any view auto-cancels Config edits
   const um=h.match(/^#\/user\/([^/]+)(?:\/([^/]+))?/);
-  if(um){userCtx={id:decodeURIComponent(um[1]),sub:um[2]||"profile"};$("#uid").value=userCtx.id;paint();return;}
-  userCtx=null;const s=h.replace(/^#\/?/,"");const n=BY_SLUG[s];
+  const rm=h.match(/^#\/rec\/([^/]+)/);
+  if(rm){recCtx=decodeURIComponent(rm[1]);userCtx=null;paint();return;}
+  if(um){recCtx=null;userCtx={id:decodeURIComponent(um[1]),sub:um[2]||"profile"};$("#uid").value=userCtx.id;paint();return;}
+  recCtx=null;userCtx=null;const s=h.replace(/^#\/?/,"");const n=BY_SLUG[s];
   if(n){current=n;paint();}else{setTab(current);}
 }
 
