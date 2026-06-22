@@ -13,4 +13,5 @@ from memorise_taxonomy import (  # noqa: F401
     normalize_label,
     review_vocab,
     to_tag,
+    to_tags,
 )
