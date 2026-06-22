@@ -1,0 +1,743 @@
+{
+ "title": "Tagging Omeka Content for the Recommender System",
+ "source": "Final tags (adapted from VHA tags)",
+ "notes": [
+  "Titles and descriptions in brackets",
+  "Tags separated by commas",
+  "In the first section there's a main tag and sub-tag, in some sections only sub-tags",
+  "Tags added after drift-check vs Westerbork collection 7 (2026-06-22): map, camp-area entrances/guard towers/storage barrack/warehouse/commander's house, survivor/resistance fighter/child girl/child boy/collaborators/patients/POWs, provinces Brabant/Buitenland, mothertongues Frisian/English."
+ ],
+ "dimensions": [
+  {
+   "key": "theme_what",
+   "label": "Theme main tags (What)",
+   "description": "Sub-tag of what is described in the item",
+   "main_tags": [
+    {
+     "tag": "Adaptation and Survival",
+     "subtags": [
+      "adaptation",
+      "camp adaptation methods",
+      "hiding adaptation methods",
+      "survival explanations",
+      "decisions",
+      "survival",
+      "uprising",
+      "partisans",
+      "black market",
+      "hiding place",
+      "occupation",
+      "trial"
+     ]
+    },
+    {
+     "tag": "Aid and Protection",
+     "subtags": [
+      "aid giving",
+      "false document provision",
+      "shelter provision",
+      "sustenance provision",
+      "migration assistance",
+      "protection",
+      "protection papers",
+      "Palestine certificates",
+      "exchange",
+      "money provision"
+     ]
+    },
+    {
+     "tag": "Awareness and Reflection",
+     "subtags": [
+      "Holocaust awareness",
+      "reflections",
+      "post-World War II reflections",
+      "bystander",
+      "witness",
+      "civilian",
+      "illusion",
+      "propaganda"
+     ]
+    },
+    {
+     "tag": "Brutality and Killings",
+     "subtags": [
+      "killings",
+      "executions",
+      "mass executions",
+      "brutal treatment",
+      "shootings",
+      "violence",
+      "violent attacks",
+      "humiliation",
+      "beatings",
+      "murder",
+      "Kristallnacht",
+      "abuse",
+      "death marches"
+     ]
+    },
+    {
+     "tag": "Camp Procedures",
+     "subtags": [
+      "camp procedures",
+      "camp intake procedures",
+      "selections",
+      "prisoner identification",
+      "prisoner identification numbers",
+      "prisoner insignia",
+      "prisoner of war camps (generic)",
+      "forced tattoos",
+      "quarantine",
+      "delousing",
+      "dispossession",
+      "punishment",
+      "self-administration",
+      "registration"
+     ]
+    },
+    {
+     "tag": "Cultural and Creative Activities",
+     "subtags": [
+      "creative works",
+      "original works",
+      "crafts",
+      "fine arts",
+      "performing arts",
+      "musical recitals",
+      "music",
+      "literary recitals",
+      "cultural activities",
+      "camp/ghetto/hiding-related cultural activities",
+      "education",
+      "camp/refugee camp education",
+      "vocational training",
+      "sports",
+      "gymnastics",
+      "football",
+      "handball",
+      "boxing",
+      "cinema",
+      "cabaret",
+      "theatre"
+     ]
+    },
+    {
+     "tag": "Daily Life",
+     "subtags": [
+      "Roll-call",
+      "farming",
+      "classes",
+      "learning",
+      "teaching",
+      "acts of resistance",
+      "holidays",
+      "property",
+      "education",
+      "school",
+      "birthdays",
+      "working"
+     ]
+    },
+    {
+     "tag": "Deaths and Mortality",
+     "subtags": [
+      "deaths",
+      "post-liberation deaths",
+      "suicides",
+      "corpses",
+      "corpse disposal",
+      "burial sites",
+      "mass graves",
+      "crematorium",
+      "corpse detail",
+      "extermination"
+     ]
+    },
+    {
+     "tag": "Deportation and Transport",
+     "subtags": [
+      "deportation experiences",
+      "transfer experiences",
+      "transfer conditions",
+      "transfers",
+      "means of transport",
+      "trains",
+      "freight trains",
+      "rescue transports",
+      "Kasztner transport",
+      "exchange transport",
+      "deportation",
+      "transport",
+      "bus"
+     ]
+    },
+    {
+     "tag": "Discrimination",
+     "subtags": [
+      "anti-Jewish measures",
+      "discriminatory measures",
+      "antisemitism",
+      "Nazi propaganda",
+      "arrests",
+      "anti-Jewish arrests",
+      "roundups",
+      "anti-Jewish roundups",
+      "personal prejudice",
+      "anti-Romani",
+      "anti-Romani arrests",
+      "homophobia",
+      "racism",
+      "xenophobia",
+      "sexism",
+      "denouncement"
+     ]
+    },
+    {
+     "tag": "DP Camps",
+     "subtags": [
+      "displaced persons camp administration/experiences",
+      "refugee camp experiences",
+      "central committee",
+      "Jewish DP camp",
+      "Polish DP camp",
+      "Kazet theatre"
+     ]
+    },
+    {
+     "tag": "Family",
+     "subtags": [
+      "family life",
+      "family histories",
+      "family homes",
+      "wartime family interactions",
+      "ghetto family interactions",
+      "marriages",
+      "survivor marriages",
+      "children",
+      "siblings",
+      "parents",
+      "orphans",
+      "pregnancy",
+      "foster family",
+      "giving birth"
+     ]
+    },
+    {
+     "tag": "Flight and Migration",
+     "subtags": [
+      "flight",
+      "flight preparations",
+      "flight to the UK",
+      "migration decisions",
+      "migration experiences",
+      "migration policies",
+      "migration preparations",
+      "Kindertransport",
+      "refugee",
+      "hiding",
+      "aliyah",
+      "emigration to Palestine",
+      "escape",
+      "Palestine training program",
+      "kibbutz"
+     ]
+    },
+    {
+     "tag": "Food and Hunger",
+     "subtags": [
+      "food",
+      "camp food",
+      "ghetto food",
+      "food acquisition",
+      "hunger",
+      "food rationing",
+      "kitchen"
+     ]
+    },
+    {
+     "tag": "Forced Labor",
+     "subtags": [
+      "forced labor activities/conditions",
+      "forced labor battalion experiences",
+      "agricultural/armament/construction/factory/medical/textile/translation forced labor",
+      "personal property sorting forced labor",
+      "work detail",
+      "workshops"
+     ]
+    },
+    {
+     "tag": "Guarding",
+     "subtags": [
+      "guards",
+      "SS",
+      "SD",
+      "watch tower",
+      "dog",
+      "barbed wire fence",
+      "camp commander",
+      "Netherlands Marechaussee",
+      "NSB",
+      "kapo",
+      "prisoner police",
+      "perpetrator",
+      "collaboration",
+      "corruption",
+      "Dutch military police",
+      "Jewish Order Service (OD)"
+     ]
+    },
+    {
+     "tag": "Health and Diseases",
+     "subtags": [
+      "health",
+      "physical health",
+      "diseases",
+      "epidemics",
+      "typhus",
+      "medical care",
+      "hospitals",
+      "camp hospital",
+      "medical staff",
+      "dentist",
+      "doctor",
+      "nurse",
+      "illness",
+      "pediatrician",
+      "medicine",
+      "maternity ward"
+     ]
+    },
+    {
+     "tag": "Liberation",
+     "subtags": [
+      "liberation",
+      "camp liberation",
+      "ghetto liberation",
+      "liberation participation",
+      "forced march liberation",
+      "transfer liberation",
+      "liberator",
+      "British Army",
+      "Canadian troops",
+      "Soviet troops",
+      "Jewish brigade",
+      "Allied forces"
+     ]
+    },
+    {
+     "tag": "Living Conditions",
+     "subtags": [
+      "housing conditions",
+      "camp/hiding-related housing conditions",
+      "living conditions",
+      "camp/ghetto/hiding/refugee camp living conditions",
+      "environmental conditions",
+      "bunk beds",
+      "weather",
+      "seasons",
+      "over-crowdedness"
+     ]
+    },
+    {
+     "tag": "Jewish Life",
+     "subtags": [
+      "Jewish life",
+      "Jewish culture",
+      "Yiddish culture",
+      "Yiddish language",
+      "Hebrew",
+      "Shabbat",
+      "Jewish holidays",
+      "Hanukkah"
+     ]
+    },
+    {
+     "tag": "Political Activities",
+     "subtags": [
+      "Communism",
+      "Zionism",
+      "resistance activities",
+      "resistance fighters",
+      "Jewish Council"
+     ]
+    },
+    {
+     "tag": "Religion",
+     "subtags": [
+      "prayers",
+      "Jewish prayers",
+      "religious observances",
+      "religious objects",
+      "religious holidays",
+      "rabbi",
+      "priest",
+      "Catholicism",
+      "Christianity",
+      "Judaism",
+      "synagogue",
+      "church",
+      "baptism"
+     ]
+    },
+    {
+     "tag": "Sanitary Conditions",
+     "subtags": [
+      "Delousing",
+      "showers",
+      "camp sanitary conditions",
+      "lice"
+     ]
+    },
+    {
+     "tag": "Social Relations",
+     "subtags": [
+      "social relations",
+      "camp/hiding-related social relations",
+      "friends",
+      "solidarity",
+      "positive encounters",
+      "friendship",
+      "helping"
+     ]
+    },
+    {
+     "tag": "Thoughts and Feelings",
+     "subtags": [
+      "psychological reactions",
+      "camp/liberation-related psychological reactions",
+      "emotions",
+      "feelings",
+      "thoughts",
+      "mental health",
+      "physical sensations",
+      "suffering",
+      "trauma",
+      "joy",
+      "happiness",
+      "relief",
+      "love",
+      "anger",
+      "guilt"
+     ]
+    }
+   ]
+  },
+  {
+   "key": "medium_what",
+   "label": "Medium (What)",
+   "description": "Sub-tags to describe the medium of the item in Omeka",
+   "subtags": [
+    "Photograph",
+    "artwork",
+    "object",
+    "physical document",
+    "film",
+    "audio testimony",
+    "written testimony",
+    "text",
+    "biographical text",
+    "map"
+   ],
+   "clarifications": {
+    "Photograph": "inc. stills from a film",
+    "artwork": "inc. drawing, painting, sculpture",
+    "physical document": "i.e. letter, newspaper cutout",
+    "written testimony": "1st person account i.e. diary entry, memoire",
+    "text": "written by 3rd party i.e. historians, staff / researchers",
+    "biographical text": "text centering a person"
+   }
+  },
+  {
+   "key": "place_where",
+   "label": "Place (Where)",
+   "description": "Tags for areas/regions that an item relates to",
+   "groups": [
+    {
+     "label": "Camp areas",
+     "subtags": [
+      "Barracks",
+      "buildings",
+      "camp entrance",
+      "infirmary",
+      "internment camp",
+      "labour camp",
+      "Neutrals' camp",
+      "Prisoners of War camp",
+      "Special camp",
+      "tent camp",
+      "Star camp",
+      "Men's camp",
+      "Women's camp",
+      "Hungarians' camp",
+      "exchange camp",
+      "punishment barracks",
+      "kitchens",
+      "Schattenberg camp farm",
+      "topography",
+      "water treatment plant",
+      "aircraft scrapyard",
+      "dentist",
+      "laboratory",
+      "living barracks",
+      "theatre and registration",
+      "orphanage",
+      "commander's house",
+      "train tracks",
+      "train platform",
+      "narrow-gauge train",
+      "greenhouse",
+      "garden",
+      "maternity ward",
+      "camp main road",
+      "landscape",
+      "railway line",
+      "watch tower",
+      "Heidelager",
+      "camp boundary",
+      "playground",
+      "warehouse",
+      "visiting barrack",
+      "boiler room",
+      "entrance",
+      "guard towers",
+      "storage barrack"
+     ]
+    },
+    {
+     "label": "Barrack number",
+     "format": "Barrack x, Barrack x-x",
+     "examples": [
+      "barrack 35",
+      "barracks 65-67"
+     ]
+    },
+    {
+     "label": "Transit destinations (arrived from, deported to)",
+     "format": [
+      "Arrived from: x",
+      "Deported to: x"
+     ],
+     "note": "Tag name of camp where person was staying (and deported to)",
+     "examples": [
+      "Arrived from: Camp Vught",
+      "Deported to: Auschwitz-Birkenau"
+     ]
+    }
+   ]
+  },
+  {
+   "key": "person_who",
+   "label": "Person (Who)",
+   "description": "Tags for biographical information of the author/creator/described person",
+   "groups": [
+    {
+     "label": "Reason for imprisonment",
+     "subtags": [
+      "Victim",
+      "prisoner",
+      "Disabled and sick people",
+      "homosexuals",
+      "Italian military internees",
+      "Jehova's witnesses",
+      "Jewish",
+      "Polish Home Army",
+      "political persecutee",
+      "political prisoner",
+      "prisoners of war",
+      "PoW",
+      "Roma and Sinti",
+      "socially persecuted people",
+      "'S-inmates'",
+      "internees",
+      "Moluccan",
+      "Indo-Dutch",
+      "survivor",
+      "resistance fighter",
+      "child girl",
+      "child boy",
+      "collaborators",
+      "patients",
+      "POWs"
+     ]
+    },
+    {
+     "label": "Age group",
+     "subtags": [
+      "child",
+      "adult",
+      "elderly",
+      "age 16-18",
+      "age 18-24",
+      "age 25-34",
+      "age 35-44",
+      "age 45-54",
+      "age 55-64",
+      "age 65-74",
+      "age 75-84",
+      "age 85+"
+     ],
+     "note": "Child = >18; Adult = 18-64; Elderly = 65-85+"
+    },
+    {
+     "label": "Gender and age",
+     "subtags": [
+      "Male",
+      "female",
+      "non-binary"
+     ]
+    },
+    {
+     "label": "Mothertongue",
+     "subtags": [
+      "Dutch",
+      "German",
+      "Polish",
+      "Hungarian",
+      "Yiddish",
+      "Frisian",
+      "English"
+     ],
+     "note": "E.g."
+    },
+    {
+     "label": "Province (Netherlands)",
+     "subtags": [
+      "Noord-Holland",
+      "Zuid-Holland",
+      "Utrecht",
+      "Gelderland",
+      "Overijssel",
+      "Flevoland",
+      "Drenthe",
+      "Friesland",
+      "Groningen",
+      "Limburg",
+      "Noord-Brabant",
+      "Zeeland",
+      "Brabant",
+      "Buitenland"
+     ]
+    },
+    {
+     "label": "City/village & country",
+     "format": [
+      "Born in: x",
+      "Lived in x",
+      "From: x"
+     ],
+     "note": "Tag name of city/village and country of origin and/or where they lived before deportation",
+     "examples": [
+      "Born in: Haren",
+      "Lived in: Amsterdam",
+      "From: Germany"
+     ]
+    }
+   ]
+  },
+  {
+   "key": "time_when",
+   "label": "Time (When)",
+   "description": "Tags for time period of camp (additional to years of reference in Omeka)",
+   "groups": [
+    {
+     "label": "Time period",
+     "subtags": [
+      "Refugee camp",
+      "Transit camp",
+      "Internment Camp",
+      "Schattenberg period",
+      "contemporary time",
+      "memorial museum"
+     ]
+    }
+   ]
+  },
+  {
+   "key": "theme_how",
+   "label": "Theme tags (How)",
+   "description": "Research-related tags. Used for AI engine Storylines & Aliisa's research; focus on content of material but also how it is produced. More than one tag may be used.",
+   "groups": [
+    {
+     "label": "AI Engine themes Westerbork",
+     "source": "From Bas",
+     "subtags": [
+      "\"Sports\" & \"Leisure\"",
+      "Sport & Theatre",
+      "Resistance",
+      "Jewish Culture & Religion",
+      "Sinti & Roma",
+      "Perpetrators",
+      "Perpetrators & Bystanders"
+     ]
+    },
+    {
+     "label": "Type of stores",
+     "source": "From Bas",
+     "subtags": [
+      "Personal Stories",
+      "Historical Context",
+      "Anecdotes",
+      "Centered around an Artifact"
+     ]
+    },
+    {
+     "label": "Daily Life & Camp Experience",
+     "definition": "Describing experiences of (mainly) prisoners/survivors, 3rd person account, less personal. Items that describe: routines, labour, social dynamics, survival strategies.",
+     "tagging_rule": "no sub tags, tag as Daily Life & Camp Experience"
+    },
+    {
+     "label": "Historical Context & Overview",
+     "definition": "Items that describe: events shaping the history, use of the site, power structures. Fact-based texts (written by memorial / historians), describing objectively e.g. historical overview, organisation of the site, changes of functions based on historical events.",
+     "tagging_rule": "no sub tags, tag as Historical Context & Overview"
+    },
+    {
+     "label": "Reflections & Encounters",
+     "definition": "Items that relate to: biographies, relationships, witness testimonies, philosophical reflections, quotes. Personal, humanised, text close to the witness / survivor (1st person account, or describing a personal story).",
+     "tagging_rule": "no sub tags, tag as Reflections & Encounters"
+    }
+   ]
+  },
+  {
+   "key": "language_how",
+   "label": "Language tags (How)",
+   "description": "Each item text will be given 5 keywords based on a sentiment analysis. All found keywords are listed below.",
+   "groups": [
+    {
+     "label": "Tone of Text",
+     "subtags": [
+      "Somber (tone)",
+      "tragic (tone)",
+      "reflective (tone)",
+      "tragic irony (tone)",
+      "historical (tone)",
+      "poignant (tone)",
+      "mournful (tone)",
+      "serious (tone)",
+      "compassionate (tone)",
+      "documentary (tone)",
+      "humane (tone)",
+      "objective (tone)",
+      "understated (tone)",
+      "descriptive (tone)",
+      "nuanced (tone)",
+      "analytical (tone)",
+      "bittersweet (tone)",
+      "anecdotal (tone)",
+      "humanizing (tone)",
+      "informational (tone)",
+      "critical (tone)",
+      "hopeful (tone)",
+      "unsettling (tone)",
+      "subtle irony (tone)"
+     ],
+     "clarifications": {
+      "poignant (tone)": "emotionally moving, personal, touching",
+      "humane (tone)": "empathy, moral care in inhumane times",
+      "anecdotal (tone)": "storytelling",
+      "humanizing (tone)": "personal, real, relatable"
+     }
+    }
+   ]
+  }
+ ]
+}
