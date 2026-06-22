@@ -9,6 +9,7 @@ from memorise_taxonomy import (  # noqa: F401
     DEFAULT_FACET,
     FacetAssignment,
     assign_facet,
+    normalize_filter_value,
     normalize_key,
     normalize_label,
     review_vocab,

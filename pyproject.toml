@@ -23,15 +23,15 @@ dependencies = [
     "redis (>=5.0.0,<7.0.0)",
     "requests (>=2.32.0,<3.0.0)",
     "pyarrow (>=17.0.0,<22.0.0)",
-    # shared tag taxonomy / match normalization (single source of truth).
-    # local dev: `pip install -e ../memorise-taxonomy`
-    "memorise-taxonomy",
 ]
 
 [tool.poetry]
 # src-layout package mapping (must live under [tool.poetry]; poetry-core ignores it
 # at the top level).
-packages = [{ include = "ai_engine", from = "src" }]
+packages = [
+    { include = "ai_engine", from = "src" },
+    { include = "memorise_taxonomy", from = "src" },
+]
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=8.0.0"
@@ -47,3 +47,10 @@ markers = [
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+]
