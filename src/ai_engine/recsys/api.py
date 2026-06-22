@@ -157,6 +157,46 @@ def _served_record(request_id: str, user_id: str, items: list, out: dict, filter
     }
 
 
+def _tail_served(base: str, n: int) -> list[dict]:
+    """Latest n served-impression rows, newest first.
+
+    log_served writes one parquet PER request into served/date=YYYY-MM-DD/, so the
+    dataset is many tiny files. Reading them all to return a short tail is O(history).
+    Date dirs sort chronologically, so read newest-day-first and stop at the first
+    partition boundary once we have >= n rows: cost scales with the newest day(s).
+    ponytail: one row per file means a busy day is still many files — add a daily
+    parquet compaction job if a single day's read becomes the bottleneck.
+    """
+    import glob
+    import json
+    import pyarrow.parquet as pq
+
+    files = sorted(glob.glob(os.path.join(base, "served", "**", "*.parquet"), recursive=True),
+                   reverse=True)  # date=YYYY-MM-DD sorts chronologically -> newest first
+    rows: list = []
+    cur_day = None
+    for f in files:
+        day = os.path.dirname(f)
+        if len(rows) >= n and day != cur_day:
+            break  # enough rows AND the previous day partition is fully read
+        cur_day = day
+        try:
+            rows.extend(pq.read_table(f).to_pylist())
+        except Exception:
+            continue
+    rows.sort(key=lambda r: r.get("ts") or "", reverse=True)
+    out = []
+    for r in rows[:n]:
+        items = r.get("items")
+        if isinstance(items, str):
+            try:
+                items = json.loads(items)
+            except Exception:
+                items = []
+        out.append({**r, "items": items})
+    return out
+
+
 def _log_base(c) -> Optional[str]:
     """The CURRENT tenant's event-log directory (where served/ + date=*/ live).
     Per-tenant ParquetEventLog has `.base`; fall back to the global env for single-tenant."""
@@ -699,32 +739,14 @@ def make_router(components: Components) -> APIRouter:
     @ops.get("/served/recent")
     def served_recent(n: int = Query(default=50, ge=1, le=500)) -> dict:
         """Tail of the durable served-impression log (PII -> guarded). Per-tenant log dir."""
-        import glob
-        import json
         base = _log_base(c)
         if not base:
             return {"result": [], "detail": "EVENT_LOG_DIR not set"}
         try:
-            import pyarrow.parquet as pq
+            import pyarrow.parquet  # noqa: F401  (presence check; helper imports it)
         except ImportError:
             return {"result": [], "detail": "pyarrow not installed"}
-        rows: list = []
-        for f in glob.glob(os.path.join(base, "served", "**", "*.parquet"), recursive=True):
-            try:
-                rows.extend(pq.read_table(f).to_pylist())
-            except Exception:
-                continue
-        rows.sort(key=lambda r: r.get("ts") or "", reverse=True)
-        out = []
-        for r in rows[:n]:
-            items = r.get("items")
-            if isinstance(items, str):
-                try:
-                    items = json.loads(items)
-                except Exception:
-                    items = []
-            out.append({**r, "items": items})
-        return {"result": out}
+        return {"result": _tail_served(base, n)}
 
     @ops.get("/served/explain")
     def served_explain(request_id: str = Query(..., description="served impression request_id")) -> dict:
