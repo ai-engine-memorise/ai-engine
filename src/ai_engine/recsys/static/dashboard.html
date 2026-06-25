@@ -386,7 +386,12 @@ const COLORS={semantic:"var(--c-semantic)",affinity:"var(--c-affinity)",tag:"var
 const $=(s,el=document)=>el.querySelector(s);
 const el=(t,a={},...kids)=>{const e=document.createElement(t);for(const k in a){if(k==="class")e.className=a[k];else if(k==="html")e.innerHTML=a[k];else if(k.startsWith("on"))e[k]=a[k];else e.setAttribute(k,a[k]);}for(const k of kids.flat())e.append(k&&k.nodeType?k:document.createTextNode(k??""));return e;};
 const base=()=>window.location.origin;   // dashboard is served by the API itself, so same-origin
-const headers=()=>{const h={};const k=$("#key").value.trim();if(k)h["X-API-Key"]=k;const t=$("#tenant").value.trim();if(t)h["X-Tenant-Id"]=t;return h;};
+// scope of the active X-API-Key, set by loadWhoami(): "tenant" (per-tenant key, tenant is
+// key-derived) | "global" (superuser, may target a tenant) | "public" | null (unknown yet).
+let keyScope=null;
+// X-Tenant-Id only matters for the global/public path; a per-tenant key is authoritative and
+// the server ignores the header — omit it so a stale value can't leak if the key later changes.
+const headers=()=>{const h={};const k=$("#key").value.trim();if(k)h["X-API-Key"]=k;const t=$("#tenant").value.trim();if(t&&keyScope!=="tenant")h["X-Tenant-Id"]=t;return h;};
 async function api(path){const r=await fetch(base()+path,{headers:headers()});if(!r.ok)throw new Error(r.status+" "+r.statusText+", "+path);return (await r.json()).result;}
 const fmt=x=>(typeof x==="number")?(Math.round(x*1000)/1000):x;
 const mdInline=t=>String(t??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>");
@@ -1502,10 +1507,14 @@ async function ping(){try{const r=await fetch(base()+"/health");setConn(r.ok);if
 // Tenant is key-derived (never spoofable). Show the resolved name + scope in the sidebar.
 async function loadWhoami(){
   try{const w=await api("/api/whoami");
+    keyScope=w.scope||null;
     $("#tenantname").textContent=w.tenant||"default";
     const sc=w.scope==="global"?"global key":w.scope==="tenant"?"tenant key":"public";
     $("#conn").title="connected · "+sc;
-  }catch(e){$("#tenantname").textContent=($("#tenant").value.trim()||"default");}
+    // per-tenant key pins the tenant -> a leftover X-Tenant-Id is dead weight; drop it so it
+    // can't silently retarget a later global-key session.
+    if(w.scope==="tenant"&&$("#tenant").value){$("#tenant").value="";localStorage.removeItem("ins_tenant");}
+  }catch(e){keyScope=null;$("#tenantname").textContent=($("#tenant").value.trim()||"default");}
 }
 
 /* ===== routing & boot ===== */
