@@ -44,6 +44,15 @@ _PERSONALIZATION = {
     "q:personalization_area": "place_where.camp_areas",
 }
 
+
+def _qid_variants(qid: str) -> tuple[str, ...]:
+    """Both spellings of a question id: the survey track event sends the `q:`-prefixed
+    form (`q:personalization_area`), the post-survey identify traits send the bare form
+    (`personalization_area`). Matching either keeps them in the same bucket/facet — the
+    demographic qid tuples already list both variants; this does the same for personalization."""
+    bare = qid[2:] if qid.startswith("q:") else qid
+    return (f"q:{bare}", bare)
+
 # Survey answer values must line up with content tag LABELS or the persona silently
 # matches nothing. score_tag already compares case-insensitively, so casing is safe;
 # this map fixes the remaining divergences: separator style (slug/underscore/hyphen)
@@ -106,7 +115,7 @@ def split_survey_answers(answers: dict) -> dict:
     demographic (presurvey) vs personalization vs anything else. Keys are the raw
     question ids; values are the raw answers."""
     demo_qids = set(_AGE_QIDS) | set(_GENDER_QIDS) | set(_NAT_QIDS) | set(_PROVINCE_QIDS) | set(_CONN_QIDS)
-    pers_qids = set(_PERSONALIZATION)
+    pers_qids = {v for qid in _PERSONALIZATION for v in _qid_variants(qid)}
     demographic: dict = {}
     personalization: dict = {}
     other: dict = {}
@@ -143,7 +152,7 @@ def survey_affinity(answers: dict) -> dict[str, float]:
     # explicit preference questions: value IS the taxonomy label -> strong weight.
     # canonicalize the value so slug/underscore/spelling variants still match content.
     for qid, facet in _PERSONALIZATION.items():
-        for v in _vals(answers, qid):
+        for v in _vals(answers, *_qid_variants(qid)):
             if v:
                 out[f"{facet}:{_canonical_label(v)}"] = 1.0
 
