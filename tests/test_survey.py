@@ -89,11 +89,12 @@ def test_survey_event_seeds_user_model():
     assert sig.demographics.get("age") == "25_34"  # stored -> retrievable via /usermodel
 
 
-def test_province_maps_to_place_where_facet():
+def test_province_maps_to_person_who_facet():
+    # province tags live under person_who.province_netherlands (tags.json / live Qdrant)
     a = survey_affinity({"q:province": "Utrecht"})
-    assert a["place_where.province_netherlands:Utrecht"] == 0.5
+    assert a["person_who.province_netherlands:Utrecht"] == 0.5
     b = survey_affinity({"province": "Zuid-Holland"})            # hyphen preserved (matters)
-    assert "place_where.province_netherlands:Zuid-Holland" in b
+    assert "person_who.province_netherlands:Zuid-Holland" in b
     assert extract_demographics({"q:province": "Gelderland"})["province"] == "Gelderland"
 
 
@@ -102,7 +103,7 @@ def test_province_seeds_affinity_matching_content_tags():
     ev = InteractionEvent(user_id="u", event="SURVEY_SUBMITTED", ts=NOW,
                           survey_answers={"q:province": "Utrecht"})
     sig = build_user_signals(user_id="u", events=[ev], contents={}, vectors={}, now=NOW, cfg=CFG)
-    assert "place_where.province_netherlands:utrecht" in sig.tag_affinity   # lowercased fold
+    assert "person_who.province_netherlands:utrecht" in sig.tag_affinity   # lowercased fold
 
 
 def test_identify_payload_normalizes_to_demographic_event():
