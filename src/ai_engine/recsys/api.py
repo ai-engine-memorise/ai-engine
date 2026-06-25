@@ -157,34 +157,51 @@ def _served_record(request_id: str, user_id: str, items: list, out: dict, filter
     }
 
 
-def _tail_served(base: str, n: int) -> list[dict]:
+def _tail_served(base: str, n: int, light: bool = True) -> list[dict]:
     """Latest n served-impression rows, newest first.
 
     log_served writes one parquet PER request into served/date=YYYY-MM-DD/, so the
-    dataset is many tiny files. Reading them all to return a short tail is O(history).
-    Date dirs sort chronologically, so read newest-day-first and stop at the first
-    partition boundary once we have >= n rows: cost scales with the newest day(s).
-    ponytail: one row per file means a busy day is still many files — add a daily
-    parquet compaction job if a single day's read becomes the bottleneck.
+    dataset is many tiny files. Reading them all to return a short tail is O(history),
+    and even one busy day is O(requests/day). Strategy: walk date dirs newest-first
+    (they sort chronologically), and within each list files WITHOUT reading them —
+    rank by mtime (≈ serve time) and read only the newest ~n parquet files. Cost is
+    O(n) reads + cheap stat/sort over the newest day(s), not O(history).
+
+    `light` (default) strips the per-item `breakdown`/`features` arrays from the rows:
+    the traffic table needs only the item count and the per-impression metadata, and
+    the drill-in (/served/explain) re-reads the full row from parquet, so the heavy
+    float vectors never need to ride along in the list payload.
     """
     import glob
     import json
     import pyarrow.parquet as pq
 
-    files = sorted(glob.glob(os.path.join(base, "served", "**", "*.parquet"), recursive=True),
-                   reverse=True)  # date=YYYY-MM-DD sorts chronologically -> newest first
+    # newest day dirs first; collect candidate files (path only, no parquet read yet)
+    # until we have >= n, so a short tail touches only the newest partition(s).
+    day_dirs = sorted(glob.glob(os.path.join(base, "served", "date=*")), reverse=True)
+    candidates: list[str] = []
+    for d in day_dirs:
+        candidates.extend(glob.glob(os.path.join(d, "*.parquet")))
+        if len(candidates) >= n:
+            break
+
+    def _mtime(f: str) -> float:
+        try:
+            return os.path.getmtime(f)
+        except OSError:
+            return 0.0
+
+    candidates.sort(key=_mtime, reverse=True)  # newest write (≈ serve) first
+
     rows: list = []
-    cur_day = None
-    for f in files:
-        day = os.path.dirname(f)
-        if len(rows) >= n and day != cur_day:
-            break  # enough rows AND the previous day partition is fully read
-        cur_day = day
+    for f in candidates:
         try:
             rows.extend(pq.read_table(f).to_pylist())
         except Exception:
             continue
-    rows.sort(key=lambda r: r.get("ts") or "", reverse=True)
+        if len(rows) >= n:    # mtime-desc -> stop after the newest n files are read
+            break
+    rows.sort(key=lambda r: r.get("ts") or "", reverse=True)  # exact order by logged ts
     out = []
     for r in rows[:n]:
         items = r.get("items")
@@ -193,6 +210,9 @@ def _tail_served(base: str, n: int) -> list[dict]:
                 items = json.loads(items)
             except Exception:
                 items = []
+        if light and isinstance(items, list):
+            items = [{k: it[k] for k in ("id", "rank", "role") if k in it}
+                     for it in items if isinstance(it, dict)]
         out.append({**r, "items": items})
     return out
 
