@@ -843,7 +843,7 @@ async function renderUser(v){
   const cap1=s=>s.replace(/^\w/,c=>c.toUpperCase());   // capitalize first letter only
   const kvList=(obj,capVal,stripQ)=>{const dl=el("dl",{class:"kv"});
     Object.entries(obj||{}).forEach(([k,a])=>dl.append(
-      el("dt",{title:k},cap1((stripQ?k.replace(/^q:(personalization_)?/,""):KEYLABEL[k]||k).replace(/_/g," "))),
+      el("dt",{title:k},cap1((stripQ?k.replace(/^(q:)?(personalization_)?/,""):KEYLABEL[k]||k).replace(/_/g," "))),
       el("dd",{},Array.isArray(a)?a.join(", "):(capVal?humanVal(k,a):String(a)))));
     return dl;};
   const spill=(label,done)=>el("span",{class:"statusbadge "+(done?"done":"pending"),title:done?"survey completed":"survey not completed"},
