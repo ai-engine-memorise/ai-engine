@@ -142,4 +142,5 @@ class PersonaExplanation(BaseModel):
     visitor_type: Optional[VisitorType] = None       # Falk
     trajectory: list[str] = Field(default_factory=list)  # recent thematic arc (labels, most-recent first)
     demographics: dict = Field(default_factory=dict)
+    behavior: dict = Field(default_factory=dict)         # engagement stats (counts/dwell) — for data-driven prose
     summary: Optional[str] = None

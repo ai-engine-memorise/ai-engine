@@ -231,6 +231,35 @@ td:first-child,th:first-child{padding-left:2px} td:last-child,th:last-child{padd
 .metric{font-family:Montserrat,sans-serif;font-size:27px;font-weight:700;color:var(--primary-dark);line-height:1.1}
 [data-theme="dark"] .metric{color:var(--accent)}
 .metric+div{margin-top:4px}
+/* visitor profile layout */
+.pgrid{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:14px;align-items:start}
+.pgrid>div{min-width:0;display:flex;flex-direction:column}
+@media(max-width:920px){.pgrid{grid-template-columns:1fr}}
+.hero .ptype{font-family:Montserrat,sans-serif;font-size:23px;font-weight:700;color:var(--primary-dark);line-height:1.15;margin:2px 0 0}
+[data-theme="dark"] .hero .ptype{color:var(--fg)}
+.statchips{display:flex;gap:10px;flex-wrap:wrap;margin-top:13px}
+.statchip{background:var(--code);border:1px solid var(--line);border-radius:10px;padding:8px 13px;min-width:76px}
+.statchip .n{font-family:Montserrat,sans-serif;font-size:20px;font-weight:700;color:var(--primary-dark);line-height:1.1}
+[data-theme="dark"] .statchip .n{color:var(--accent)}
+.statchip .l{font-size:11px;color:var(--mut);letter-spacing:.04em}
+.persona-sub{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:14px;font-size:12.5px;color:var(--mut)}
+.persona-sub b{color:var(--fg);font-weight:600;text-transform:capitalize}
+.cardhead-row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.kv{display:grid;grid-template-columns:max-content 1fr;gap:5px 14px;font-size:13px;align-items:baseline}
+.kv dt{color:var(--mut);white-space:nowrap}
+.kv dd{margin:0;color:var(--fg);overflow-wrap:anywhere}
+.surveyflag{display:flex;align-items:center;gap:7px;justify-content:space-between;margin-bottom:5px}
+.statusbadge{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:3px 10px;border-radius:999px;border:1px solid var(--line)}
+.statusbadge .dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+.statusbadge.done{background:var(--accent-t);color:var(--accent);border-color:transparent}
+.statusbadge.pending{background:transparent;color:var(--mut)}
+.tagrow{display:grid;grid-template-columns:minmax(140px,200px) 1fr 46px;gap:12px;align-items:center;margin:6px 0}
+.tagrow .lab{min-width:0;line-height:1.15}
+.tagrow .lab .fb{font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);display:block}
+.tagrow .lab .t{font-size:13px;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;text-transform:capitalize}
+.tagrow .val{font-size:12px;color:var(--mut);text-align:right;font-variant-numeric:tabular-nums}
+.morebtn{margin-top:8px;background:transparent;border:0;color:var(--accent);font:inherit;font-size:12px;font-weight:600;cursor:pointer;padding:2px 0}
+.morebtn:hover{text-decoration:underline}
 
 input.f,select.f{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font:inherit;font-size:13px}
 input.f:focus,select.f:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-t)}
@@ -405,6 +434,45 @@ function valueBars(pairs,{signed=false,max=null}={}){
     el("div",{class:"small",style:"width:215px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"},label),
     el("div",{class:"barwrap",style:"flex:1;max-width:360px"},el("div",{class:"seg",style:`width:${100*Math.abs(v)/m}%;background:${signed&&v<0?'var(--c-aversion)':'var(--accent)'}`})),
     el("div",{class:"small num mut",style:"width:52px;text-align:right"},fmt(v))));
+  return box;
+}
+// taxonomy facet path -> short human label (the prefix before ':' in a tag key)
+const FACET_LABELS={"theme_what":"theme","theme_how.type_of_stores":"story type",
+  "place_where.camp_areas":"area","location":"location",
+  "person_who.city_village_country":"origin","person_who.age_group":"age",
+  "person_who.province_netherlands":"province","person_who.gender_and_age":"gender"};
+function prettyKey(key){
+  const i=String(key).indexOf(":");
+  const facetPath=i<0?"":key.slice(0,i);
+  let label=(i<0?key:key.slice(i+1)).replace(/^from:\s*/i,"").replace(/_/g," ").trim();
+  const facet=FACET_LABELS[facetPath]||(facetPath.split(".").pop()||"").replace(/_/g," ");
+  return {facet,label:label||"—"};
+}
+// humanize a stored demographic value: "45_54"->"45–54","65_plus"->"65+","male"->"Male"
+function humanVal(k,v){
+  v=String(v);
+  if(k==="age")return v.replace(/_plus$/,"+").replace(/_/g,"–");
+  // underscores -> spaces (keep hyphens: "Zuid-Holland"); title-case each word
+  return v.replace(/_/g," ").replace(/(^|[\s-])\w/g,c=>c.toUpperCase());
+}
+// tag affinity/aversion list: facet badge + clean label + bar, capped with a show-all toggle
+function tagList(pairs,{signed=false,top=6}={}){
+  const m=Math.max(0.0001,...pairs.map(([,v])=>Math.abs(v)));
+  const box=el("div");
+  const mkRow=([key,v])=>{const {facet,label}=prettyKey(key);
+    return el("div",{class:"tagrow"},
+      el("div",{class:"lab"},facet?el("span",{class:"fb"},facet):"",el("span",{class:"t",title:key},label)),
+      el("div",{class:"barwrap"},el("div",{class:"seg",style:`width:${100*Math.abs(v)/m}%;background:${signed&&v<0?'var(--c-aversion)':'var(--accent)'}`})),
+      el("div",{class:"val"},fmt(v)));};
+  pairs.slice(0,top).forEach(p=>box.append(mkRow(p)));
+  if(pairs.length>top){
+    const extra=el("div",{style:"display:none"});
+    pairs.slice(top).forEach(p=>extra.append(mkRow(p)));
+    const more=`show all ${pairs.length} ▾`;
+    const btn=el("button",{class:"morebtn",onclick:()=>{const open=extra.style.display==="none";
+      extra.style.display=open?"":"none";btn.textContent=open?"show less ▴":more;}},more);
+    box.append(extra,btn);
+  }
   return box;
 }
 
@@ -745,73 +813,96 @@ async function renderUser(v){
   if(!exp){v.append(el("div",{class:"empty"},"No model for ",el("b",{},uid),". Ingest some events for this user first."));return;}
   const vt=exp.visitor_type||{};
   const model=(extra&&extra.model)||{}, surv=(extra&&extra.surveys)||{}, demo=(extra&&extra.demographics)||{};
-  // ----- persona header -----
-  v.append(el("div",{class:"card lift"},
-    el("div",{class:"row",style:"gap:7px;flex-wrap:wrap"},
-      personaPill("Falk: "+(vt.type||"?"),vt.type),
-      el("span",{class:"pill neutral"},"Pekarik: "+(exp.experience_preference||"?")),
-      el("span",{class:"pill neutral"},"Style: "+(exp.engagement_style||"?")),
-      el("span",{class:"pill "+(exp.is_cold?"cold":"warm")},exp.is_cold?"cold":"warm")),
-    vt.rationale?el("div",{class:"small mut",style:"margin-top:8px"},vt.rationale):"",
-    exp.summary?el("p",{style:"margin:.55rem 0 0;line-height:1.6",html:mdInline(exp.summary)}):""));
-  // ----- demographics -----
+  const c=model.counts||{};
+  // ===== hero: engagement is PRIMARY (stats first); inferred personas secondary =====
+  const beh=model.behavior||{};
+  const pct=x=>typeof x==="number"?Math.round(x*100)+"%":"—";
+  const hero=el("div",{class:"card lift hero"});
+  // primary heading = what the visitor actually engages with (behavioural, not a label)
+  const topAff=(model.tag_affinity||[])[0];
+  const heading=topAff?("Leans toward "+prettyKey(topAff.key).label):(exp.is_cold?"Cold-start visitor":"Visitor");
+  hero.append(el("div",{class:"row",style:"gap:9px;align-items:center;flex-wrap:wrap"},
+    el("div",{class:"ptype",style:"text-transform:capitalize"},heading),
+    el("span",{class:"pill "+(exp.is_cold?"cold":"warm")},exp.is_cold?"cold start":"warm")));
+  // primary stats
+  const chip=(n,l)=>el("div",{class:"statchip"},el("div",{class:"n"},String(n)),el("div",{class:"l"},l));
+  hero.append(el("div",{class:"statchips"},
+    chip(c.viewed||0,"viewed"),chip(c.positives||0,"engaged"),chip(c.negatives||0,"dismissed"),
+    chip(pct(beh.avg_dwell_ratio),"avg dwell"),chip(pct(beh.completion_rate),"completion"),
+    chip(pct(beh.depth),"depth")));
+  // data-driven summary now comes from the server verbalizer (behaviour-led prose)
+  if(exp.summary)hero.append(el("p",{class:"summ",style:"margin:.7rem 0 0;line-height:1.6",html:mdInline(exp.summary)}));
+  v.append(hero);
+
+  // ===== two-column body: identity (left) · behaviour (right) =====
+  const left=el("div"),right=el("div");
+
+  // ===== LEFT: one card — demographics, then personalization answers below;
+  //            survey completion shown as pills in the header. =====
+  const KEYLABEL={personal_connection:"WW2 connection"};
+  const cap1=s=>s.replace(/^\w/,c=>c.toUpperCase());   // capitalize first letter only
+  const kvList=(obj,capVal,stripQ)=>{const dl=el("dl",{class:"kv"});
+    Object.entries(obj||{}).forEach(([k,a])=>dl.append(
+      el("dt",{title:k},cap1((stripQ?k.replace(/^q:(personalization_)?/,""):KEYLABEL[k]||k).replace(/_/g," "))),
+      el("dd",{},Array.isArray(a)?a.join(", "):(capVal?humanVal(k,a):String(a)))));
+    return dl;};
+  const spill=(label,done)=>el("span",{class:"statusbadge "+(done?"done":"pending"),title:done?"survey completed":"survey not completed"},
+    el("span",{class:"dot"}),label+(done?" ✓":""));
+  const pc=el("div",{class:"card"});
+  pc.append(el("div",{class:"cardhead-row"},
+    el("div",{class:"cardhead",style:"margin:0"},"Visitor profile"),
+    el("div",{class:"row",style:"gap:6px;flex-wrap:wrap"},
+      spill("Pre-survey",surv.completed_demographic),
+      spill("Personalization",surv.completed_personalization))));
+  // demographics
   const demoPairs=Object.entries(demo).filter(([,x])=>x!=null&&x!=="");
-  if(demoPairs.length)v.append(el("div",{class:"card"},cardhead("Demographics"),
-    el("div",{},...demoPairs.map(([k,x])=>el("div",{class:"row",style:"gap:8px;margin:3px 0"},
-      el("span",{class:"small mut",style:"width:160px"},k),
-      el("span",{class:"small"},Array.isArray(x)?x.join(", "):String(x)))))));
-  // ----- surveys (pre-survey + personalization) -----
-  const surveyRows=obj=>Object.entries(obj||{}).map(([q,a])=>el("div",{class:"row",style:"gap:8px;margin:3px 0"},
-    el("span",{class:"small mut",style:"width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap",title:q},q.replace(/^q:/,"")),
-    el("span",{class:"small"},Array.isArray(a)?a.join(", "):String(a))));
-  const sc=el("div",{class:"card"},cardhead("Surveys"));
-  sc.append(el("div",{class:"eyebrow",style:"display:block;margin-bottom:4px"},"Pre-survey / demographics "+(surv.completed_demographic?"✓ completed":"— not completed")));
-  sc.append((surv.demographic&&Object.keys(surv.demographic).length)?el("div",{},...surveyRows(surv.demographic)):el("div",{class:"small mut"},"no answers recorded"));
-  sc.append(el("div",{class:"eyebrow",style:"display:block;margin:12px 0 4px"},"Personalization survey "+(surv.completed_personalization?"✓ completed":"— not completed")));
-  sc.append((surv.personalization&&Object.keys(surv.personalization).length)?el("div",{},...surveyRows(surv.personalization)):el("div",{class:"small mut"},"no answers recorded"));
+  pc.append(el("div",{class:"eyebrow",style:"display:block;margin-bottom:6px"},"Demographics"));
+  pc.append(demoPairs.length?kvList(Object.fromEntries(demoPairs),true,false):el("div",{class:"small mut"},"no answers recorded"));
+  // personalization (below demographics, same card)
+  pc.append(el("div",{class:"eyebrow",style:"display:block;margin:15px 0 6px"},"Personalization"));
+  pc.append((surv.personalization&&Object.keys(surv.personalization).length)?kvList(surv.personalization,true,true):el("div",{class:"small mut"},"no answers recorded"));
+  // other free-text answers (visitor_type, motivation, …) — left verbatim
   if(surv.other&&Object.keys(surv.other).length){
-    sc.append(el("div",{class:"eyebrow",style:"display:block;margin:12px 0 4px"},"Other survey answers"));
-    sc.append(el("div",{},...surveyRows(surv.other)));
+    pc.append(el("div",{class:"eyebrow",style:"display:block;margin:15px 0 6px"},"Other answers"));
+    pc.append(kvList(surv.other,false,true));
   }
-  v.append(sc);
-  // ----- dynamic user model -----
+  left.append(pc);
+
+  // ----- RIGHT: dynamic user model -----
   const dm=el("div",{class:"card"},cardhead("Dynamic user model"));
-  if(model.counts)dm.append(el("div",{class:"small mut",style:"margin-bottom:9px"},
-    `${model.counts.viewed||0} viewed · ${model.counts.positives||0} liked · ${model.counts.negatives||0} disliked`+(model.is_cold?"  (cold start)":"")));
+  let dmEmpty=true;
   if(model.tag_affinity&&model.tag_affinity.length){
-    dm.append(el("div",{class:"eyebrow",style:"display:block;margin-bottom:4px"},"Tag affinities — what the visitor leans toward"));
-    dm.append(valueBars(model.tag_affinity.map(t=>[t.key,t.weight])));
+    dm.append(el("div",{class:"eyebrow",style:"display:block;margin-bottom:7px"},"Leans toward"));
+    dm.append(tagList(model.tag_affinity.map(t=>[t.key,t.weight])));dmEmpty=false;
   }
   if(model.tag_aversion&&model.tag_aversion.length){
-    dm.append(el("div",{class:"eyebrow",style:"display:block;margin:12px 0 4px"},"Tag aversions — what to avoid"));
-    dm.append(valueBars(model.tag_aversion.map(t=>[t.key,t.weight]),{signed:true}));
+    dm.append(el("div",{class:"eyebrow",style:"display:block;margin:16px 0 7px"},"Avoids"));
+    dm.append(tagList(model.tag_aversion.map(t=>[t.key,t.weight]),{signed:true}));dmEmpty=false;
   }
-  const beh=Object.entries(model.behavior||{}).filter(([,x])=>typeof x==="number");
-  if(beh.length){
-    dm.append(el("div",{class:"eyebrow",style:"display:block;margin:12px 0 4px"},"Engagement behaviour"));
-    dm.append(el("div",{class:"row",style:"gap:16px;flex-wrap:wrap"},...beh.map(([k,x])=>
-      el("span",{class:"small"},el("span",{class:"mut"},k+": "),fmt(x)))));
-  }
-  v.append(dm);
-  // ----- content engaged positively, with its tags (basis for inferred interest) -----
+  if(dmEmpty)dm.append(el("div",{class:"small mut"},"No tag signal yet — visitor has not engaged with content."));
+  right.append(dm);
+  // ----- RIGHT: trajectory -----
+  if(exp.trajectory&&exp.trajectory.length)right.append(el("div",{class:"card"},cardhead("Trajectory"),
+    el("div",{class:"small"},exp.trajectory.join("   →   "))));
+  // ----- RIGHT: evidence interests / aversions -----
+  if(exp.interests&&exp.interests.length)right.append(el("div",{class:"card"},cardhead("Interests (with evidence)"),
+    valueBars(exp.interests.map(i=>[i.label+(i.evidence&&i.evidence.length?`  ·  ${i.evidence.length} item(s)`:""),i.weight]))));
+  if(exp.aversions&&exp.aversions.length)right.append(el("div",{class:"card"},cardhead("Aversions"),
+    valueBars(exp.aversions.map(i=>[i.label,i.weight]),{signed:true})));
+  // ----- RIGHT: content engaged positively, with its tags -----
   if(model.liked_content&&model.liked_content.length){
     const lc=el("div",{class:"card"},cardhead("Engaged positively with"),
-      el("div",{class:"small mut",style:"margin-bottom:8px"},"content the visitor liked and the tags it carries — the basis for the inferred interests"));
+      el("div",{class:"small mut",style:"margin-bottom:8px"},"content the visitor engaged with and the tags it carries — the basis for the inferred interests"));
     for(const it of model.liked_content){
-      lc.append(el("div",{style:"padding:7px 0;border-top:1px solid var(--line)"},
-        el("div",{class:"row",style:"gap:8px"},el("b",{class:"small"},it.title||it.id),el("span",{class:"small num mut"},"weight "+fmt(it.weight))),
-        el("div",{class:"row",style:"gap:5px;flex-wrap:wrap;margin-top:5px"},
+      lc.append(el("div",{style:"padding:8px 0;border-top:1px solid var(--line)"},
+        el("div",{class:"row",style:"gap:8px;justify-content:space-between"},el("b",{class:"small"},it.title||it.id),el("span",{class:"small num mut"},"weight "+fmt(it.weight))),
+        el("div",{class:"row",style:"gap:5px;flex-wrap:wrap;margin-top:6px"},
           ...((it.tags||[]).length?it.tags.map(t=>el("span",{class:"pill neutral",style:"font-size:11px"},t)):[el("span",{class:"small mut"},"no tags")]))));
     }
-    v.append(lc);
+    right.append(lc);
   }
-  // ----- trajectory + evidence interests/aversions (kept from the original profile) -----
-  if(exp.trajectory&&exp.trajectory.length)v.append(el("div",{class:"card"},cardhead("Trajectory"),
-    el("div",{class:"small"},exp.trajectory.join("   →   "))));
-  if(exp.interests&&exp.interests.length)v.append(el("div",{class:"card"},cardhead("Interests (with evidence)"),
-    valueBars(exp.interests.map(i=>[i.label+(i.evidence&&i.evidence.length?`  ·  ${i.evidence.length} item(s)`:""),i.weight]))));
-  if(exp.aversions&&exp.aversions.length)v.append(el("div",{class:"card"},cardhead("Aversions"),
-    valueBars(exp.aversions.map(i=>[i.label,i.weight]),{signed:true})));
+
+  v.append(el("div",{class:"pgrid"},left,right));
 }
 
 async function renderHistory(v){

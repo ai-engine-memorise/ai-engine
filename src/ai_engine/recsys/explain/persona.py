@@ -198,4 +198,5 @@ def explain_user(signals: UserSignals, contents: Optional[dict[str, Content]] = 
                                    cognitive_share, signals.demographics, warm=bool(aff)),
         trajectory=trajectory[:6],
         demographics=signals.demographics,
+        behavior=signals.behavior or {},
     )

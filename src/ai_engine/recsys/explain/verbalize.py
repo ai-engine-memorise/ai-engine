@@ -27,27 +27,60 @@ _PREF = {
 
 
 def verbalize(exp: PersonaExplanation) -> str:
-    """One-paragraph, evidence-grounded persona summary (deterministic)."""
+    """One-paragraph summary led by the visitor's OWN behaviour data (how much they
+    engaged, how deeply, what their interactions reveal they're drawn to), with the
+    inferred Falk/Pekarik persona kept to a soft trailing clause. Deterministic."""
     # truly cold only when there is no behavior at all (no interests, path, or aversions)
     if not exp.interests and not exp.trajectory and not exp.aversions:
         return ("New visitor, no engagement yet. Recommendations start from any survey "
                 "persona or demographics, then adapt as they read.")
 
+    b = exp.behavior or {}
+    n = int(b.get("n_views", 0) or 0)
+    n_pos = int(b.get("n_positive", 0) or 0)
+    n_neg = int(b.get("n_negative", 0) or 0)
     parts: list[str] = []
-    vt = exp.visitor_type
-    if vt:
-        parts.append(f"Looks like a **{vt.type}** ({vt.rationale}; confidence {vt.confidence:.2f}).")
+
+    # 1) activity — the raw counts
+    if n:
+        frag = f"Engaged with {n} {'story' if n == 1 else 'stories'}"
+        bits = []
+        if n_pos:
+            bits.append(f"{n_pos} held attention")
+        if n_neg:
+            bits.append(f"{n_neg} dismissed")
+        if bits:
+            frag += " — " + ", ".join(bits)
+        parts.append(frag + ".")
+
+    # 2) reading depth — actual dwell / completion numbers
+    dwell = b.get("avg_dwell_ratio")
+    if isinstance(dwell, (int, float)) and n:
+        comp = b.get("completion_rate") or 0.0
+        parts.append(f"Reads to about {round(dwell * 100)}% of the estimated time, "
+                     f"finishing {round(comp * 100)}%.")
+
+    # 3) interests revealed by interactions, with the evidence count behind each
     if exp.interests:
-        parts.append(f"Drawn to {', '.join(i.label for i in exp.interests[:3])}.")
-    if exp.experience_preference != "unknown":
-        parts.append(f"Engages with a preference for {_PREF[exp.experience_preference]}; "
-                     f"{_STYLE.get(exp.engagement_style, _STYLE['unknown'])}.")
-    else:
-        parts.append(f"So far {_STYLE.get(exp.engagement_style, _STYLE['unknown'])}.")
+        def _lab(i):
+            ev = len(i.evidence or [])
+            return i.label + (f" ({ev})" if ev else "")
+        parts.append("Strongest pull toward " + ", ".join(_lab(i) for i in exp.interests[:3]) + ".")
     if exp.aversions:
-        parts.append(f"Tends to avoid {', '.join(a.label for a in exp.aversions[:2])}.")
+        parts.append("Tends to avoid " + ", ".join(a.label for a in exp.aversions[:2]) + ".")
     if exp.trajectory:
-        parts.append("Recent path: " + " then ".join(exp.trajectory) + ".")
+        parts.append("Recent path: " + " → ".join(exp.trajectory) + ".")
+
+    # 4) reading style + a soft persona tag (de-emphasized; no confidence jargon)
+    style = _STYLE.get(exp.engagement_style)
+    vt = exp.visitor_type
+    art = "an" if (vt and vt.type and vt.type[:1].lower() in "aeiou") else "a"
+    if style and vt and vt.type:
+        parts.append(f"{style.capitalize()} — reads like {art} {vt.type.lower()}.")
+    elif style:
+        parts.append(style.capitalize() + ".")
+    elif vt and vt.type:
+        parts.append(f"Reads like {art} {vt.type.lower()}.")
     return " ".join(parts)
 
 

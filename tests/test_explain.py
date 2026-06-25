@@ -79,7 +79,11 @@ def test_cold_user_explanation_is_graceful():
 
 def test_verbalize_is_evidence_grounded_prose():
     s = verbalize(explain_user(_deep_narrow(), C))
-    assert "Hobbyist" in s and "forced labor" in s.lower()
+    # data-led prose: leads with engagement counts/depth, grounds in the actual interest,
+    # and keeps the inferred persona to a soft trailing mention.
+    assert "forced labor" in s.lower()
+    assert "hobbyist" in s.lower()
+    assert "Engaged with" in s or "%" in s
 
 
 # ----- explainable clusters ------------------------------------------------ #
