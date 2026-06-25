@@ -523,6 +523,7 @@ def make_router(components: Components) -> APIRouter:
 
         agg_rows = [{
             "content_id": cid, "title": titles.get(cid, ""), "visits": a.visits,
+            "indexed": cid in titles,        # False -> engaged item missing from this tenant's qdrant collection
             "dwell_seconds": a.dwell_seconds,
             "end_reason": a.end_reason.value if a.end_reason else None,
             "last_ts": a.last_ts.isoformat() if a.last_ts else None,
@@ -539,6 +540,7 @@ def make_router(components: Components) -> APIRouter:
         } for e in sorted(events, key=lambda e: e.ts, reverse=True)[:limit]]
 
         return {"result": {"user_id": user_id, "event_count": len(events),
+                           "unindexed": sum(1 for r in agg_rows if not r["indexed"]),
                            "aggregates": agg_rows, "events": ev_rows}}
 
     @ops.get("/clusters")
@@ -640,6 +642,7 @@ def make_router(components: Components) -> APIRouter:
             pos = positive.get(cid, 0)
             content.append({
                 "content_id": cid, "title": titles.get(cid, ""),
+                "indexed": cid in titles,                            # resolvable in this tenant's qdrant collection
                 "views": v_,                                          # times viewed (events)
                 "users": users_n,                                    # unique users exposed
                 "avg_dwell": round(dwell.get(cid, 0.0) / v_, 1) if v_ else 0.0,
@@ -647,6 +650,17 @@ def make_router(components: Components) -> APIRouter:
                 "positive_rate": round(pos / users_n, 3) if users_n else 0.0,   # positive vs others
             })
         content.sort(key=lambda r: (r["views"], r["users"]), reverse=True)
+
+        # Index audit (Phase 1): engaged content the app served but which is absent from
+        # this tenant's qdrant collection (filtered at ingest, deleted, or post-snapshot).
+        # Such items show as a bare id with no title/tags anywhere downstream.
+        missing = [cid for cid in all_cids if cid not in titles]
+        missing.sort(key=lambda cid: visits.get(cid, 0), reverse=True)
+        audit = {
+            "seen_total": len(all_cids),
+            "unindexed": len(missing),
+            "unindexed_ids": missing[:500],          # bounded; full count is in `unindexed`
+        }
 
         themes = sorted(([lbl(k), round(w, 3)] for k, w in theme.items()),
                         key=lambda kv: kv[1], reverse=True)[:15]
@@ -675,7 +689,7 @@ def make_router(components: Components) -> APIRouter:
                 })
 
         return {"result": {"users": len(sigs), "content": content[:limit],
-                           "themes": themes, "clusters": clusters}}
+                           "audit": audit, "themes": themes, "clusters": clusters}}
 
     @ops.get("/content/{content_id}")
     def content_detail(content_id: str) -> dict:
