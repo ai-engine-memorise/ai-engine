@@ -35,6 +35,7 @@ def _c(id, title, axis, theme_label, sub, latlon=None, years=None):
         has_image=False,
         lat=lat,
         lon=lon,
+        years=[int(y) for y in (years or [])],
         tags=[
             Tag(facet="theme_what", label=theme_label, weight=1.0),
             Tag(facet="theme_what", label=sub, weight=0.8),
@@ -46,14 +47,14 @@ def _c(id, title, axis, theme_label, sub, latlon=None, years=None):
 # content_id -> (Content, vector, raw payload). Coordinates are spots on the
 # Bergen-Belsen memorial site; creation years give the temporal view shape.
 _WORLD = dict([
-    ("A1", _c("A1", "Forced labour in the textile workshop", 0, "Forced Labor", "workshops", (52.7581, 9.9062), [1942, 1943])),
-    ("A2", _c("A2", "Construction work detail", 0, "Forced Labor", "work detail", (52.7576, 9.9081), [1941, 1942])),
-    ("A3", _c("A3", "Armament factory labour", 0, "Forced Labor", "work detail", (52.7583, 9.9079), [1943, 1944])),
-    ("B1", _c("B1", "Children in the women's camp", 1, "Family", "children", (52.7562, 9.9105), [1944])),
-    ("B2", _c("B2", "A family's life in the Star Camp", 1, "Family", "family life", (52.7568, 9.9111), [1943, 1944])),
-    ("B3", _c("B3", "Siblings reunited after deportation", 1, "Family", "siblings", (52.7565, 9.9098), [1944, 1945])),
-    ("C1", _c("C1", "Liberation by the British Army", 2, "Liberation", "camp liberation", (52.7597, 9.9041), [1945])),
-    ("C2", _c("C2", "First days after liberation", 2, "Liberation", "liberator", (52.7599, 9.9048), [1945])),
+    ("101", _c("101", "Forced labour in the textile workshop", 0, "Forced Labor", "workshops", (52.7581, 9.9062), [1942, 1943])),
+    ("102", _c("102", "Construction work detail", 0, "Forced Labor", "work detail", (52.7576, 9.9081), [1941, 1942])),
+    ("103", _c("103", "Armament factory labour", 0, "Forced Labor", "work detail", (52.7583, 9.9079), [1943, 1944])),
+    ("201", _c("201", "Children in the women's camp", 1, "Family", "children", (52.7562, 9.9105), [1944])),
+    ("202", _c("202", "A family's life in the Star Camp", 1, "Family", "family life", (52.7568, 9.9111), [1943, 1944])),
+    ("203", _c("203", "Siblings reunited after deportation", 1, "Family", "siblings", (52.7565, 9.9098), [1944, 1945])),
+    ("301", _c("301", "Liberation by the British Army", 2, "Liberation", "camp liberation", (52.7597, 9.9041), [1945])),
+    ("302", _c("302", "First days after liberation", 2, "Liberation", "liberator", (52.7599, 9.9048), [1945])),
 ])
 
 

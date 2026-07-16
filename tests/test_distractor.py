@@ -16,18 +16,18 @@ def _signals(events, cfg):
 
 
 def _rec(cfg):
-    events = view_events("u1", "A1", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
+    events = view_events("u1", "101", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
     store = FakeContentStore(CONTENTS, VECTORS)
     return Recommender(store, InMemoryUserModelStore(), cfg).recommend_for_signals(_signals(events, cfg))
 
 
 def test_always_one_distractor_at_slot_3_or_4():
-    cfg = RecConfig(final_limit=6)   # probability default 1.0 -> always inject
+    cfg = RecConfig(final_limit=6, distractor_probability=1.0)   # force inject to test placement
     rec = _rec(cfg)
     kinds = [it.kind for it in rec.items]
     assert kinds.count("distractor") == 1
     d = next(it for it in rec.items if it.kind == "distractor")
-    assert d.content_id != "A1"                                   # unseen
+    assert d.content_id != "101"                                   # unseen
     assert rec.diagnostics["distractor"]["content_id"] == d.content_id
     slot = rec.diagnostics["distractor"]["slot"]
     assert slot in (3, 4)                                         # 1-based position
@@ -36,7 +36,7 @@ def test_always_one_distractor_at_slot_3_or_4():
 
 def test_distractor_slots_are_1_based_positions():
     # configure the distractor to land at rank 2 (1-based) and confirm it does
-    rec = _rec(RecConfig(distractor_slots=[2], final_limit=6))
+    rec = _rec(RecConfig(distractor_slots=[2], final_limit=6, distractor_probability=1.0))
     d = next(it for it in rec.items if it.kind == "distractor")
     assert rec.items.index(d) == 1                        # index 1 == rank 2
     assert rec.diagnostics["distractor"]["slot"] == 2
@@ -44,7 +44,7 @@ def test_distractor_slots_are_1_based_positions():
 
 def test_distractor_strategies_all_produce_one():
     for strat in ("max_dissimilar", "unexplored_theme", "random"):
-        rec = _rec(RecConfig(distractor_strategy=strat, final_limit=6))
+        rec = _rec(RecConfig(distractor_strategy=strat, final_limit=6, distractor_probability=1.0))
         assert sum(1 for it in rec.items if it.kind == "distractor") == 1, strat
 
 
@@ -66,7 +66,7 @@ def test_distractor_unavailable_is_reported_not_silent():
         "L2": Content(id="L2", title="b", tags=[Tag(facet="location", label="Loc")]),
     }
     store = FakeContentStore(contents, {k: [1.0, 0.0] for k in contents})
-    rec = Recommender(store, InMemoryUserModelStore(), RecConfig(final_limit=6)) \
+    rec = Recommender(store, InMemoryUserModelStore(), RecConfig(final_limit=6, distractor_probability=1.0)) \
         .recommend_for_signals(UserSignals(user_id="u"), filter="Loc")
     assert all(it.kind == "recommendation" for it in rec.items)        # no distractor placed
     assert rec.diagnostics["distractor"]["placed"] is False           # but NOT silent

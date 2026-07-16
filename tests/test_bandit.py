@@ -26,7 +26,7 @@ def test_mat_inverse_roundtrip():
 
 
 def test_prior_theta_equals_static_weights():
-    w = {"semantic": 0.30, "affinity": 0.25, "tag": 0.25, "recency": 0.10, "aversion": -0.25, "geo": 0.20}
+    w = {"semantic": 0.30, "tag": 0.25, "recency": 0.10, "aversion": -0.25, "geo": 0.20}
     b = LinearBandit.with_prior(w, ridge=1.0)
     theta = b.theta()
     for name, t in zip(FEATURE_ORDER, theta):
@@ -89,7 +89,7 @@ def test_to_from_dict_roundtrip():
 # ----- recommender integration --------------------------------------------- #
 
 def _signals():
-    events = view_events("u1", "A1", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
+    events = view_events("u1", "101", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
     return build_user_signals(user_id="u1", events=events, contents=CONTENTS, vectors=VECTORS,
                               now=NOW, cfg=RecConfig())
 

@@ -12,7 +12,7 @@ object *or list*. The serving adapter already had a correct extractor
 (`qdrant_store._extract_latlon`); the endpoint simply didn't use it (fixed in
 v0.6.15 by reusing it). That bug is the pattern this document is about.
 
-## D1. Payload-schema knowledge lives in 4+ places — **H**
+## D1. Payload-schema knowledge lives in 4+ places — **H** — DONE (v0.6.16)
 
 What a raw Qdrant payload looks like (`locations` object/list, `image_url` /
 `imageUrl` / `thumbnail_url`, `public_url`, `time_metadata.dates_of_creation`,
@@ -35,7 +35,7 @@ Every new payload consumer re-answers "what fields exist" and diverges (see inci
 payloads except the metadata JSON view; `dashboard.html` drops `_latlon` and every
 `p.image_url||p.imageUrl||…` chain and consumes normalized fields only.
 
-## D2. Cohort demand aggregation triplicated — **H** (perf-relevant)
+## D2. Cohort demand aggregation triplicated — **H** (perf-relevant) — DONE (v0.6.16)
 
 `content_stats`, `cohort_stats` and `content_spread` each hand-roll the same loop:
 iterate `model_store.iter_signals()`, call `event_buffer.fetch_events(uid)`,
@@ -47,7 +47,7 @@ dashboard needed lazy loading in the first place).
 variant) into one helper. That helper is also the natural seam for the planned
 short-TTL cache: cache it once, all three endpoints get fast together.
 
-## D3. Demographic semantics (py) vs labels (JS) — **M**
+## D3. Demographic semantics (py) vs labels (JS) — **M** — DONE (v0.6.16)
 
 `survey.canon_demo_value` decides what an answer *means* (language folding, junk,
 `no_answer`); `dashboard.html::humanVal` decides how it *reads* (`65_plus` → `65+`,
@@ -57,7 +57,7 @@ short-TTL cache: cache it once, all three endpoints get fast together.
 labels too and `humanVal` shrinks to a fallback. Do together with D1's response
 reshaping.
 
-## D4. Dev shims inside prod code paths — **M**
+## D4. Dev shims inside prod code paths — **M** — DONE (v0.6.16)
 
 - `api.py::content_spread` carries a `digits()` id fallback that exists only because
   `normalize_content_id` digit-strips the fixture ids (`A1` → `1`). Production ids
@@ -73,7 +73,13 @@ no secrets) and stays. But it crossed ~2600 lines this sprint. If it keeps growi
 split `<script>` into `static/dashboard.js` (same inert-shell property, still no
 build step) before considering anything heavier. Not worth churn today.
 
-## Plan
+## Plan — executed 2026-07-16, same day
+
+All four steps landed in one pass; acceptance criteria verified (suite 136 green,
+all tabs render error-free, one extractor, one aggregation loop, zero payload
+field-chains left in dashboard.html). D5 remains a watch item.
+
+### Original plan
 
 One consolidation PR, no behavior change, ordered so each step is independently
 shippable:

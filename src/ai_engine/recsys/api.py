@@ -217,6 +217,54 @@ def _tail_served(base: str, n: int, light: bool = True) -> list[dict]:
     return out
 
 
+def _cohort_view_aggs(c) -> list[tuple]:
+    """[(signals, {content_id: ViewAgg})] for every visitor in the model store.
+
+    THE cohort demand scan (docs/debt-payload-scatter.md D2): one implementation
+    shared by /content/stats, /cohort/stats and /content/spread, and the single
+    seam to add caching to when the scan gets slow at production scale."""
+    from .signals.signal_builder import aggregate_views
+    sigs = list(c.model_store.iter_signals() if hasattr(c.model_store, "iter_signals") else [])
+    out = []
+    for s in sigs:
+        try:
+            aggs = aggregate_views(c.event_buffer.fetch_events(s.user_id))
+        except Exception:
+            aggs = {}
+        out.append((s, aggs))
+    return out
+
+
+def _iter_catalogue(c, cap: int = 2000):
+    """Iterate the catalogue as normalized `Content` (fake store dict, or a capped
+    Qdrant scroll through the payload normalizer). No raw payloads leave this point."""
+    store = c.content_store
+    if hasattr(store, "_contents"):
+        yield from list(store._contents.values())[:cap]
+        return
+    client = getattr(store, "client", None)
+    coll = getattr(store, "collection_name", None)
+    if client is None or not coll:
+        return
+    from .adapters.qdrant_store import _payload_to_content
+    off, n = None, 0
+    while n < cap:
+        try:
+            points, off = client.scroll(collection_name=coll, limit=256, offset=off,
+                                        with_payload=True, with_vectors=False)
+        except Exception:
+            return
+        if not points:
+            return
+        for p in points:
+            yield _payload_to_content(p.id, p.payload)
+            n += 1
+            if n >= cap:
+                return
+        if off is None:
+            return
+
+
 def _log_base(c) -> Optional[str]:
     """The CURRENT tenant's event-log directory (where served/ + date=*/ live).
     Per-tenant ParquetEventLog has `.base`; fall back to the global env for single-tenant."""
@@ -618,12 +666,12 @@ def make_router(components: Components) -> APIRouter:
         field's distribution is computed against the OTHER active filters (so the selected
         values can be switched), while the behaviour numbers respect ALL filters.
         PII-guarded (counts only)."""
-        from .signals.signal_builder import aggregate_views
-        sigs = list(c.model_store.iter_signals() if hasattr(c.model_store, "iter_signals") else [])
+        pairs = _cohort_view_aggs(c)          # the shared cohort demand scan (D2)
+        sigs = [s for s, _ in pairs]
         filters = {k: set(v.split(",")) for k, v in (("age", age), ("gender", gender),
                                                      ("nationality", nationality), ("province", province)) if v}
 
-        from .survey import canon_demo_value
+        from .survey import canon_demo_value, demo_label
 
         def matches(s, skip: Optional[str] = None) -> bool:
             demo = getattr(s, "demographics", None) or {}
@@ -639,18 +687,17 @@ def make_router(components: Components) -> APIRouter:
                 field = demographics.setdefault(str(k), {})
                 field[cv] = field.get(cv, 0) + 1
 
-        cohort = [s for s in sigs if matches(s)]
+        cohort = [(s, aggs) for s, aggs in pairs if matches(s)]
         total_events = total_views = positive = negative = warm = 0
         dwell_sum = 0.0
         dwell_views = 0
         end_reasons: dict[str, int] = {}
-        for s in cohort:
+        for s, aggs in cohort:
             try:
-                evs = c.event_buffer.fetch_events(s.user_id)
+                total_events += len(c.event_buffer.fetch_events(s.user_id))
             except Exception:
-                evs = []
-            total_events += len(evs)
-            for a in aggregate_views(evs).values():
+                pass
+            for a in aggs.values():
                 total_views += a.visits or 0
                 if a.dwell_seconds:
                     dwell_sum += a.dwell_seconds
@@ -672,6 +719,7 @@ def make_router(components: Components) -> APIRouter:
             "positive": positive, "negative": negative,
             "end_reasons": end_reasons,
             "demographics": demographics,
+            "labels": {f: {v: demo_label(f, v) for v in dist} for f, dist in demographics.items()},
             "filters": {k: sorted(v) for k, v in filters.items()},
         }}
 
@@ -679,19 +727,14 @@ def make_router(components: Components) -> APIRouter:
     def content_stats(limit: int = Query(default=30, ge=1, le=200)) -> dict:
         """Cohort-wide content engagement: which items are seen / liked / abandoned across
         all visitors, popular themes, and each cluster's content preferences. PII-guarded."""
-        from .signals.signal_builder import aggregate_views
-        sigs = c.model_store.iter_signals() if hasattr(c.model_store, "iter_signals") else []
-        sigs = list(sigs)
+        pairs = _cohort_view_aggs(c)          # the shared cohort demand scan (D2)
+        sigs = [s for s, _ in pairs]
         visits: dict[str, int] = {}          # total view events (times viewed)
         dwell: dict[str, float] = {}         # summed dwell seconds
         exposed: dict[str, set] = {}         # unique users who saw it
         positive: dict[str, int] = {}        # users with a positive outcome
         theme: dict[str, float] = {}
-        for s in sigs:
-            try:
-                aggs = aggregate_views(c.event_buffer.fetch_events(s.user_id))
-            except Exception:
-                aggs = {}
+        for s, aggs in pairs:
             for cid, a in aggs.items():
                 visits[cid] = visits.get(cid, 0) + (a.visits or 0)
                 dwell[cid] = dwell.get(cid, 0.0) + (a.dwell_seconds or 0.0)
@@ -761,84 +804,29 @@ def make_router(components: Components) -> APIRouter:
     def content_spread() -> dict:
         """Supply vs demand across SPACE and TIME, for the bias-aware map and year view.
 
-        For every catalogue item (capped scroll) collect its coordinates and creation
-        years; for every visitor collect view events. Aggregates then report BOTH the
-        catalogue density (items: supply) and the engagement rate (views per item:
-        demand), so 'popular' can be read against how much content exists there/then."""
-        import re as _re
-        from .signals.signal_builder import aggregate_views
-
-        # ---- demand: views per content id across the cohort ----
-        sigs = list(c.model_store.iter_signals() if hasattr(c.model_store, "iter_signals") else [])
+        Coordinates and creation years come off the normalized `Content` (the payload
+        normalizer is the only place raw payloads are parsed); demand comes from the
+        shared cohort view scan. Reports BOTH catalogue density (items: supply) and
+        engagement (views: demand), so 'popular' reads against how much content
+        exists there/then."""
         views: dict[str, int] = {}
-        for s in sigs:
-            try:
-                for cid, a in aggregate_views(c.event_buffer.fetch_events(s.user_id)).items():
-                    views[cid] = views.get(cid, 0) + (a.visits or 0)
-            except Exception:
-                continue
-        digits = lambda x: (_re.search(r"\d+", str(x)) or [str(x)])[0]
-
-        # ---- supply: iterate the catalogue (fake store dict, or a capped Qdrant scroll) ----
-        def _iter_payloads(cap: int = 2000):
-            store = c.content_store
-            if hasattr(store, "_payloads") and getattr(store, "_payloads"):
-                for cid, p in list(store._payloads.items())[:cap]:
-                    yield str(cid), p or {}
-                return
-            client = getattr(store, "client", None)
-            coll = getattr(store, "collection_name", None)
-            if client is None or not coll:
-                return
-            off, n = None, 0
-            while n < cap:
-                try:
-                    points, off = client.scroll(collection_name=coll, limit=256, offset=off,
-                                                with_payload=True, with_vectors=False)
-                except Exception:
-                    return
-                if not points:
-                    return
-                for p in points:
-                    yield str(p.id), (p.payload or {})
-                    n += 1
-                    if n >= cap:
-                        return
-                if off is None:
-                    return
-
-        # same payload-shape handling as serving (qdrant geo field `locations`
-        # as object or list, or flat lat/lon keys)
-        from .adapters.qdrant_store import _extract_latlon
-
-        def _latlon(p) -> Optional[tuple]:
-            lat, lon = _extract_latlon(p if isinstance(p, dict) else {})
-            return (lat, lon) if lat is not None and lon is not None else None
-
-        def _years(p) -> list[int]:
-            tm = (p.get("time_metadata") or {}) if isinstance(p, dict) else {}
-            raw = tm.get("dates_of_creation") or tm.get("date") or []
-            out = set()
-            for token in (raw if isinstance(raw, list) else [raw]):
-                for y in _re.findall(r"\b(1[89]\d\d|20\d\d)\b", str(token)):
-                    out.add(int(y))
-            return sorted(out)
+        for _s, aggs in _cohort_view_aggs(c):
+            for cid, a in aggs.items():
+                views[cid] = views.get(cid, 0) + (a.visits or 0)
 
         out_items = []
         n_items = n_geo = n_dated = 0
-        for cid, payload in _iter_payloads():
+        for cont in _iter_catalogue(c):
             n_items += 1
-            v = views.get(cid, 0) or views.get(digits(cid), 0)
-            ll = _latlon(payload)
-            ys = _years(payload)
-            if ll:
+            has_geo = cont.lat is not None and cont.lon is not None
+            if has_geo:
                 n_geo += 1
-            if ys:
+            if cont.years:
                 n_dated += 1
-            if ll or ys:
-                out_items.append({"id": cid, "title": payload.get("title") or str(cid),
-                                  "lat": ll[0] if ll else None, "lon": ll[1] if ll else None,
-                                  "years": ys, "views": v})
+            if has_geo or cont.years:
+                out_items.append({"id": cont.id, "title": cont.title or cont.id,
+                                  "lat": cont.lat, "lon": cont.lon,
+                                  "years": cont.years, "views": views.get(cont.id, 0)})
         return {"result": {"items": out_items,
                            "coverage": {"items": n_items, "with_geo": n_geo, "with_dates": n_dated}}}
 
@@ -985,17 +973,12 @@ def make_router(components: Components) -> APIRouter:
 
         ids = [it.get("id") for it in items if it.get("id")]
         contents = c.content_store.get(ids) if ids else {}
-        try:  # thumbnail + source link live only in the raw payload
-            payloads = c.content_store.raw_payloads(ids) if ids else {}
-        except Exception:
-            payloads = {}
         has_breakdown = any(it.get("breakdown") for it in items)
 
         out_items = []
         for it in items:
             cid = it.get("id")
             ct = contents.get(cid)
-            p = payloads.get(cid) or {}
             content_tags = [t.key for t in getattr(ct, "tags", [])] if ct else []
             overlap = [
                 {"key": k, "user_weight": round(aff_norm[normalize_key(k)], 3)}
@@ -1011,8 +994,8 @@ def make_router(components: Components) -> APIRouter:
                 "breakdown": it.get("breakdown") or {},
                 "content_tags": content_tags,
                 "tag_overlap": overlap,
-                "image_url": p.get("image_url") or p.get("imageUrl") or p.get("thumbnail_url"),
-                "public_url": p.get("public_url") or p.get("publicUrl"),
+                "image_url": getattr(ct, "image_url", None) if ct else None,
+                "public_url": getattr(ct, "public_url", None) if ct else None,
             })
 
         # Persona-level view of the same user model (so the UI can speak the same language).

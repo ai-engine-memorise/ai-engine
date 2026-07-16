@@ -755,6 +755,8 @@ async function drawCohortStats(box){
   };
   const CAT=["var(--c-semantic)","var(--c-tag)","var(--c-geo)","var(--c-recency)"];
   const DEMO_LABEL={age:"Age",gender:"Gender",nationality:"Nationality",province:"Province",personal_connection:"WW2 connection"};
+  const SLBL=st.labels||{};                       // server-owned value labels (D3)
+  const lab=(f,v)=>(SLBL[f]&&SLBL[f][v])||humanVal(f,v);
 
   // section header: title + active filter chips (the statistics zone reads as its own block)
   // min-height reserves the chip row's space up front, so toggling a filter never shifts the layout
@@ -763,7 +765,7 @@ async function drawCohortStats(box){
   const fl=Object.entries(_coFilter);
   if(fl.length){
     fl.forEach(([f,vals])=>vals.forEach(val=>head.append(el("button",{class:"filterchip",title:"remove this filter",onclick:()=>setF(f,val)},
-      `${DEMO_LABEL[f]||f}: ${humanVal(f,val)}`,el("span",{class:"x"},"✕")))));
+      `${DEMO_LABEL[f]||f}: ${lab(f,val)}`,el("span",{class:"x"},"✕")))));
     head.append(el("button",{class:"morebtn",style:"margin:0",onclick:()=>{_coFilter={};refresh();}},"clear all"));
     head.append(el("span",{class:"small mut"},`${st.visitors} of ${st.total_visitors} visitors`));
   }
@@ -792,11 +794,11 @@ async function drawCohortStats(box){
     const w=el("div",{class:"colchart"});
     for(const [val,cnt] of entries){
       const on=sel.includes(val),dim=sel.length&&!on;
-      w.append(el("button",{class:"col",title:`${humanVal(field,val)}: ${cnt} visitor${cnt===1?"":"s"}`,
+      w.append(el("button",{class:"col",title:`${lab(field,val)}: ${cnt} visitor${cnt===1?"":"s"}`,
         onclick:cnt?()=>setF(field,val):null,style:cnt?"":"cursor:default"},
         el("span",{class:"cnt num"},cnt||""),
         el("div",{class:"track"},el("div",{class:"bar"+(on?" on":""),style:`height:${cnt?Math.max(10,Math.round(100*cnt/m)):0}%;${dim?"opacity:.35":""}`})),
-        el("span",{class:"lbl"+(on?" on":"")},humanVal(field,val))));
+        el("span",{class:"lbl"+(on?" on":"")},lab(field,val))));
     }
     return w;
   };
@@ -810,7 +812,7 @@ async function drawCohortStats(box){
     entries.forEach(([val,cnt],i)=>{
       if(!cnt)return;
       const cc=CAT[i%CAT.length],frac=cnt/tot,on=sel.includes(val),dim=sel.length&&!on;
-      const tip=`${humanVal(field,val)}: ${cnt} · ${Math.round(100*frac)}%`;
+      const tip=`${lab(field,val)}: ${cnt} · ${Math.round(100*frac)}%`;
       if(frac>=0.999){
         paths+=`<circle cx="${C}" cy="${C}" r="${R}" fill="none" stroke="${cc}" stroke-width="${SW}" style="cursor:pointer" data-val="${val}"><title>${tip}</title></circle>`;
       }else{
@@ -827,8 +829,8 @@ async function drawCohortStats(box){
     entries.forEach(([val,cnt],i)=>{
       if(!cnt)return;
       const cc=CAT[i%CAT.length],on=sel.includes(val);
-      leg.append(el("button",{class:"legchip"+(on?" on":""),title:`${humanVal(field,val)}: ${cnt} visitor${cnt===1?"":"s"}`,onclick:()=>setF(field,val)},
-        el("span",{class:"sw",style:`background:${cc}`}),`${humanVal(field,val)} · ${Math.round(100*cnt/tot)}%`));
+      leg.append(el("button",{class:"legchip"+(on?" on":""),title:`${lab(field,val)}: ${cnt} visitor${cnt===1?"":"s"}`,onclick:()=>setF(field,val)},
+        el("span",{class:"sw",style:`background:${cc}`}),`${lab(field,val)} · ${Math.round(100*cnt/tot)}%`));
     });
     return el("div",{class:"row",style:"gap:14px;align-items:center;flex-wrap:wrap"},svgbox,leg);
   };
@@ -869,7 +871,7 @@ async function drawCohortStats(box){
       const cellEl=el("div",{},el("div",{class:"eyebrow",style:"display:block;margin:6px 0 3px"},DEMO_LABEL[field]||cap1(field.replace(/_/g," "))));
       if(field==="age")cellEl.append(colChart(field,entries));
       else if(entries.length<=3)cellEl.append(pieChart(field,entries));
-      else cellEl.append(distList(entries.slice(0,8).map(([val,cnt])=>({label:humanVal(field,val),count:cnt,value:val})),field));
+      else cellEl.append(distList(entries.slice(0,8).map(([val,cnt])=>({label:lab(field,val),count:cnt,value:val})),field));
       fg.append(cellEl);
     }
     statsCard.append(el("div",{style:"border-top:1px solid var(--line);margin:12px 0 8px"}),fg);
@@ -1546,7 +1548,7 @@ function itemTags(it,max=6){
 function itemRow(it){
   const isD=it.role==="distractor", p=it.payload||{}, cnt=it.content||{};
   const title=cnt.title||p.title||"(untitled)";
-  const img=p.image_url||p.imageUrl||p.thumbnail_url||"";
+  const img=cnt.image_url||"";
   return el("div",{class:"evrow",title:"open full item",onclick:()=>openItemDetail(it)},
     el("span",{class:"evrank"},"#"+it.rank),
     img?el("img",{class:"evthumb",src:img,alt:"",loading:"lazy"}):el("span",{class:"evthumb ph"}),
@@ -1571,17 +1573,8 @@ function scenarioCard(s){
   return c;
 }
 // recursively pull a {lat,lon} out of a payload's location-ish fields (memorial-UI parity)
-function _latlon(p){
-  const find=o=>{
-    if(!o||typeof o!=="object")return null;
-    if(Array.isArray(o)){for(const x of o){const r=find(x);if(r)return r;}return null;}
-    const lat=o.lat??o.latitude, lon=o.lon??o.lng??o.longitude;
-    if(typeof lat==="number"&&typeof lon==="number")return{lat,lon};
-    for(const k in o){const r=find(o[k]);if(r)return r;}
-    return null;
-  };
-  return find(p.locations)||find(p.geo_metadata)||find(p.location)||find({lat:p.lat,lon:p.lon});
-}
+// coordinates come off the normalized Content (cnt.lat/lon): the server payload
+// normalizer is the only place raw payload shape is interpreted (D1).
 // item detail modal — styled to match the memorial UI content card
 // shared content detail modal with sub-tabs: Content view | Metadata (JSON)
 function _contentModal({title,img,text,tags,metaRows,src,raw}){
@@ -1619,7 +1612,8 @@ function _contentModal({title,img,text,tags,metaRows,src,raw}){
   closeItemDetail(); document.body.append(ov);
 }
 function _metaRows(p,cnt,extra){
-  const coords=_latlon(p), created=p.time_metadata&&p.time_metadata.dates_of_creation;
+  const coords=(cnt.lat!=null&&cnt.lon!=null)?{lat:cnt.lat,lon:cnt.lon}:null;
+  const created=(cnt.years&&cnt.years.length)?cnt.years:(p.time_metadata&&p.time_metadata.dates_of_creation);
   const rows=[["Creator",p.creator||cnt.creator||"Unknown"]];
   if(cnt.content_type||p.content_type)rows.push(["Type",cnt.content_type||p.content_type]);
   if(coords)rows.push(["Location",coords.lat.toFixed(5)+", "+coords.lon.toFixed(5)]);
@@ -1628,9 +1622,9 @@ function _metaRows(p,cnt,extra){
   return rows;
 }
 function _showContentCard(p,cnt,extra){
-  _contentModal({title:cnt.title||p.title||"(No title)",img:p.image_url||p.imageUrl||"",
+  _contentModal({title:cnt.title||p.title||"(No title)",img:cnt.image_url||"",
     text:cnt.text||p.text||"",tags:cnt.tags||p.tags||[],metaRows:_metaRows(p,cnt,extra),
-    src:p.public_url||p.publicUrl||"",raw:(p&&Object.keys(p).length)?p:cnt});
+    src:cnt.public_url||"",raw:(p&&Object.keys(p).length)?p:cnt});
 }
 function openItemDetail(it){
   const p=it.payload||{}, cnt=it.content||{};

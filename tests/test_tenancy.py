@@ -12,7 +12,7 @@ from ai_engine.recsys.tenancy import TenantRegistry, TenantSpec
 
 
 def _ev(evt, uid, ts, reason=None, dwell=None):
-    props = {"content": {"content_id": "A1"}}
+    props = {"content": {"content_id": "101"}}
     details = {}
     if reason:
         details["reason"] = reason

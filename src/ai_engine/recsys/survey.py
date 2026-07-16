@@ -110,6 +110,18 @@ def canon_demo_value(field: str, value) -> Optional[str]:
     return _DEMO_CANON.get(field, {}).get(v, v)
 
 
+def demo_label(field: str, value) -> str:
+    """Human label for a canonical demographic value. The server owns both the
+    semantics (canon_demo_value) and the wording, so the dashboard renders labels
+    verbatim instead of re-deriving them (docs/debt-payload-scatter.md D3)."""
+    v = str(value or "")
+    if field == "age":
+        if v.startswith("under_"):
+            return "<" + "".join(ch for ch in v if ch.isdigit())
+        return v.replace("_plus", "+").replace("_", "–")
+    return v.replace("_", " ").strip().title()
+
+
 def _clean(v):
     """Survey may emit the answer entity id ('a:age:55_64') instead of the value.
     Strip the 'a:<question>:' prefix -> '55_64'. Leaves plain values untouched."""

@@ -18,10 +18,10 @@ C, V = make_contents_and_vectors()
 def test_score_features_is_the_shared_context_vector():
     sig = build_user_signals(
         user_id="u",
-        events=view_events("u", "A1", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1)),
+        events=view_events("u", "101", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1)),
         contents=C, vectors=V, now=NOW, cfg=CFG)
-    per = score_features(sig, C["A2"], V["A2"], [], CFG)
-    assert set(per) == {"semantic", "affinity", "tag", "recency", "aversion"}   # geo only when near given
+    per = score_features(sig, C["102"], V["102"], CFG)
+    assert set(per) == {"semantic", "tag", "recency", "aversion"}   # geo only when near given
     assert len(feature_vector(per)) == len(FEATURE_ORDER)
     assert per["tag"] > 0                                   # A2 shares Forced-Labor theme
 
@@ -50,12 +50,8 @@ def _replay(store, user_views):
         ids = list({e.content_id for e in history if e.content_id})
         sig = build_user_signals(user_id="u", events=history, contents=store.get(ids),
                                  vectors=store.get_vectors(ids), now=NOW, cfg=cfg)
-        liked = []
-        if sig.positives:
-            lv = store.get_vectors(list(sig.positives)); mx = max(sig.positives.values()) or 1.0
-            liked = [(sig.positives[c] / mx, lv[c]) for c in sig.positives if c in lv]
         content, vec = store.get([cid]).get(cid), store.get_vectors([cid]).get(cid)
-        per = score_features(sig, content, vec, liked, cfg)
+        per = score_features(sig, content, vec, cfg)
         est = estimate_reading_time(content.word_count, content.has_image, cfg)
         r = engagement_strength(dwell_seconds=v["dwell"], est_reading_time=est,
                                 end_reason=EndReason(v["reason"]), visits=1, survey_rating=None, cfg=cfg)
@@ -68,9 +64,9 @@ def test_temporal_replay_yields_samples_and_shifts_theta():
     store = FakeContentStore(C, V)
     # a Forced-Labor reader: deep, completing -> positive rewards on tag/semantic-rich contexts
     views = [
-        {"content_id": "A1", "dwell": 140, "reason": "next_button", "ts": NOW - timedelta(hours=3)},
-        {"content_id": "A2", "dwell": 150, "reason": "next_button", "ts": NOW - timedelta(hours=2)},
-        {"content_id": "A3", "dwell": 130, "reason": "next_button", "ts": NOW - timedelta(hours=1)},
+        {"content_id": "101", "dwell": 140, "reason": "next_button", "ts": NOW - timedelta(hours=3)},
+        {"content_id": "102", "dwell": 150, "reason": "next_button", "ts": NOW - timedelta(hours=2)},
+        {"content_id": "103", "dwell": 130, "reason": "next_button", "ts": NOW - timedelta(hours=1)},
     ]
     samples = _replay(store, views)
     assert len(samples) == 3

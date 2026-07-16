@@ -18,11 +18,11 @@ def _build(events, now=NOW, demographics=None):
 
 def test_deep_engagement_becomes_positive_with_tags_and_taste():
     events = (
-        view_events("u1", "A1", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
-        + view_events("u1", "A2", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
+        view_events("u1", "101", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
+        + view_events("u1", "102", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
     )
     sig = _build(events)
-    assert "A1" in sig.positives and "A2" in sig.positives
+    assert "101" in sig.positives and "102" in sig.positives
     assert sig.tag_affinity.get("theme_what:forced labor", 0) > 0  # keys canonicalized lowercase
     # taste vector points along the Forced-Labor axis (index 0)
     assert sig.taste_vector is not None
@@ -30,29 +30,29 @@ def test_deep_engagement_becomes_positive_with_tags_and_taste():
 
 
 def test_quick_abandon_becomes_negative():
-    events = view_events("u1", "B1", dwell=1, reason="abandon", base_ts=NOW - timedelta(hours=1))
+    events = view_events("u1", "201", dwell=1, reason="abandon", base_ts=NOW - timedelta(hours=1))
     sig = _build(events)
-    assert "B1" in sig.negatives
-    assert "B1" not in sig.positives
+    assert "201" in sig.negatives
+    assert "201" not in sig.positives
     # the abandoned content's THEME becomes an aversion (B1 = Family) -> downranks later
     assert sig.tag_aversion.get("theme_what:family", 0) > 0
 
 
 def test_recency_decays_weight():
-    recent = _build(view_events("u1", "A1", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1)))
-    old = _build(view_events("u1", "A1", dwell=120, reason="next_button", base_ts=NOW - timedelta(days=60)))
-    assert recent.positives["A1"] > old.positives["A1"]
+    recent = _build(view_events("u1", "101", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1)))
+    old = _build(view_events("u1", "101", dwell=120, reason="next_button", base_ts=NOW - timedelta(days=60)))
+    assert recent.positives["101"] > old.positives["101"]
 
 
 def test_impression_not_viewed_is_soft_negative():
     from ai_engine.recsys.contracts.models import InteractionEvent
     ev = InteractionEvent(
-        user_id="u1", event="CONTENT_VIEW_STARTED", content_id="A1",
-        ts=NOW - timedelta(hours=1), impressions=["C1"],
+        user_id="u1", event="CONTENT_VIEW_STARTED", content_id="101",
+        ts=NOW - timedelta(hours=1), impressions=["301"],
     )
-    seen = view_events("u1", "A1", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
+    seen = view_events("u1", "101", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
     sig = _build(seen + [ev])
-    assert "C1" in sig.negatives  # shown alongside A1 but never opened
+    assert "301" in sig.negatives  # shown alongside A1 but never opened
 
 
 def test_demographics_seed_person_who_affinity():
@@ -64,17 +64,17 @@ def test_demographics_seed_person_who_affinity():
 
 def test_recent_views_ordered_and_recency_vector():
     events = (
-        view_events("u1", "A1", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=2))
-        + view_events("u1", "A3", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
+        view_events("u1", "101", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=2))
+        + view_events("u1", "103", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
     )
     sig = _build(events)
-    assert sig.recent_views[0] == "A3"          # most-recent first (sequence)
-    assert sig.recency_vector == VECTORS["A3"]
-    assert set(sig.viewed) == {"A1", "A3"}      # full view history
+    assert sig.recent_views[0] == "103"          # most-recent first (sequence)
+    assert sig.recency_vector == VECTORS["103"]
+    assert set(sig.viewed) == {"101", "103"}      # full view history
 
 
 def test_aggregate_views_pairs_dwell():
-    events = view_events("u1", "A1", dwell=42, reason="next_button", base_ts=NOW)
+    events = view_events("u1", "101", dwell=42, reason="next_button", base_ts=NOW)
     aggs = aggregate_views(events)
-    assert aggs["A1"].dwell_seconds == 42
-    assert aggs["A1"].end_reason is not None
+    assert aggs["101"].dwell_seconds == 42
+    assert aggs["101"].end_reason is not None

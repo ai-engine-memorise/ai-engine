@@ -21,16 +21,16 @@ def _model(uid, events):
 
 def _deep_narrow(uid="hobby"):   # 3 Forced-Labor stories, fully read
     return _model(uid,
-        view_events(uid, "A1", dwell=140, reason="next_button", base_ts=NOW - timedelta(hours=3))
-        + view_events(uid, "A2", dwell=150, reason="next_button", base_ts=NOW - timedelta(hours=2))
-        + view_events(uid, "A3", dwell=130, reason="next_button", base_ts=NOW - timedelta(hours=1)))
+        view_events(uid, "101", dwell=140, reason="next_button", base_ts=NOW - timedelta(hours=3))
+        + view_events(uid, "102", dwell=150, reason="next_button", base_ts=NOW - timedelta(hours=2))
+        + view_events(uid, "103", dwell=130, reason="next_button", base_ts=NOW - timedelta(hours=1)))
 
 
 def _broad_skim(uid="broad"):    # one story from each theme, all abandoned quickly
     return _model(uid,
-        view_events(uid, "A1", dwell=8, reason="close_button", base_ts=NOW - timedelta(hours=4))
-        + view_events(uid, "B1", dwell=6, reason="abandon", base_ts=NOW - timedelta(hours=3))
-        + view_events(uid, "C1", dwell=7, reason="close_button", base_ts=NOW - timedelta(hours=2)))
+        view_events(uid, "101", dwell=8, reason="close_button", base_ts=NOW - timedelta(hours=4))
+        + view_events(uid, "201", dwell=6, reason="abandon", base_ts=NOW - timedelta(hours=3))
+        + view_events(uid, "301", dwell=7, reason="close_button", base_ts=NOW - timedelta(hours=2)))
 
 
 # ----- behavior summary on the user model ---------------------------------- #
@@ -50,7 +50,7 @@ def test_deep_narrow_reads_as_hobbyist():
     assert exp.experience_preference == "cognitive"
     # interests carry their EVIDENCE (Tintarev scrutability)
     forced = next(i for i in exp.interests if i.label.lower() == "forced labor")
-    assert set(forced.evidence) == {"A1", "A2", "A3"}
+    assert set(forced.evidence) == {"101", "102", "103"}
 
 
 def test_broad_skim_reads_as_experience_seeker():
@@ -65,8 +65,8 @@ def test_broad_skim_reads_as_experience_seeker():
 def test_aversion_surfaces_in_explanation():
     # like Forced-Labor, abandon Family -> Family becomes an explained aversion
     sig = _model("u",
-        view_events("u", "A1", dwell=140, reason="next_button", base_ts=NOW - timedelta(hours=2))
-        + view_events("u", "B1", dwell=1, reason="abandon", base_ts=NOW - timedelta(hours=1)))
+        view_events("u", "101", dwell=140, reason="next_button", base_ts=NOW - timedelta(hours=2))
+        + view_events("u", "201", dwell=1, reason="abandon", base_ts=NOW - timedelta(hours=1)))
     exp = explain_user(sig, C)
     assert any(a.label.lower() == "family" for a in exp.aversions)
 
@@ -108,10 +108,10 @@ def test_assign_handles_empty_model():
 
 def _deep_two_themes(uid):   # deep in BOTH Forced Labor and Family -> spans clusters
     return _model(uid,
-        view_events(uid, "A1", dwell=140, reason="next_button", base_ts=NOW - timedelta(hours=4))
-        + view_events(uid, "A2", dwell=140, reason="next_button", base_ts=NOW - timedelta(hours=3))
-        + view_events(uid, "B1", dwell=140, reason="next_button", base_ts=NOW - timedelta(hours=2))
-        + view_events(uid, "B2", dwell=140, reason="next_button", base_ts=NOW - timedelta(hours=1)))
+        view_events(uid, "101", dwell=140, reason="next_button", base_ts=NOW - timedelta(hours=4))
+        + view_events(uid, "102", dwell=140, reason="next_button", base_ts=NOW - timedelta(hours=3))
+        + view_events(uid, "201", dwell=140, reason="next_button", base_ts=NOW - timedelta(hours=2))
+        + view_events(uid, "202", dwell=140, reason="next_button", base_ts=NOW - timedelta(hours=1)))
 
 
 def test_fuzzy_memberships_sum_to_one():
@@ -126,8 +126,8 @@ def test_fuzzy_splits_a_blended_visitor_where_kmeans_cannot():
     corpus = [
         _deep_narrow("forced_1"),
         _model("family_1",
-               view_events("family_1", "B1", dwell=140, reason="next_button", base_ts=NOW - timedelta(hours=2))
-               + view_events("family_1", "B2", dwell=140, reason="next_button", base_ts=NOW - timedelta(hours=1))),
+               view_events("family_1", "201", dwell=140, reason="next_button", base_ts=NOW - timedelta(hours=2))
+               + view_events("family_1", "202", dwell=140, reason="next_button", base_ts=NOW - timedelta(hours=1))),
         _deep_two_themes("blended"),
     ]
     fc = cluster_users_fuzzy(corpus, c=2, seed=1)

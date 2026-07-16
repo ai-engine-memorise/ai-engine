@@ -5,6 +5,7 @@ plus a flat `tag_labels` ("facet:label") KEYWORD-indexed field used for tag reca
 """
 from __future__ import annotations
 import logging
+import re
 from typing import Optional, Sequence
 
 from qdrant_client import QdrantClient  # type: ignore
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 def _extract_latlon(payload: dict):
     """Pull (lat, lon) from the payload. Accepts a `locations` geo object/list
-    ({lat,lon}) — the content-engine GEO-indexed field — or flat lat/lon keys."""
+    ({lat,lon}) the content-engine GEO-indexed field, or flat lat/lon keys."""
     loc = payload.get("locations") or payload.get("location")
     if isinstance(loc, list) and loc:
         loc = loc[0]
@@ -37,14 +38,29 @@ def _extract_latlon(payload: dict):
     return None, None
 
 
+def _extract_years(payload: dict) -> list[int]:
+    """Creation years from `time_metadata.dates_of_creation` (list or scalar, any
+    reasonable date string): every 4-digit year 18xx-20xx found, sorted, deduped."""
+    tm = payload.get("time_metadata") or {}
+    raw = tm.get("dates_of_creation") or tm.get("date") or []
+    out = set()
+    for token in (raw if isinstance(raw, list) else [raw]):
+        for y in re.findall(r"\b(1[89]\d\d|20\d\d)\b", str(token)):
+            out.add(int(y))
+    return sorted(out)
+
+
 def _payload_to_content(point_id, payload: dict) -> Content:
+    """THE payload normalizer: the single place raw payload shape is interpreted
+    (docs/debt-payload-scatter.md D1). Everything downstream consumes `Content`."""
     payload = payload or {}
     tags = [
         Tag(facet=t.get("facet", "unknown"), label=t.get("label", ""), weight=float(t.get("weight", 1.0)))
         for t in (payload.get("tags") or [])
     ]
     files = payload.get("files_url") or []
-    has_image = bool(payload.get("image_url") or (isinstance(files, list) and files))
+    image_url = payload.get("image_url") or payload.get("imageUrl") or payload.get("thumbnail_url")
+    has_image = bool(image_url or (isinstance(files, list) and files))
     ctype = payload.get("content_type", ContentType.text_item.value)
     try:
         ctype = ContentType(ctype)
@@ -61,6 +77,9 @@ def _payload_to_content(point_id, payload: dict) -> Content:
         has_image=has_image,
         lat=lat,
         lon=lon,
+        image_url=image_url,
+        public_url=payload.get("public_url") or payload.get("publicUrl"),
+        years=_extract_years(payload),
     )
 
 
@@ -85,7 +104,7 @@ class QdrantContentStore:
 
     def raw_payloads(self, ids: Sequence[str]) -> dict[str, dict]:
         """Raw Qdrant payloads keyed by id (image_url / public_url / creator / time_metadata …)
-        — the full content the recsys `Content` model drops. Used to open item detail cards."""
+       , the full content the recsys `Content` model drops. Used to open item detail cards."""
         if not ids:
             return {}
         try:

@@ -35,23 +35,23 @@ def _ids(rec):
 
 def test_clear_taste_surfaces_unseen_sibling():
     events = (
-        view_events("u1", "A1", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
-        + view_events("u1", "A2", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
+        view_events("u1", "101", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
+        + view_events("u1", "102", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
     )
     rec = Recommender(_store(), InMemoryUserModelStore(), CFG).recommend_for_signals(_signals(events))
     ids = _ids(rec)
-    assert "A3" in ids                 # the unseen Forced-Labor story is recommended
-    assert "A1" not in ids and "A2" not in ids  # already-seen items excluded
-    assert rec.items[0].content_id == "A3"
+    assert "103" in ids                 # the unseen Forced-Labor story is recommended
+    assert "101" not in ids and "102" not in ids  # already-seen items excluded
+    assert rec.items[0].content_id == "103"
 
 
 def test_disliked_item_never_recommended():
     events = (
-        view_events("u1", "A1", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
-        + view_events("u1", "C1", dwell=1, reason="abandon", base_ts=NOW - timedelta(hours=1))
+        view_events("u1", "101", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
+        + view_events("u1", "301", dwell=1, reason="abandon", base_ts=NOW - timedelta(hours=1))
     )
     rec = Recommender(_store(), InMemoryUserModelStore(), CFG).recommend_for_signals(_signals(events))
-    assert "C1" not in _ids(rec)
+    assert "301" not in _ids(rec)
 
 
 def test_tag_recall_works_with_semantic_off():
@@ -59,46 +59,27 @@ def test_tag_recall_works_with_semantic_off():
     cfg = RecConfig()
     cfg.fusion.semantic = 0.0
     cfg.fusion.tag = 1.0
-    events = view_events("u1", "A1", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
+    events = view_events("u1", "101", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
     rec = Recommender(_store(), InMemoryUserModelStore(), cfg).recommend_for_signals(_signals(events))
     ids = _ids(rec)
-    assert {"A2", "A3"} <= set(ids)                    # Forced-Labor siblings recalled by tag
-    assert rec.items[0].content_id in {"A2", "A3"}     # and ranked top (tag-driven)
+    assert {"102", "103"} <= set(ids)                    # Forced-Labor siblings recalled by tag
+    assert rec.items[0].content_id in {"102", "103"}     # and ranked top (tag-driven)
     assert rec.items[0].breakdown.get("tag", 0) > 0
 
 
 def test_neutral_view_excluded_via_viewed_history():
     events = (
-        view_events("u1", "A1", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
-        + view_events("u1", "B1", dwell=8, reason="close_button", base_ts=NOW - timedelta(hours=1))
+        view_events("u1", "101", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
+        + view_events("u1", "201", dwell=8, reason="close_button", base_ts=NOW - timedelta(hours=1))
     )
     sig = _signals(events)
-    assert "B1" in sig.viewed and "B1" not in sig.positives and "B1" not in sig.negatives  # neutral
+    assert "201" in sig.viewed and "201" not in sig.positives and "201" not in sig.negatives  # neutral
     rec = Recommender(_store(), InMemoryUserModelStore(), RecConfig()).recommend_for_signals(sig)
-    assert "B1" not in _ids(rec)              # viewed -> de-duplicated out
-
-
-def test_affinity_surfaces_both_interests_of_a_multi_interest_user():
-    # user likes Forced-Labor (A1) AND Liberation (C1) — two distinct tastes.
-    # item-kNN affinity keeps BOTH siblings (A-axis and C-axis) above unliked Family.
-    events = (
-        view_events("u1", "A1", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=2))
-        + view_events("u1", "C1", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
-    )
-    rec = Recommender(_store(), InMemoryUserModelStore(), CFG).recommend_for_signals(_signals(events))
-    recs = [it for it in rec.items if it.kind == "recommendation"]
-    assert all("affinity" in it.breakdown for it in recs)
-    # compare RELEVANCE (final_score), not MMR position — MMR may interleave a Family
-    # item for diversity, but on relevance both liked-axis siblings beat unliked Family.
-    score = {it.content_id: it.final_score for it in recs}
-    best_family = max(score.get(c, 0.0) for c in ("B1", "B2", "B3"))
-    assert score.get("A3", 0.0) > best_family      # Forced-Labor sibling (near liked A1)
-    assert score.get("C2", 0.0) > best_family      # Liberation sibling (near liked C1)
-    assert score["A3"] > 0 and score["C2"] > 0
+    assert "201" not in _ids(rec)              # viewed -> de-duplicated out
 
 
 def test_recency_contributes_to_score():
-    events = view_events("u1", "A1", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
+    events = view_events("u1", "101", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
     rec = Recommender(_store(), InMemoryUserModelStore(), RecConfig()).recommend_for_signals(_signals(events))
     recs = [it for it in rec.items if it.kind == "recommendation"]
     assert recs and all("recency" in it.breakdown for it in recs)
@@ -166,9 +147,9 @@ def test_cold_start_fallback_when_signal_matches_nothing():
 
 def test_online_flow_updater_then_recommender():
     source = FakeEventSource()
-    for ev in view_events("u1", "A1", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1)):
+    for ev in view_events("u1", "101", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1)):
         source.append(ev)
-    for ev in view_events("u1", "A2", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1)):
+    for ev in view_events("u1", "102", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1)):
         source.append(ev)
 
     store = InMemoryUserModelStore()
@@ -177,7 +158,7 @@ def test_online_flow_updater_then_recommender():
 
     rec = Recommender(content, store, CFG).recommend("u1")
     assert rec.strategy == "warm"
-    assert "A3" in _ids(rec)
+    assert "103" in _ids(rec)
 
 
 # --------------------------------------------------------------------------- #
@@ -187,15 +168,15 @@ def test_online_flow_updater_then_recommender():
 def test_invariants_scores_seen_dedup_limit():
     cfg = RecConfig(final_limit=3)
     events = (
-        view_events("u1", "A1", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
-        + view_events("u1", "B1", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
+        view_events("u1", "101", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
+        + view_events("u1", "201", dwell=120, reason="next_button", base_ts=NOW - timedelta(hours=1))
     )
     rec = Recommender(_store(), InMemoryUserModelStore(), cfg).recommend_for_signals(_signals(events))
 
     ids = _ids(rec)
     assert len(ids) <= cfg.final_limit
     assert len(ids) == len(set(ids))                 # no duplicates
-    assert "A1" not in ids and "B1" not in ids       # no seen items
+    assert "101" not in ids and "201" not in ids       # no seen items
     for it in rec.items:
         assert 0.0 <= it.final_score <= 1.0
         assert abs(sum(it.breakdown.values()) - it.final_score) < 1e-9
