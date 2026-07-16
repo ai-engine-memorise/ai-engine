@@ -50,7 +50,7 @@ def verbalize(exp: PersonaExplanation) -> str:
         if n_neg:
             bits.append(f"{n_neg} dismissed")
         if bits:
-            frag += " — " + ", ".join(bits)
+            frag += ": " + ", ".join(bits)
         parts.append(frag + ".")
 
     # 2) reading depth — actual dwell / completion numbers
@@ -76,7 +76,7 @@ def verbalize(exp: PersonaExplanation) -> str:
     vt = exp.visitor_type
     art = "an" if (vt and vt.type and vt.type[:1].lower() in "aeiou") else "a"
     if style and vt and vt.type:
-        parts.append(f"{style.capitalize()} — reads like {art} {vt.type.lower()}.")
+        parts.append(f"{style.capitalize()}; reads like {art} {vt.type.lower()}.")
     elif style:
         parts.append(style.capitalize() + ".")
     elif vt and vt.type:

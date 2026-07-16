@@ -37,11 +37,16 @@ _NAT_QIDS = ("q:nationality", "nationality", "country")
 _PROVINCE_QIDS = ("q:province", "province", "region")   # NL province the visitor is from
 _CONN_QIDS = ("q:ww2_connection", "personal_connection")
 
-# personalization questions: answer value = canonical taxonomy label -> facet
+# personalization questions: answer value = canonical taxonomy label -> facet.
+# Like the demographic qids above, each question also has a prefix-less alias:
+# production clients send "personalization_theme", not "q:personalization_theme".
 _PERSONALIZATION = {
     "q:personalization_theme": "theme_what",
+    "personalization_theme": "theme_what",
     "q:personalization_interest": "theme_how.type_of_stores",
+    "personalization_interest": "theme_how.type_of_stores",
     "q:personalization_area": "place_where.camp_areas",
+    "personalization_area": "place_where.camp_areas",
 }
 
 # Survey answer values must line up with content tag LABELS or the persona silently
@@ -90,7 +95,36 @@ def _vals(answers: dict, *qids: str) -> list:
 
 
 def extract_demographics(answers: dict) -> dict:
-    """Raw survey answers -> demographics dict (for storage / inspection)."""
+    """Pull the demographic fields out of raw survey answers into a flat dict.
+
+    Reads the five demographic fields (age, gender, nationality, province,
+    personal_connection) from a survey or identify payload and returns them as plain
+    `{field: value}`. Each field can arrive under several question ids or trait keys (for
+    example age as `q:age`, `age_group`, or `age`); the first id that is present wins, and
+    for a multi-select answer the first value is taken.
+
+    The values are kept **raw** (for example `"55_64"`, not the taxonomy label
+    `"age 55-64"`). This function is only for storing and inspecting who the visitor is
+    (it populates `UserSignals.demographics`). Turning demographics into weighted taxonomy
+    tags for matching is a separate step, `survey_affinity` / `_demographic_affinity`.
+
+    Args:
+        answers: `question_id -> answer` from a survey/identify event.
+
+    Returns:
+        `{field: value}` containing only the demographic fields that were answered
+        (empty dict if none are present).
+
+    Example:
+        ```python
+        extract_demographics({
+            "q:age": "55_64",
+            "q:gender": "female",
+            "nationality": "france",       # from an identify trait
+        })
+        # {"age": "55_64", "gender": "female", "nationality": "france"}
+        ```
+    """
     out = {}
     for field, qids in (("age", _AGE_QIDS), ("gender", _GENDER_QIDS),
                         ("nationality", _NAT_QIDS), ("province", _PROVINCE_QIDS),
@@ -117,7 +151,51 @@ def split_survey_answers(answers: dict) -> dict:
 
 
 def survey_affinity(answers: dict) -> dict[str, float]:
-    """Survey answers -> {tag_key: weight} in the content taxonomy (the persona)."""
+    """Turn raw survey answers into weighted taxonomy tags (the visitor's persona).
+
+    Emits `{"facet:label": weight}` keyed in the SAME taxonomy the content is tagged
+    with, so `score_tag` can match persona against content directly. Two kinds of answer
+    contribute, at deliberately different weights:
+
+    - **Demographics** (age, gender, nationality, NL province) map to `person_who.*`
+      facets at modest weights: age 0.5, gender 0.3, nationality 0.4, province 0.5. A
+      "core country" is an origin the collection tags content for specifically
+      (`CORE_COUNTRIES` = Netherlands, Germany, Poland); a nationality outside that set
+      has no country tag of its own, so it also emits the `International` rollup (0.3) and
+      matches content tagged for that non-core complement.
+    - **Personalization preferences** (theme / interest / area) are what the visitor
+      explicitly picked, so they get the strongest weight (1.0). The answer value IS the
+      taxonomy label, run through `_canonical_label` so spelling/separator variants
+      (e.g. "forced labour") still line up with the content label ("Forced Labor").
+
+    Multi-select answers emit one key per selected value. These land in the survey side
+    of `tag_affinity`; `build_user_signals` blends them with engagement so they dominate
+    on cold start (see `ai_engine.recsys.signals.signal_builder.build_user_signals`).
+
+    Args:
+        answers: `question_id -> answer` from a survey/identify event (values may be
+            scalars or lists; entity-id values like `a:age:55_64` are cleaned first).
+
+    Returns:
+        `{"facet:label": weight}`. Empty if no recognized questions are present.
+
+    Example:
+        ```python
+        survey_affinity({
+            "q:age": "55_64",
+            "q:gender": "female",
+            "q:nationality": "france",              # not a core country
+            "q:personalization_theme": "forced labour",
+        })
+        # {
+        #     'person_who.age_group:age 55-64': 0.5,
+        #     'person_who.gender_and_age:female': 0.3,
+        #     'person_who.city_village_country:From: France': 0.4,
+        #     'person_who.city_village_country:International': 0.3,
+        #     'theme_what:Forced Labor': 1.0,
+        # }
+        ```
+    """
     out: dict[str, float] = {}
 
     for v in _vals(answers, *_AGE_QIDS):

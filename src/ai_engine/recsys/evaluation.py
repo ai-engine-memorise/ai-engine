@@ -30,31 +30,31 @@ from .ranking.scorers import cosine
 #   full = both surveys · personalization = themes only · demographics = onboarding only · none = walk-in
 BUILTIN_PERSONAS = [
     {"key": "school_student_nl", "name": "Dutch school student", "type": "Student", "completion": "full",
-     "description": "Class visit, local (Drenthe). Did both surveys — everyday-life and children's stories.",
+     "description": "Class visit, local (Drenthe). Did both surveys: everyday-life and children's stories.",
      "seeds": ["children", "daily life", "school", "biography"],
      "demographics": {"age_group": "16_18", "province": "Drenthe",
                       "q:personalization_theme": ["Daily Life"]}},
-    {"key": "university_student", "name": "University student — resistance", "type": "Student",
+    {"key": "university_student", "name": "University student: resistance", "type": "Student",
      "completion": "personalization",
-     "description": "Skipped the demographic onboarding; only picked themes — resistance and personal stories.",
+     "description": "Skipped the demographic onboarding; only picked themes: resistance and personal stories.",
      "seeds": ["resistance", "rescue", "escape", "aid and protection"],
      "demographics": {"q:personalization_theme": ["Resistance"], "q:personalization_interest": ["Personal stories"]}},
-    {"key": "researcher_forced_labour", "name": "Researcher — forced labour", "type": "Researcher",
+    {"key": "researcher_forced_labour", "name": "Researcher: forced labour", "type": "Researcher",
      "completion": "full",
      "description": "Deep, focused interest in forced labour and deportation; completed both surveys.",
      "seeds": ["forced labor", "administration", "transit camp", "deportation", "registration"],
      "demographics": {"age_group": "25_34", "q:personalization_theme": ["Forced Labor", "Deportation"]}},
-    {"key": "historian_persecution", "name": "Historian — persecution & policy", "type": "Researcher",
+    {"key": "historian_persecution", "name": "Historian: persecution & policy", "type": "Researcher",
      "completion": "personalization",
      "description": "Theme picks only (deportation, family); no demographics given.",
      "seeds": ["anti-jewish measures", "persecution", "administration", "deportation"],
      "demographics": {"q:personalization_theme": ["Deportation", "Family"]}},
     {"key": "intl_tourist", "name": "International tourist", "type": "Tourist", "completion": "demographics",
-     "description": "Did only the demographic onboarding (35-44, from Germany); no theme preferences — place-driven.",
+     "description": "Did only the demographic onboarding (35-44, from Germany); no theme preferences; place-driven.",
      "seeds": ["barrack", "watchtower", "entrance", "memorial", "transport"],
      "demographics": {"age_group": "35_44", "nationality": "germany"}},
     {"key": "regional_tourist", "name": "Regional day-tripper", "type": "Tourist", "completion": "demographics",
-     "description": "Onboarding only — Dutch, 55-64, from Gelderland; no theme picks.",
+     "description": "Onboarding only: Dutch, 55-64, from Gelderland; no theme picks.",
      "seeds": ["liberation", "memorial", "remembrance", "postwar"],
      "demographics": {"age_group": "55_64", "province": "Gelderland"}},
     {"key": "descendant", "name": "Descendant / personal tie", "type": "Descendant", "completion": "full",
@@ -63,7 +63,7 @@ BUILTIN_PERSONAS = [
      "demographics": {"age_group": "65_74", "personal_connection": "yes",
                       "q:personalization_theme": ["Family"], "q:personalization_interest": ["Personal stories"]}},
     {"key": "walk_in", "name": "Walk-in visitor (no survey)", "type": "Tourist", "completion": "none",
-     "description": "Took no survey at all — pure cold-start; tests the diverse fallback the engine serves.",
+     "description": "Took no survey at all: pure cold-start; tests the diverse fallback the engine serves.",
      "seeds": [],
      "demographics": {}},
 ]
@@ -145,7 +145,7 @@ def generate_persona(prompt: str, vocab: dict) -> dict:
 
 
 def intra_list_diversity(vectors: list[Optional[list]]) -> Optional[float]:
-    """Mean pairwise (1 - cosine) over the served items' vectors — higher = more varied."""
+    """Mean pairwise (1 - cosine) over the served items' vectors, higher = more varied."""
     vs = [v for v in vectors if v]
     if len(vs) < 2:
         return None

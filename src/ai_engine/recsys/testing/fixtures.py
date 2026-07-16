@@ -16,9 +16,16 @@ from ..contracts.models import Content, Tag, InteractionEvent
 from .fakes import FakeContentStore
 
 
-def _c(id, title, axis, theme_label, sub):
+def _c(id, title, axis, theme_label, sub, latlon=None, years=None):
     vec = [0.0] * 6
     vec[axis] = 1.0
+    lat, lon = latlon if latlon else (None, None)
+    payload = {"title": title, "text": title,
+               "tags": [{"facet": "theme_what", "label": theme_label}]}
+    if latlon:
+        payload["location"] = {"lat": lat, "lon": lon}
+    if years:
+        payload["time_metadata"] = {"dates_of_creation": [str(y) for y in years]}
     return Content(
         id=id,
         content_type=ContentType.text_item,
@@ -26,37 +33,45 @@ def _c(id, title, axis, theme_label, sub):
         text=title,
         word_count=120,
         has_image=False,
+        lat=lat,
+        lon=lon,
         tags=[
             Tag(facet="theme_what", label=theme_label, weight=1.0),
             Tag(facet="theme_what", label=sub, weight=0.8),
             Tag(facet="theme_how.type_of_stores", label="Personal stories", weight=0.5),
         ],
-    ), vec
+    ), vec, payload
 
 
-# content_id -> (Content, vector)
+# content_id -> (Content, vector, raw payload). Coordinates are spots on the
+# Bergen-Belsen memorial site; creation years give the temporal view shape.
 _WORLD = dict([
-    ("A1", _c("A1", "Forced labour in the textile workshop", 0, "Forced Labor", "workshops")),
-    ("A2", _c("A2", "Construction work detail", 0, "Forced Labor", "work detail")),
-    ("A3", _c("A3", "Armament factory labour", 0, "Forced Labor", "work detail")),
-    ("B1", _c("B1", "Children in the women's camp", 1, "Family", "children")),
-    ("B2", _c("B2", "A family's life in the Star Camp", 1, "Family", "family life")),
-    ("B3", _c("B3", "Siblings reunited after deportation", 1, "Family", "siblings")),
-    ("C1", _c("C1", "Liberation by the British Army", 2, "Liberation", "camp liberation")),
-    ("C2", _c("C2", "First days after liberation", 2, "Liberation", "liberator")),
+    ("A1", _c("A1", "Forced labour in the textile workshop", 0, "Forced Labor", "workshops", (52.7581, 9.9062), [1942, 1943])),
+    ("A2", _c("A2", "Construction work detail", 0, "Forced Labor", "work detail", (52.7576, 9.9081), [1941, 1942])),
+    ("A3", _c("A3", "Armament factory labour", 0, "Forced Labor", "work detail", (52.7583, 9.9079), [1943, 1944])),
+    ("B1", _c("B1", "Children in the women's camp", 1, "Family", "children", (52.7562, 9.9105), [1944])),
+    ("B2", _c("B2", "A family's life in the Star Camp", 1, "Family", "family life", (52.7568, 9.9111), [1943, 1944])),
+    ("B3", _c("B3", "Siblings reunited after deportation", 1, "Family", "siblings", (52.7565, 9.9098), [1944, 1945])),
+    ("C1", _c("C1", "Liberation by the British Army", 2, "Liberation", "camp liberation", (52.7597, 9.9041), [1945])),
+    ("C2", _c("C2", "First days after liberation", 2, "Liberation", "liberator", (52.7599, 9.9048), [1945])),
 ])
 
 
 def make_world() -> FakeContentStore:
-    contents = {cid: cv[0] for cid, cv in _WORLD.items()}
-    vectors = {cid: cv[1] for cid, cv in _WORLD.items()}
-    return FakeContentStore(contents, vectors)
+    return FakeContentStore({cid: cv[0] for cid, cv in _WORLD.items()},
+                            {cid: cv[1] for cid, cv in _WORLD.items()},
+                            payloads={cid: cv[2] for cid, cv in _WORLD.items()})
 
 
 def make_contents_and_vectors():
     contents = {cid: cv[0] for cid, cv in _WORLD.items()}
     vectors = {cid: cv[1] for cid, cv in _WORLD.items()}
     return contents, vectors
+
+
+def make_payloads():
+    """Raw payload dicts (location, time_metadata, …) matching the fixture world."""
+    return {cid: cv[2] for cid, cv in _WORLD.items()}
 
 
 def view_events(
@@ -68,7 +83,7 @@ def view_events(
     base_ts: datetime,
     visits: int = 1,
 ) -> list[InteractionEvent]:
-    """Emit a START + END pair (path-B style separate events) for one content."""
+    """Emit a START + END pair (separate events) for one content."""
     out: list[InteractionEvent] = []
     for k in range(visits):
         t0 = base_ts + timedelta(minutes=k)

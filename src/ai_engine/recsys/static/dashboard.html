@@ -253,7 +253,8 @@ td:first-child,th:first-child{padding-left:2px} td:last-child,th:last-child{padd
 .statusbadge .dot{width:6px;height:6px;border-radius:50%;background:currentColor}
 .statusbadge.done{background:var(--accent-t);color:var(--accent);border-color:transparent}
 .statusbadge.pending{background:transparent;color:var(--mut)}
-.tagrow{display:grid;grid-template-columns:minmax(140px,200px) 1fr 46px;gap:12px;align-items:center;margin:6px 0}
+.tagrow{display:grid;grid-template-columns:minmax(110px,200px) minmax(0,1fr) 46px;gap:12px;align-items:center;margin:6px 0}
+.tagrow .barwrap{min-width:0}   /* the global 150px floor would overflow narrow cards */
 .tagrow .lab{min-width:0;line-height:1.15}
 .tagrow .lab .fb{font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);display:block}
 .tagrow .lab .t{font-size:13px;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;text-transform:capitalize}
@@ -269,6 +270,91 @@ button.primary:hover{filter:brightness(1.05)}
 .err{color:#9C5B4F} code{background:var(--code);padding:1px 6px;border-radius:5px;font-size:12px;font-family:'Roboto Mono',monospace}
 .num{font-family:'Roboto Mono',monospace}
 .empty{padding:26px;text-align:center;color:var(--mut);border:1px dashed var(--line);border-radius:var(--rad)}
+/* taxonomy tag chip: facet badge + clean label (+ weight on overlap hits) */
+.tchip{display:inline-flex;align-items:center;gap:7px;background:var(--code);border:1px solid var(--line);border-radius:999px;padding:3px 11px 3px 5px;font-size:12px;margin:2px}
+.tchip .fb{font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);border:1px solid var(--line);border-radius:999px;padding:1px 7px;background:var(--bg)}
+.tchip .w{font-size:11px;color:var(--mut);font-variant-numeric:tabular-nums}
+.tchip.hit{background:#5E735514;border-color:#5E735555;color:#5E7355}
+.tchip.hit .fb{color:#5E7355;border-color:#5E735555;background:transparent}
+.tchip.hit .w{color:#5E7355;opacity:.75}
+/* cohort statistics */
+.distrow{display:grid;grid-template-columns:minmax(95px,155px) minmax(0,1fr) 70px;gap:10px;align-items:center;margin:6px 0}
+/* instant tooltip (native title is too slow to discover) */
+[data-tip]{position:relative;cursor:help}
+[data-tip]:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);
+  background:var(--fg);color:var(--bg);font-size:11px;font-weight:500;letter-spacing:normal;text-transform:none;
+  padding:4px 10px;border-radius:6px;white-space:nowrap;z-index:60;pointer-events:none;box-shadow:0 4px 14px var(--shadow)}
+th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
+th.sortable:hover{color:var(--fg)}
+th.sortable .arrow{display:inline-block;width:11px;font-size:10px;color:var(--accent)}  /* fixed width: arrow can't shift columns */
+.distrow.click{cursor:pointer;border-radius:6px}
+.distrow.click:hover>.small:first-child{color:var(--fg)}
+.statrow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 20px}
+.statcell .statval{font-family:Montserrat,sans-serif;font-size:20px;font-weight:700;color:var(--primary-dark);line-height:1.2}
+[data-theme="dark"] .statcell .statval{color:var(--accent)}
+.colchart{display:flex;align-items:flex-end;justify-content:center;gap:6px;margin:4px 0 2px}
+.colchart .col{flex:1;max-width:46px;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:0;padding:0;cursor:pointer;font:inherit}
+.colchart .track{width:100%;max-width:26px;height:44px;background:var(--track);border-radius:5px;display:flex;align-items:flex-end;overflow:hidden}
+.colchart .bar{width:100%;background:var(--accent);border-radius:4px 4px 0 0;transition:.15s}
+.colchart .col:hover .bar{filter:brightness(1.1)}
+.colchart .bar.on{background:var(--primary-dark)}
+[data-theme="dark"] .colchart .bar.on{background:var(--fg)}
+.colchart .cnt{font-size:10.5px;color:var(--mut);min-height:13px;opacity:0;transition:.15s}
+.colchart .col:hover .cnt{opacity:1}
+.colchart .lbl{font-size:10.5px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.colchart .lbl.on{color:var(--fg);font-weight:600}
+.filterchip{display:inline-flex;align-items:center;gap:7px;background:var(--accent-t);border:1px solid var(--accent);color:var(--link);border-radius:999px;padding:3px 11px;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+.filterchip .x{opacity:.7}
+.filterchip:hover .x{opacity:1}
+.legchip{display:inline-flex;align-items:center;gap:6px;background:transparent;border:0;padding:2px 4px;border-radius:6px;font:inherit;font-size:12px;color:var(--mut);cursor:pointer}
+.legchip:hover{color:var(--fg)}
+.legchip.on{color:var(--fg);font-weight:600}
+/* collection map widget: basemap + linked side list + year strip */
+.mapwrap{display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:16px}
+@media(max-width:920px){.mapwrap{grid-template-columns:1fr}}
+.lmap{height:360px;border-radius:12px;background:var(--track);overflow:hidden;z-index:0}
+.lmap .leaflet-tile-pane{filter:sepia(.32) saturate(.72) brightness(1.02)}   /* tone tiles to the house palette */
+[data-theme="dark"] .lmap .leaflet-tile-pane{filter:saturate(.55) brightness(.92)}
+.lmap .leaflet-tooltip{background:var(--fg);color:var(--bg);border:0;border-radius:6px;font-size:11.5px;box-shadow:0 4px 14px var(--shadow)}
+.glowdot{filter:drop-shadow(0 0 6px rgba(168,137,91,.85))}
+.mapside{min-width:0}
+.sider{display:grid;grid-template-columns:minmax(0,1fr) 74px 32px;gap:8px;align-items:center;padding:5px 6px;border-radius:7px;cursor:pointer}
+.sider:hover{background:var(--accent-t)}
+.timeline{position:absolute;left:14px;right:14px;bottom:12px;z-index:800;
+  background:color-mix(in srgb,var(--panel) 80%,transparent);backdrop-filter:blur(7px);
+  border:1px solid var(--line);border-radius:12px;padding:9px 16px 6px}
+.tl-row{display:flex;justify-content:space-between;position:relative}
+.tl-row:before{content:"";position:absolute;left:8px;right:8px;top:11px;height:2px;background:var(--line);border-radius:2px}
+.tl-cell{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:0;padding:0;cursor:pointer;font:inherit}
+.tl-slot{height:22px;display:flex;align-items:center;justify-content:center}
+.tl-dot{border-radius:50%;background:var(--accent);border:2px solid var(--panel);box-shadow:0 0 7px rgba(168,137,91,.85);transition:.15s;z-index:1}
+.tl-cell:hover .tl-dot{transform:scale(1.25)}
+.tl-cell.on .tl-dot{background:var(--primary-dark);box-shadow:0 0 11px rgba(66,61,52,.8)}
+[data-theme="dark"] .tl-cell.on .tl-dot{background:var(--fg)}
+.tl-cell.dim .tl-dot{opacity:.3!important;box-shadow:none}
+.tl-year{font-size:10.5px;color:var(--mut);font-variant-numeric:tabular-nums}
+.tl-cell.on .tl-year{color:var(--fg);font-weight:700}
+/* methods page */
+.methodgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;margin:0 0 6px}
+.methodcard{background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--accent);border-radius:var(--rad);padding:14px 16px}
+.methodcard h4{margin:0 0 6px;font-size:13.5px;display:flex;gap:8px;align-items:center}
+.methodcard p{margin:0;font-size:12.5px;color:var(--mut);line-height:1.55}
+.steps{padding:2px 0}
+.step{display:flex;gap:14px;position:relative;padding-bottom:18px}
+.step:last-child{padding-bottom:0}
+.step:not(:last-child):after{content:"";position:absolute;left:13px;top:28px;bottom:2px;width:1px;background:var(--line)}
+.stepnum{width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:700;flex:0 0 auto}
+/* rec-detail compact item rows */
+.reccard{display:flex;gap:13px;padding:12px 15px;margin:8px 0;align-items:flex-start}
+.recthumb{width:48px;height:48px;border-radius:9px;object-fit:cover;flex:0 0 auto;background:var(--code);cursor:pointer}
+.recthumb.ph{display:inline-block;border:1px solid var(--line)}
+.recbody{flex:1;min-width:0}
+.reclink{cursor:pointer}
+.reclink:hover{color:var(--accent)}
+.srclink{font-size:11.5px;font-weight:600;color:var(--accent);text-decoration:none;margin-left:auto;white-space:nowrap}
+.srclink:hover{text-decoration:underline}
+/* rec-detail "why served" facts: equal columns, wrap cleanly, no separators to dangle */
+.metagrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px 20px;align-items:start}
 /* lazy-loading section placeholder */
 .lazyload{display:flex;align-items:center;justify-content:center;gap:9px;padding:26px;color:var(--mut);font-size:13px;border:1px dashed var(--line);border-radius:var(--rad)}
 .lazyload .spin{width:15px;height:15px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:lspin .7s linear infinite;flex:none}
@@ -331,7 +417,7 @@ button.ghost:hover{border-color:var(--accent)}
     </div>
     <nav class="side-nav" id="tabs"></nav>
     <div class="side-foot">
-      <span class="foot-tenant" id="tenantname" title="active tenant">—</span>
+      <span class="foot-tenant" id="tenantname" title="active tenant"></span>
       <span class="conn" id="conn" title="not connected"><span class="dot"></span></span>
     </div>
   </aside>
@@ -390,6 +476,7 @@ const base=()=>window.location.origin;   // dashboard is served by the API itsel
 const headers=()=>{const h={};const k=$("#key").value.trim();if(k)h["X-API-Key"]=k;const t=$("#tenant").value.trim();if(t)h["X-Tenant-Id"]=t;return h;};
 async function api(path){const r=await fetch(base()+path,{headers:headers()});if(!r.ok)throw new Error(r.status+" "+r.statusText+", "+path);return (await r.json()).result;}
 const fmt=x=>(typeof x==="number")?(Math.round(x*1000)/1000):x;
+const cap1=s=>String(s).replace(/^\w/,c=>c.toUpperCase());   // capitalize first letter only
 const mdInline=t=>String(t??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>");
 // one fixed colour per Falk persona, used everywhere the persona appears
 const PERSONA_COLORS={Explorer:"#4F6276",Hobbyist:"#5E7355","Experience-Seeker":"#A8895B",Recharger:"#7A5C6E",Facilitator:"#4E7E78"};
@@ -452,7 +539,7 @@ function prettyKey(key){
   const facetPath=i<0?"":key.slice(0,i);
   let label=(i<0?key:key.slice(i+1)).replace(/^from:\s*/i,"").replace(/_/g," ").trim();
   const facet=FACET_LABELS[facetPath]||(facetPath.split(".").pop()||"").replace(/_/g," ");
-  return {facet,label:label||"—"};
+  return {facet,label:label||""};
 }
 // humanize a stored demographic value: "45_54"->"45–54","65_plus"->"65+","male"->"Male"
 function humanVal(k,v){
@@ -461,15 +548,27 @@ function humanVal(k,v){
   // underscores -> spaces (keep hyphens: "Zuid-Holland"); title-case each word
   return v.replace(/_/g," ").replace(/(^|[\s-])\w/g,c=>c.toUpperCase());
 }
-// tag affinity/aversion list: facet badge + clean label + bar, capped with a show-all toggle
-function tagList(pairs,{signed=false,top=6}={}){
+// one taxonomy tag as a chip: facet badge + clean label; weight shown on overlap hits
+function tagChip(key,weight){
+  const {facet,label}=prettyKey(key);
+  const c=el("span",{class:"tchip"+(weight!=null?" hit":""),title:key});
+  if(facet)c.append(el("span",{class:"fb"},facet));
+  c.append(el("span",{},label));
+  if(weight!=null)c.append(el("span",{class:"w"},fmt(weight)));
+  return c;
+}
+// tag affinity/aversion list: facet badge + clean label + bar, capped with a show-all toggle.
+// `hi` = Set of normalized keys to highlight green (e.g. affinities matched by served items).
+function tagList(pairs,{signed=false,top=6,hi=null}={}){
   const m=Math.max(0.0001,...pairs.map(([,v])=>Math.abs(v)));
   const box=el("div");
+  const norm=k=>String(k).toLowerCase().trim();
   const mkRow=([key,v])=>{const {facet,label}=prettyKey(key);
-    return el("div",{class:"tagrow"},
+    const hit=hi&&hi.has(norm(key));
+    return el("div",{class:"tagrow"+(hit?" hit":"")},
       el("div",{class:"lab"},facet?el("span",{class:"fb"},facet):"",el("span",{class:"t",title:key},label)),
-      el("div",{class:"barwrap"},el("div",{class:"seg",style:`width:${100*Math.abs(v)/m}%;background:${signed&&v<0?'var(--c-aversion)':'var(--accent)'}`})),
-      el("div",{class:"val"},fmt(v)));};
+      el("div",{class:"barwrap"},el("div",{class:"seg",style:`width:${100*Math.abs(v)/m}%;background:${hit?'#5E7355':signed&&v<0?'var(--c-aversion)':'var(--accent)'}`})),
+      el("div",{class:"val",style:hit?"color:#5E7355;font-weight:600":""},fmt(v)));};
   pairs.slice(0,top).forEach(p=>box.append(mkRow(p)));
   if(pairs.length>top){
     const extra=el("div",{style:"display:none"});
@@ -495,6 +594,7 @@ const ICONS={
   config:'<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>',
   personas:'<path d="M4 14c0 3 3 5 5 5 1.5 0 2-1 3-1s1.5 1 3 1c2 0 5-2 5-5 0-4-3-9-5-9-1.5 0-2 1-3 1s-1.5-1-3-1c-2 0-5 5-5 9Z"/>',
   evaluate:'<path d="M9 3h6M10 3v6l-4.5 8a2 2 0 0 0 1.8 3h9.4a2 2 0 0 0 1.8-3L14 9V3M7.5 15h9"/>',
+  info:'<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5"/><circle cx="12" cy="8" r="0.6" fill="currentColor"/>',
 };
 const slug=n=>n.toLowerCase().replace(/\s+/g,"-");
 
@@ -504,16 +604,16 @@ const GROUPS=[
   {label:"Admin",      tabs:{Policy:renderPolicy,Tenants:renderTenants,Config:renderConfig}},
   {label:"Reference",  tabs:{Methods:renderPersonas}},
 ];
-const ICON_OF={Cohort:"cohort",Content:"content",Policy:"policy",Traffic:"traffic","Synthetic users":"evaluate",Tenants:"tenants",Config:"config",Personas:"personas"};
+const ICON_OF={Cohort:"cohort",Content:"content",Policy:"policy",Traffic:"traffic","Synthetic users":"evaluate",Tenants:"tenants",Config:"config",Methods:"info"};
 const SUBTITLE={
   Cohort:"Search any visitor, or browse the learned segments. Open a visitor for their model, history and live recommendations.",
   Content:"Which items get seen, liked and abandoned across all visitors.",
   Policy:"The ranking policy: fusion weights, bandit theta and training health.",
   Traffic:"Serving counters and the tail of the served-impression log.",
-  "Synthetic users":"Probe recommender behaviour with built-in or prompt-built personas — across scenarios, with metrics.",
+  "Synthetic users":"Probe recommender behaviour with built-in or prompt-built personas: across scenarios, with metrics.",
   Tenants:"Create, inspect and delete tenant slices at runtime (no redeploy).",
   Config:"Live RecConfig: edit, apply and persist runtime overrides.",
-  Personas:"How the engine reads a visitor — the research behind the labels.",
+  Methods:"How the engine reads a visitor: the research behind the labels.",
 };
 const ALL=Object.assign({},...GROUPS.map(g=>g.tabs));
 const SCOPE={};GROUPS.forEach(g=>Object.keys(g.tabs).forEach(t=>SCOPE[t]=g.label));
@@ -568,62 +668,213 @@ async function renderRecDetail(v){
   let d;
   try{d=await api(`/api/served/explain?request_id=${encodeURIComponent(recCtx)}`);}catch(e){failCard(host,e);return;}
   if(!d){host.append(el("div",{class:"empty"},"Recommendation ",el("b",{},recCtx)," not found in the served log."));return;}
-  // ----- meta: why served -----
+  // ----- meta: why served (labelled facts, not a pill soup) -----
   const meta=el("div",{class:"card"},cardhead("Why this was served"));
-  meta.append(el("div",{class:"row",style:"gap:7px;flex-wrap:wrap;margin-bottom:6px"},
-    el("span",{class:"pill "+(d.strategy||"warm")},"strategy: "+(d.strategy||"?")),
-    d.ranking?el("span",{class:"pill neutral"},"ranking: "+d.ranking):"",
-    d.cold_start?el("span",{class:"pill cold"},"cold start"):"",
-    d.filter?el("span",{class:"pill neutral"},"filter: "+d.filter):""));
-  meta.append(el("div",{class:"small mut"},
-    "visitor ",el("button",{class:"userchip",title:"open visitor",onclick:()=>openUser(d.user_id,"profile")},d.user_id||"?"),
-    "   ·   "+((d.ts||"").replace("T"," ").slice(0,19))));
-  if(!d.has_breakdown)meta.append(el("div",{class:"small mut",style:"margin-top:8px;font-style:italic"},
+  const kv=(label,val)=>el("div",{},el("div",{class:"eyebrow"},label),el("div",{style:"margin-top:4px"},val));
+  const mg=el("div",{class:"metagrid"});
+  mg.append(
+    kv("strategy",el("span",{class:"pill "+(d.strategy||"warm")},d.strategy||"?")),
+    kv("ranking",d.ranking?el("span",{class:"pill neutral"},d.ranking):""),
+    kv("visitor",el("button",{class:"userchip",title:"open visitor",onclick:()=>openUser(d.user_id,"profile")},d.user_id||"?")),
+    kv("served",el("span",{class:"small mut num"},(d.ts||"").replace("T"," ").slice(0,19))));
+  if(d.filter)mg.append(kv("filter",el("span",{class:"pill neutral"},d.filter)));
+  meta.append(mg);
+  // cold_start = the global-diverse-sample fallback (pool was empty); it always implies
+  // strategy "cold", so it reads as a footnote to the facts, not a fact of its own
+  if(d.cold_start)meta.append(el("div",{class:"small mut",style:"margin-top:10px"},
+    "cold start: the visitor had no usable signal yet, so the candidate pool fell back to a global diverse sample of the collection"));
+  if(!d.has_breakdown)meta.append(el("div",{class:"small mut",style:"margin-top:10px;font-style:italic"},
     "Legacy impression: the per-scorer breakdown was not recorded at serve time. Tag overlap below is computed against the visitor's current model."));
   host.append(meta);
-  // ----- the user model -----
-  if(d.user_model){
-    const um=d.user_model,vt=um.visitor_type||{};
+  // ----- the visitor model: engagement style + tag affinities, one card.
+  // Affinities that actually matched a served item are green — the same green as the
+  // overlap chips on the item rows below, so the visitor->item link reads at a glance.
+  const um=d.user_model,tags=d.user_tag_affinity||[];
+  const hitKeys=new Set();
+  (d.items||[]).forEach(it=>(it.tag_overlap||[]).forEach(o=>hitKeys.add(String(o.key).toLowerCase().trim())));
+  if(um||tags.length){
     const umc=el("div",{class:"card"},cardhead("Visitor model"));
-    umc.append(el("div",{class:"row",style:"gap:7px;flex-wrap:wrap"},
-      personaPill("Falk: "+(vt.type||"?"),vt.type),
-      el("span",{class:"pill neutral"},"Pekarik: "+(um.experience_preference||"?")),
-      el("span",{class:"pill neutral"},"Style: "+(um.engagement_style||"?"))));
-    if(um.summary)umc.append(el("p",{class:"small",style:"margin:.5rem 0 0;line-height:1.55",html:mdInline(um.summary)}));
+    if(um&&um.engagement_style)umc.append(el("div",{class:"row",style:"gap:7px;flex-wrap:wrap"},
+      el("span",{class:"pill neutral"},"Style: "+um.engagement_style)));
+    if(um&&um.summary)umc.append(el("p",{class:"small",style:"margin:.5rem 0 0;line-height:1.55",html:mdInline(um.summary)}));
+    if(tags.length){
+      umc.append(
+        el("div",{class:"eyebrow",style:"display:block;margin:12px 0 4px"},"Tag affinities"),
+        el("div",{style:"max-width:620px"},tagList(tags.map(t=>[t.key,t.weight]),{hi:hitKeys})));
+      if(hitKeys.size)umc.append(el("div",{class:"small mut",style:"margin-top:6px"},
+        el("span",{class:"sw",style:"background:#5E7355"}),"green = this affinity matched a recommended item below"));
+    }
     host.append(umc);
   }
-  if(d.user_tag_affinity&&d.user_tag_affinity.length){
-    host.append(el("div",{class:"card"},cardhead("Visitor tag model"),
-      valueBars(d.user_tag_affinity.map(t=>[t.key,t.weight]))));
-  }
-  // ----- recommended items + explanation -----
+  // ----- recommended items: compact rows (thumb, title, chips, breakdown) -----
   const items=d.items||[];
   host.append(el("div",{class:"eyebrow",style:"display:block;margin:14px 0 6px"},`Recommended items (${items.length})`));
+  let anyBd=false;
   for(const it of items){
-    const card=el("div",{class:"card"});
-    card.append(el("div",{class:"row",style:"gap:8px;align-items:baseline"},
-      el("b",{},`#${it.rank} `,it.title||it.id),
+    const card=el("div",{class:"card reccard"});
+    const open=()=>openContentDetail(it.id);
+    card.append(it.image_url
+      ?el("img",{class:"recthumb",src:it.image_url,alt:"",loading:"lazy",title:"open content card",onclick:open})
+      :el("span",{class:"recthumb ph",title:"open content card",onclick:open}));
+    const body=el("div",{class:"recbody"});
+    body.append(el("div",{class:"row",style:"gap:8px;align-items:baseline;flex-wrap:wrap"},
+      el("b",{class:"reclink",title:"open content card",onclick:open},`#${it.rank} `,it.title||it.id),
       el("span",{class:"pill "+(it.role==="distractor"?"cold":"warm"),style:"font-size:11px"},it.role||"target"),
-      it.relevance_score!=null?el("span",{class:"small num mut"},"score "+fmt(it.relevance_score)):""));
+      it.relevance_score!=null?el("span",{class:"small num mut"},"score "+fmt(it.relevance_score)):"",
+      it.public_url?el("a",{class:"srclink",href:it.public_url,target:"_blank",rel:"noopener",title:"open source record"},"source ↗"):""));
+    // overlap chips first (green, with the visitor's weight), remaining content tags muted
     const ov=it.tag_overlap||[];
-    card.append(el("div",{class:"eyebrow",style:"display:block;margin:9px 0 4px"},`Tag overlap visitor ↔ content (${ov.length})`));
-    if(ov.length)card.append(el("div",{class:"row",style:"gap:5px;flex-wrap:wrap"},
-      ...ov.map(o=>el("span",{class:"pill",style:"background:#5E735522;color:#5E7355;border-color:#5E735566;font-size:11px"},`${o.key}  ·  ${fmt(o.user_weight)}`))));
-    else card.append(el("div",{class:"small mut"},"no matching tags — recommended for other reasons (semantic similarity, exploration, geo, recency)"));
     const others=(it.content_tags||[]).filter(t=>!ov.some(o=>o.key===t));
-    if(others.length)card.append(el("div",{class:"row",style:"gap:5px;flex-wrap:wrap;margin-top:5px"},
-      el("span",{class:"small mut",style:"margin-right:4px"},"other content tags:"),
-      ...others.map(t=>el("span",{class:"pill neutral",style:"font-size:11px;opacity:.6"},t))));
+    if(ov.length||others.length)body.append(el("div",{class:"row",style:"gap:2px;flex-wrap:wrap;margin-top:6px"},
+      ...ov.map(o=>tagChip(o.key,o.user_weight)),
+      ...others.map(t=>{const ch=tagChip(t);ch.style.opacity=".6";return ch;})));
+    if(!ov.length)body.append(el("div",{class:"small mut",style:"margin-top:4px"},
+      "no tag overlap: ranked by other signals (semantic similarity, exploration, geo, recency)"));
     const bd=it.breakdown||{};
-    if(Object.keys(bd).length){
-      card.append(el("div",{class:"eyebrow",style:"display:block;margin:10px 0 4px"},"Why ranked here (score breakdown)"));
-      card.append(breakdownBar(bd));
-      card.append(legend());
-    }
+    if(Object.keys(bd).length){anyBd=true;body.append(el("div",{style:"margin-top:8px"},breakdownBar(bd)));}
+    card.append(body);
     host.append(card);
   }
+  if(anyBd)host.append(legend());
 }
 
+
+/* ===== COHORT STATISTICS: demographic slices double as filters ===== */
+let _coFilter={};                    // {field: [raw values]}, multi-select, persists across repaints
+async function drawCohortStats(box){
+  const qs=Object.entries(_coFilter).map(([k,v])=>k+"="+encodeURIComponent(v.join(","))).join("&");
+  const st=await api("/api/cohort/stats"+(qs?"?"+qs:""));
+  box.innerHTML="";
+  if(!st||!st.total_visitors)return;
+  const refresh=()=>{drawCohortStats(box).catch(e=>{box.innerHTML="";failCard(box,e);});filterUsers();};
+  const setF=(f,val)=>{                        // toggle val within the field's selection
+    const cur=_coFilter[f]||[];
+    _coFilter[f]=cur.includes(val)?cur.filter(x=>x!==val):cur.concat(val);
+    if(!_coFilter[f].length)delete _coFilter[f];
+    refresh();
+  };
+  const CAT=["var(--c-semantic)","var(--c-tag)","var(--c-geo)","var(--c-recency)"];
+  const DEMO_LABEL={age:"Age",gender:"Gender",nationality:"Nationality",province:"Province",personal_connection:"WW2 connection"};
+
+  // section header: title + active filter chips (the statistics zone reads as its own block)
+  // min-height reserves the chip row's space up front, so toggling a filter never shifts the layout
+  const head=el("div",{class:"row",style:"gap:9px;flex-wrap:wrap;align-items:center;margin:0 0 8px;min-height:28px"},
+    el("span",{class:"eyebrow"},"Cohort statistics"));
+  const fl=Object.entries(_coFilter);
+  if(fl.length){
+    fl.forEach(([f,vals])=>vals.forEach(val=>head.append(el("button",{class:"filterchip",title:"remove this filter",onclick:()=>setF(f,val)},
+      `${DEMO_LABEL[f]||f}: ${humanVal(f,val)}`,el("span",{class:"x"},"✕")))));
+    head.append(el("button",{class:"morebtn",style:"margin:0",onclick:()=>{_coFilter={};refresh();}},"clear all"));
+    head.append(el("span",{class:"small mut"},`${st.visitors} of ${st.total_visitors} visitors`));
+  }
+  box.append(head);
+
+  // activity: one flat card with stat cells, not a row of boxed tiles
+  const cell=(val,label,sub,extra)=>el("div",{class:"statcell"},
+    el("div",{class:"statval num"},String(val)),
+    el("div",{class:"small mut"},label),
+    sub?el("div",{class:"small mut",style:"opacity:.75;margin-top:2px"},sub):"",extra||"");
+  const outcomes=st.positive+st.negative;
+  const split=outcomes?el("div",{class:"barwrap",style:"margin-top:7px;height:8px;min-width:0;gap:2px;max-width:150px"},
+    el("div",{class:"seg",style:`width:${100*st.positive/outcomes}%;background:var(--c-affinity)`,title:st.positive+" positive"}),
+    el("div",{class:"seg",style:`width:${100*st.negative/outcomes}%;background:var(--c-aversion)`,title:st.negative+" negative"})):"";
+  const statsCard=el("div",{class:"card",style:"margin:0 0 12px;padding-top:12px;padding-bottom:12px"});
+  statsCard.append(el("div",{class:"statrow"},
+    cell(st.visitors,"visitors",`${st.warm} warm · ${st.cold} cold`),
+    cell(st.events,"interactions",`${st.views_per_visitor} views per visitor`),
+    cell((st.avg_dwell_seconds||0)+"s","avg dwell per view",`${st.views} content views`),
+    cell(`${st.positive} / ${st.negative}`,"positive / negative","engagement outcomes",split)));
+  box.append(statsCard);
+
+  // ordinal field (age) -> columns on tracks, every bucket shown, order never changes
+  const AGE_ORDER=["under_18","18_24","25_34","35_44","45_54","55_64","65_plus"];
+  const colChart=(field,entries)=>{
+    const m=Math.max(1,...entries.map(([,c])=>c)),sel=_coFilter[field]||[];
+    const w=el("div",{class:"colchart"});
+    for(const [val,cnt] of entries){
+      const on=sel.includes(val),dim=sel.length&&!on;
+      w.append(el("button",{class:"col",title:`${humanVal(field,val)}: ${cnt} visitor${cnt===1?"":"s"}`,
+        onclick:cnt?()=>setF(field,val):null,style:cnt?"":"cursor:default"},
+        el("span",{class:"cnt num"},cnt||""),
+        el("div",{class:"track"},el("div",{class:"bar"+(on?" on":""),style:`height:${cnt?Math.max(10,Math.round(100*cnt/m)):0}%;${dim?"opacity:.35":""}`})),
+        el("span",{class:"lbl"+(on?" on":"")},humanVal(field,val))));
+    }
+    return w;
+  };
+  // few categories (gender) -> donut + clickable legend; colors follow the entity's
+  // stable (alphabetical) position, so filtering never repaints survivors
+  const pieChart=(field,entries)=>{
+    const tot=entries.reduce((s,[,c])=>s+c,0)||1,sel=_coFilter[field]||[];
+    const R=34,SW=16,C=48;
+    let a0=-Math.PI/2,paths="";
+    const nSegs=entries.filter(([,c])=>c>0).length;
+    entries.forEach(([val,cnt],i)=>{
+      if(!cnt)return;
+      const cc=CAT[i%CAT.length],frac=cnt/tot,on=sel.includes(val),dim=sel.length&&!on;
+      const tip=`${humanVal(field,val)}: ${cnt} · ${Math.round(100*frac)}%`;
+      if(frac>=0.999){
+        paths+=`<circle cx="${C}" cy="${C}" r="${R}" fill="none" stroke="${cc}" stroke-width="${SW}" style="cursor:pointer" data-val="${val}"><title>${tip}</title></circle>`;
+      }else{
+        const gap=nSegs>1?0.055:0,a1=a0+frac*2*Math.PI,s0=a0+gap/2,s1=a1-gap/2;
+        const large=(s1-s0)>Math.PI?1:0;
+        const x0=C+R*Math.cos(s0),y0=C+R*Math.sin(s0),x1=C+R*Math.cos(s1),y1=C+R*Math.sin(s1);
+        paths+=`<path d="M ${x0.toFixed(2)} ${y0.toFixed(2)} A ${R} ${R} 0 ${large} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}" fill="none" stroke="${cc}" stroke-width="${SW}" stroke-linecap="butt" style="cursor:pointer;${dim?"opacity:.35":""}" data-val="${val}"><title>${tip}</title></path>`;
+        a0=a1;
+      }
+    });
+    const svgbox=el("div",{style:"flex:0 0 auto",html:`<svg viewBox="0 0 96 96" width="88" height="88">${paths}</svg>`});
+    svgbox.querySelectorAll("[data-val]").forEach(pth=>pth.addEventListener("click",()=>setF(field,pth.getAttribute("data-val"))));
+    const leg=el("div",{style:"display:flex;flex-direction:column;gap:3px;align-items:flex-start"});
+    entries.forEach(([val,cnt],i)=>{
+      if(!cnt)return;
+      const cc=CAT[i%CAT.length],on=sel.includes(val);
+      leg.append(el("button",{class:"legchip"+(on?" on":""),title:`${humanVal(field,val)}: ${cnt} visitor${cnt===1?"":"s"}`,onclick:()=>setF(field,val)},
+        el("span",{class:"sw",style:`background:${cc}`}),`${humanVal(field,val)} · ${Math.round(100*cnt/tot)}%`));
+    });
+    return el("div",{class:"row",style:"gap:14px;align-items:center;flex-wrap:wrap"},svgbox,leg);
+  };
+  // many categories -> horizontal rows; clickable when a field is given
+  const distList=(rows,field)=>{
+    const m=Math.max(1,...rows.map(r=>r.count)),tot=rows.reduce((s,r)=>s+r.count,0)||1,sel=(field?_coFilter[field]:null)||[];
+    const d=el("div");
+    for(const r of rows){
+      const on=sel.includes(r.value),dim=sel.length&&!on;
+      d.append(el("div",{class:"distrow"+(field?" click":""),title:`${r.label}: ${r.count} of ${tot}`,
+        onclick:field?()=>setF(field,r.value):null},
+        el("div",{class:"small"+(on?" b":""),style:"overflow:hidden;text-overflow:ellipsis;white-space:nowrap"+(on?";font-weight:600":"")},r.label),
+        el("div",{class:"barwrap",style:"min-width:0;height:12px"},
+          el("div",{class:"seg",style:`width:${100*r.count/m}%;background:${r.color||'var(--accent)'};border-radius:0 4px 4px 0;${dim?"opacity:.35":""}`})),
+        el("div",{class:"small num mut",style:"text-align:right;white-space:nowrap"},`${Math.round(100*r.count/tot)}%`)));
+    }
+    return d;
+  };
+
+  // demographics: fields side by side in one compact card; ORDER IS FIXED, never
+  // re-sorted by counts, so applying a filter cannot shuffle the layout
+  const FIELD_ORDER=["age","gender","nationality","province","personal_connection"];
+  const demo=st.demographics||{};
+  const dfields=FIELD_ORDER.filter(f=>demo[f]).concat(Object.keys(demo).filter(f=>!FIELD_ORDER.includes(f)));
+  if(dfields.length){
+    // same card as the stat row: one compact statistics block, table right below
+    const fg=el("div",{style:"display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:6px 36px;align-items:start;max-width:780px;margin:0 auto;width:100%"});
+    for(const field of dfields){
+      const dist=demo[field];
+      let entries;
+      if(field==="age"){
+        // ordinal, zero-fill only INTERIOR gaps (no empty edge buckets)
+        const idx=AGE_ORDER.filter(k=>k in dist).map(k=>AGE_ORDER.indexOf(k));
+        const span=idx.length?AGE_ORDER.slice(Math.min(...idx),Math.max(...idx)+1):[];
+        entries=span.map(k=>[k,dist[k]||0]).concat(Object.entries(dist).filter(([k])=>!AGE_ORDER.includes(k)));
+      }else entries=Object.entries(dist).sort((a,b)=>String(a[0]).localeCompare(String(b[0])));  // alphabetical = stable
+      const cellEl=el("div",{},el("div",{class:"eyebrow",style:"display:block;margin:6px 0 3px"},DEMO_LABEL[field]||cap1(field.replace(/_/g," "))));
+      if(field==="age")cellEl.append(colChart(field,entries));
+      else if(entries.length<=3)cellEl.append(pieChart(field,entries));
+      else cellEl.append(distList(entries.slice(0,8).map(([val,cnt])=>({label:humanVal(field,val),count:cnt,value:val})),field));
+      fg.append(cellEl);
+    }
+    statsCard.append(el("div",{style:"border-top:1px solid var(--line);margin:12px 0 8px"}),fg);
+  }
+}
 
 /* ===== COHORT: visitor search + table, segments below ===== */
 async function renderCohort(v){
@@ -631,14 +882,11 @@ async function renderCohort(v){
   const clustersP=api("/api/clusters").catch(()=>null);
   const statsP=api("/api/users").catch(()=>[]);      // parquet scan + event sweep server-side
 
-  // search (wide, full-width, magnifier icon; Enter or row-click opens) — paints instantly
-  const search=el("input",{class:"searchbar",id:"usearch",placeholder:"Search visitor id…",
-    oninput:filterUsers,onkeydown:e=>{if(e.key==="Enter"){const q=search.value.trim();if(q)openUser(q,"profile");}}});
-  const icon=el("span",{class:"searchicon",html:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20.5 20.5l-4.2-4.2"/></svg>'});
-  v.append(el("div",{class:"searchwrap"},icon,search));
+  const statsSlot=el("div"),usersSlot=el("div"),segSlot=el("div");
+  v.append(statsSlot,usersSlot,segSlot);
 
-  const usersSlot=el("div"),segSlot=el("div");
-  v.append(usersSlot,segSlot);
+  // cohort statistics: interactive, demographic values act as filters
+  lazyFill(statsSlot,"loading cohort statistics…",box=>drawCohortStats(box));
 
   // visitors table — lazy
   lazyFill(usersSlot,"loading visitors…",async box=>{
@@ -652,27 +900,44 @@ async function renderCohort(v){
       try{const sv=await api("/api/served/recent?n=200");(sv||[]).forEach(x=>x.user_id&&set.add(x.user_id));}catch(e){}
       rowIds=[...set].sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true}));
     }
-    const tsShort=t=>t?String(t).replace("T"," ").slice(0,16):"—";
+    const tsShort=t=>t?String(t).replace("T"," ").slice(0,16):"";
+    box.append(el("div",{class:"eyebrow",style:"display:block;margin:16px 0 8px"},"Visitors"));
+    // search lives with the table it filters; Enter opens the typed id directly
+    const search=el("input",{class:"searchbar",id:"usearch",placeholder:"Search visitor id…",
+      oninput:filterUsers,onkeydown:e=>{if(e.key==="Enter"){const q=search.value.trim();if(q)openUser(q,"profile");}}});
+    const icon=el("span",{class:"searchicon",html:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20.5 20.5l-4.2-4.2"/></svg>'});
     if(!rowIds.length){
-      box.append(el("div",{class:"empty"},"No known visitors yet — ingest events, or type an id above and Open."));
+      box.append(el("div",{class:"empty"},"No known visitors yet: ingest events to see them here."));
       return;
     }
+    box.append(el("div",{class:"searchwrap"},icon,search));
     const tbl=el("table",{id:"utbl"});
-    tbl.append(el("tr",{},el("th",{},"visitor"),el("th",{},"segment"),
-      el("th",{class:"num"},"views"),el("th",{class:"num"},"liked"),el("th",{},"last seen"),el("th",{style:"width:80px"},"")));
+    const hrow=makeSortable(tbl,
+      [["visitor","visitor"],["segment","segment"],["views","views","num"],["positive","positive","num"],["last seen","last"]],
+      {rowClass:"urow",numeric:["views","positive"]});
+    hrow.append(el("th",{style:"width:80px"},""));
+    tbl.append(hrow);
     for(const u of rowIds){const p=u2c[u], s=ustat[u]||{};
-      tbl.append(el("tr",{class:"urow","data-id":String(u).toLowerCase(),style:"cursor:pointer",onclick:()=>openUser(u,"profile")},
+      const dmo=s.demographics||{};
+      const attrs={class:"urow","data-id":String(u).toLowerCase(),style:"cursor:pointer",onclick:()=>openUser(u,"profile")};
+      ["age","gender","nationality","province"].forEach(f=>attrs["data-f-"+f]=dmo[f]!=null?String(dmo[f]):"");
+      attrs["data-s-visitor"]=String(u).toLowerCase();
+      attrs["data-s-segment"]=p?"cluster "+p.cluster:"";
+      attrs["data-s-views"]=s.n_interactions!=null?s.n_interactions:0;
+      attrs["data-s-positive"]=s.n_liked||0;
+      attrs["data-s-last"]=s.last_interaction||"";
+      tbl.append(el("tr",attrs,
         el("td",{},el("b",{},u)),
-        el("td",{},p?personaPill("Cluster "+p.cluster+(p.falk_hint?" · "+p.falk_hint:""),Object.keys(PERSONA_COLORS).find(k=>(p.falk_hint||"").startsWith(k))):el("span",{class:"mut small"},"—")),
-        el("td",{class:"num"},s.n_interactions!=null?s.n_interactions:"—"),
-        el("td",{class:"num",style:s.n_liked?"color:var(--c-affinity);font-weight:600":""},s.n_liked||"—"),
+        el("td",{},p?personaPill("Cluster "+p.cluster+(p.falk_hint?" · "+p.falk_hint:""),Object.keys(PERSONA_COLORS).find(k=>(p.falk_hint||"").startsWith(k))):""),
+        el("td",{class:"num"},s.n_interactions!=null?s.n_interactions:0),
+        el("td",{class:"num",style:s.n_liked?"color:var(--c-affinity);font-weight:600":"color:var(--mut)"},s.n_liked||0),
         el("td",{class:"small mut num"},tsShort(s.last_interaction)),
         el("td",{},el("button",{class:"userchip",onclick:e=>{e.stopPropagation();openUser(u,"profile");}},"open"))));
     }
     box.append(el("div",{class:"card"},cardhead(`Visitors (${rowIds.length})`),tbl,
       el("div",{id:"unone",class:"small mut",style:"margin-top:8px;display:none"},"no visitor matches the search."),
-      el("div",{class:"small mut",style:"margin-top:8px"},"views = interactions in the event buffer · liked = positive signals · last seen = latest interaction or served impression.")));
-    filterUsers();                                 // re-apply anything typed while loading
+      el("div",{class:"small mut",style:"margin-top:8px"},"views = interactions in the event buffer · positive = positive signals · last seen = latest interaction or served impression.")));
+    setTimeout(filterUsers,0);   // apply any active demographic filter once the table is in the DOM
   });
 
   // learned segments — lazy
@@ -704,11 +969,52 @@ function renderSegments(v,r){
     }
     v.append(g);
   }else{
-    v.append(el("div",{class:"small mut",style:"margin-top:12px"},"No cluster model yet — train one (",el("code",{},"python explain/cluster_train.py --method fcm"),") and set ",el("code",{},"CLUSTER_MODEL_PATH")," to see segments."));
+    v.append(el("div",{class:"small mut",style:"margin-top:12px"},"No cluster model yet: train one (",el("code",{},"python explain/cluster_train.py --method fcm"),") and set ",el("code",{},"CLUSTER_MODEL_PATH")," to see segments."));
   }
 }
-function filterUsers(){const q=($("#usearch").value||"").toLowerCase();let shown=0;
-  for(const tr of document.querySelectorAll("#utbl .urow")){const hit=tr.getAttribute("data-id").includes(q);tr.style.display=hit?"":"none";if(hit)shown++;}
+// lazy-load Leaflet only when a map is actually shown (other tabs stay offline-safe)
+let _leafletP=null;
+function ensureLeaflet(){
+  if(window.L)return Promise.resolve(window.L);
+  if(_leafletP)return _leafletP;
+  _leafletP=new Promise((res,rej)=>{
+    const l=document.createElement("link");l.rel="stylesheet";
+    l.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";document.head.append(l);
+    const s=document.createElement("script");s.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+    s.onload=()=>res(window.L);s.onerror=rej;document.head.append(s);
+  });
+  return _leafletP;
+}
+// sortable header row for a table whose rows carry data-s-<key> attributes.
+// Text columns start ascending, keys in `numeric` start descending; the arrow
+// slot has fixed width so toggling never shifts column widths.
+function makeSortable(tbl,cols,{rowClass,numeric=[]}={}){
+  let sortKey=null,sortDir=1;
+  const sortBy=key=>{
+    const num=numeric.includes(key);
+    sortDir=sortKey===key?-sortDir:(num?-1:1);sortKey=key;
+    const rows=[...tbl.querySelectorAll("."+rowClass)];
+    rows.sort((a,b)=>{
+      const av=a.getAttribute("data-s-"+key)||"",bv=b.getAttribute("data-s-"+key)||"";
+      return sortDir*(num?(parseFloat(av)||0)-(parseFloat(bv)||0)
+                         :String(av).localeCompare(String(bv),undefined,{numeric:true}));
+    });
+    rows.forEach(r=>tbl.append(r));
+    tbl.querySelectorAll("th.sortable .arrow").forEach(sp=>sp.textContent="");
+    const arr=tbl.querySelector(`th[data-key="${key}"] .arrow`);if(arr)arr.textContent=sortDir>0?"↑":"↓";
+  };
+  const hrow=el("tr");
+  cols.forEach(([label,key,cls])=>hrow.append(el("th",{class:(cls?cls+" ":"")+"sortable","data-key":key,title:"sort by "+label,onclick:()=>sortBy(key)},label," ",el("span",{class:"arrow"}))));
+  return hrow;
+}
+// applies BOTH the search text and the active demographic filters to the table
+function filterUsers(){const s=$("#usearch");const q=(s&&s.value||"").toLowerCase();let shown=0;
+  for(const tr of document.querySelectorAll("#utbl .urow")){
+    let hit=tr.getAttribute("data-id").includes(q);
+    if(hit)for(const [f,vals] of Object.entries(_coFilter)){
+      if(!vals.includes(tr.getAttribute("data-f-"+f)||"")){hit=false;break;}}
+    tr.style.display=hit?"":"none";if(hit)shown++;
+  }
   const none=$("#unone");if(none)none.style.display=shown?"none":"";}
 async function renderPolicy(v){
   const p=await api("/api/policy");
@@ -746,20 +1052,32 @@ async function renderTraffic(v){
 
   lazyFill(metricsSlot,"loading serving counters…",async box=>{
     const m=await api("/api/metrics");
-    const g=el("div",{class:"grid"});
-    const mc=(label,val)=>el("div",{class:"metric-card"},el("div",{class:"metric num"},String(val)),el("div",{class:"mut small"},label));
-    g.append(mc("ingested events",m.ingests),mc("recommends",m.recommends),mc("cold rate",(m.cold_rate*100).toFixed(0)+"%"),mc("avg pool",m.avg_pool),mc("distractor rate",(m.distractor_rate*100).toFixed(0)+"%"));
-    box.append(g);
+    box.append(el("div",{class:"row",style:"align-items:center;margin:0 0 8px;min-height:28px"},
+      el("span",{class:"eyebrow"},"Serving statistics")));
+    const cell=(val,label,sub)=>el("div",{class:"statcell"},
+      el("div",{class:"statval num"},String(val)),
+      el("div",{class:"small mut"},label),
+      sub?el("div",{class:"small mut",style:"opacity:.75;margin-top:2px"},sub):"");
+    box.append(el("div",{class:"card",style:"margin:0;padding-top:12px;padding-bottom:12px"},el("div",{class:"statrow"},
+      cell(m.recommends,"recommendations",`${m.ingests} events ingested`),
+      cell((m.cold_rate*100).toFixed(0)+"%","cold rate","requests served without signal"),
+      cell(m.avg_pool,"avg pool","candidates per request"),
+      cell((m.distractor_rate*100).toFixed(0)+"%","distractor rate","requests with a novelty item"))));
   });
 
   lazyFill(servedSlot,"loading served impressions…",async box=>{
     let rows;
     try{rows=await api("/api/served/recent?n=40");}
     catch(e){box.append(el("div",{class:"empty"},"served log: "+e));return;}
+    box.append(el("div",{class:"eyebrow",style:"display:block;margin:2px 0 8px"},"Served impressions"));
     if(rows&&rows.length){
       const tbl=el("table");
-      tbl.append(el("tr",{},el("th",{},"time"),el("th",{},"user"),el("th",{},"strategy"),el("th",{},"ranking"),el("th",{},"items"),el("th",{},"distractor")));
-      for(const r of rows)tbl.append(el("tr",{style:"cursor:pointer",title:"explain this recommendation",onclick:()=>openRec(r.request_id)},
+      tbl.append(makeSortable(tbl,
+        [["time","time"],["user","user"],["strategy","strategy"],["ranking","ranking"],["items","items","num"],["distractor","distractor"]],
+        {rowClass:"trow",numeric:["items"]}));
+      for(const r of rows)tbl.append(el("tr",{class:"trow",style:"cursor:pointer",title:"explain this recommendation",onclick:()=>openRec(r.request_id),
+        "data-s-time":r.ts||"","data-s-user":String(r.user_id||"").toLowerCase(),"data-s-strategy":r.strategy||"",
+        "data-s-ranking":r.ranking||"","data-s-items":(r.items||[]).length,"data-s-distractor":r.distractor_id||""},
         el("td",{class:"small mut num"},(r.ts||"").replace("T"," ").slice(0,19)),
         el("td",{},el("button",{class:"userchip",title:"open visitor",onclick:(e)=>{e.stopPropagation();openUser(r.user_id,"profile");}},r.user_id)),
         el("td",{},el("span",{class:"pill "+(r.strategy||"warm")},r.strategy||"")),
@@ -775,19 +1093,160 @@ async function renderContent(v){
   if(!r||!r.users){v.append(el("div",{class:"empty"},"No visitor data yet. Ingest some events first."));return;}
   v.append(el("div",{class:"row small mut",style:"margin-bottom:12px"},`${r.users} visitors / ${r.content.length} content items seen`));
   const tbl=el("table");
-  tbl.append(el("tr",{},el("th",{},"content"),el("th",{class:"num"},"views"),el("th",{class:"num"},"users"),
-    el("th",{class:"num"},"avg dwell"),el("th",{style:"width:180px"},"positive rate")));
+  // column meanings live on the headers as tooltips, not in a footer line
+  tbl.append(el("tr",{},
+    el("th",{},"content"),
+    el("th",{class:"num","data-tip":"total view events"},"views"),
+    el("th",{class:"num","data-tip":"unique visitors exposed"},"users"),
+    el("th",{class:"num","data-tip":"mean seconds per view"},"avg dwell"),
+    el("th",{style:"width:180px","data-tip":"share of exposed users with a positive interaction"},"positive rate")));
   for(const x of r.content)tbl.append(el("tr",{style:"cursor:pointer",title:"open content card",onclick:()=>openContentDetail(x.content_id)},
     el("td",{},el("div",{},x.title||x.content_id),x.title?el("div",{class:"small mut num"},x.content_id):""),
     el("td",{class:"num"},x.views),
     el("td",{class:"num"},x.users),
-    el("td",{class:"num small mut"},x.avg_dwell?x.avg_dwell+"s":"—"),
-    el("td",{},el("div",{class:"row",style:"gap:8px;align-items:center"},
-      el("div",{class:"barwrap",style:"flex:1;max-width:130px"},el("div",{class:"seg",style:`width:${100*(x.positive_rate||0)}%;background:var(--c-affinity)`})),
-      el("span",{class:"small mut num"},Math.round(100*(x.positive_rate||0))+"%")))));
-  v.append(el("div",{class:"card"},cardhead("Content engagement across visitors (most viewed first)"),tbl,
-    el("div",{class:"small mut",style:"margin-top:8px"},"views = total view events · users = unique visitors exposed · avg dwell = mean seconds per view · positive rate = share of exposed users with a positive interaction.")));
-  if(r.themes&&r.themes.length)v.append(el("div",{class:"card"},cardhead("Popular themes across the cohort"),valueBars(r.themes)));
+    el("td",{class:"num small mut"},x.avg_dwell?x.avg_dwell+"s":""),
+    el("td",{},el("div",{style:"display:flex;gap:8px;align-items:center;flex-wrap:nowrap"},
+      el("div",{class:"barwrap",style:"flex:1;max-width:120px;height:12px"},el("div",{class:"seg",style:`width:${100*(x.positive_rate||0)}%;background:var(--c-affinity)`})),
+      el("span",{class:"small mut num",style:"white-space:nowrap"},Math.round(100*(x.positive_rate||0))+"%")))));
+  v.append(el("div",{class:"card"},cardhead("Content engagement across visitors (most viewed first)"),tbl));
+  // popular themes: full taxonomy keys from the server, grouped by facet so a story
+  // theme is never ranked against an area or a story type. Value shown = share of the
+  // cohort leaning toward the tag; the exact visitor count appears on hover.
+  if(r.themes&&r.themes.length){
+    const groups={};
+    r.themes.forEach(([k,n])=>{const {facet,label}=prettyKey(k);
+      (groups[facet||"other"]=groups[facet||"other"]||[]).push({label,n});});
+    const CAT=["var(--c-semantic)","var(--c-tag)","var(--c-geo)","var(--c-recency)"];
+    const gg=el("div",{class:"grid",style:"grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:8px 34px;align-items:start"});
+    Object.entries(groups).forEach(([facet,rows],gi)=>{
+      const cc=CAT[gi%CAT.length],m=Math.max(1,...rows.map(x=>x.n));
+      const gbox=el("div",{},el("div",{class:"eyebrow",style:"display:block;margin:6px 0 3px"},cap1(facet)));
+      rows.slice(0,7).forEach(x=>gbox.append(el("div",{class:"distrow","data-tip":`${x.n} of ${r.users} visitor${x.n===1?"":"s"}`},
+        el("div",{class:"small",style:"overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-transform:capitalize"},x.label),
+        el("div",{class:"barwrap",style:"min-width:0;height:12px"},
+          el("div",{class:"seg",style:`width:${100*x.n/m}%;background:${cc};border-radius:0 4px 4px 0`})),
+        el("div",{class:"small num mut",style:"text-align:right;white-space:nowrap"},Math.round(100*x.n/(r.users||1))+"%"))));
+      gg.append(gbox);
+    });
+    v.append(el("div",{class:"card"},cardhead("Popular themes across the cohort"),
+      el("div",{class:"small mut",style:"margin:-2px 0 6px"},"share of visitors drawn to each tag"),gg));
+  }
+  // ----- collection map: geography + time + what is actually viewed, one widget -----
+  const spreadSlot=el("div");v.append(spreadSlot);
+  lazyFill(spreadSlot,"loading collection map…",async box=>{
+    const sp=await api("/api/content/spread");
+    const items=((sp&&sp.items)||[]).filter(x=>x.lat!=null||(x.years&&x.years.length));
+    if(!items.length)return;
+    let year=null,locKey=null;                          // active focus
+    const YEARS=[...new Set(items.flatMap(x=>x.years||[]))].sort();
+    const key=x=>x.lat!=null?x.lat.toFixed(4)+","+x.lon.toFixed(4):null;
+    const inYear=x=>!year||(x.years||[]).includes(year);
+    const atLoc=x=>!locKey||key(x)===locKey;
+
+    const card=el("div",{class:"card"},el("div",{class:"cardhead-row"},
+      el("div",{class:"cardhead",style:"margin:0"},"Collection map"),
+      el("span",{style:"cursor:help;color:var(--mut);font-size:15px",
+        "data-tip":"dot size: items there · glow depth: views per item · click a dot or a year to focus"},"ⓘ")));
+    const wrap=el("div",{class:"mapwrap"});
+    const mapEl=el("div",{class:"lmap"});
+    const tl=el("div",{class:"timeline"});          // timeline lives ON the map
+    mapEl.append(tl);
+    const side=el("div",{class:"mapside"});
+    wrap.append(mapEl,side);
+    card.append(wrap);
+    box.append(card);
+
+    // which content is actually viewed, honoring the year/place focus
+    const renderSide=()=>{
+      side.innerHTML="";
+      const rows=items.filter(inYear).filter(atLoc).sort((a,b)=>b.views-a.views).slice(0,12);
+      side.append(el("div",{class:"eyebrow",style:"display:block;margin:0 0 7px"},
+        "Most viewed"+(year?" · "+year:"")));
+      if(locKey)side.append(el("button",{class:"filterchip",style:"margin:0 0 8px",onclick:()=>{locKey=null;redraw();}},
+        "this spot",el("span",{class:"x"},"✕")));
+      const mx=Math.max(1,...rows.map(x=>x.views));
+      for(const x of rows)side.append(el("div",{class:"sider",title:"open content card",onclick:()=>openContentDetail(x.id)},
+        el("div",{class:"small",style:"overflow:hidden;text-overflow:ellipsis;white-space:nowrap"},x.title),
+        el("div",{class:"barwrap",style:"height:8px;min-width:0"},
+          el("div",{class:"seg",style:`width:${100*x.views/mx}%;background:var(--accent)`})),
+        el("div",{class:"small num mut",style:"text-align:right"},x.views)));
+      if(!rows.length)side.append(el("div",{class:"small mut"},"no views in this slice yet"));
+    };
+
+    // timeline embedded on the map: one node per year on a line; node size = catalogue
+    // supply, glow depth = views per item; click a node to focus, click again to clear
+    const renderTimeline=()=>{
+      tl.innerHTML="";
+      if(!YEARS.length){tl.style.display="none";return;}
+      const per={};YEARS.forEach(y=>per[y]={items:0,views:0});
+      items.forEach(x=>(x.years||[]).forEach(y=>{per[y].items++;per[y].views+=x.views;}));
+      const mxI=Math.max(...YEARS.map(y=>per[y].items));
+      const mxR=Math.max(0.0001,...YEARS.map(y=>per[y].views/per[y].items));
+      const row=el("div",{class:"tl-row"});
+      for(const y of YEARS){
+        const d=per[y],rate=d.views/d.items;
+        const px=Math.round(9+9*Math.sqrt(d.items/mxI));
+        row.append(el("button",{class:"tl-cell"+(year===y?" on":year?" dim":""),
+          "data-tip":`${y}: ${d.items} item${d.items===1?"":"s"} · ${d.views} views · ${fmt(rate)} views/item`,
+          onclick:()=>{year=year===y?null:y;redraw();}},
+          el("span",{class:"tl-slot"},el("span",{class:"tl-dot",style:`width:${px}px;height:${px}px;opacity:${(0.45+0.55*rate/mxR).toFixed(2)}`})),
+          el("span",{class:"tl-year"},String(y))));
+      }
+      tl.append(row);
+    };
+
+    // markers: size = catalogue items at the spot, glow depth = views per item
+    let map=null,layer=null,Lref=null;
+    const geoAgg=()=>{
+      const g={};
+      items.filter(x=>x.lat!=null).filter(inYear).forEach(x=>{
+        const k=key(x);
+        (g[k]=g[k]||{lat:x.lat,lon:x.lon,items:0,views:0,titles:[]});
+        g[k].items++;g[k].views+=x.views;
+        if(g[k].titles.length<3)g[k].titles.push(x.title);
+      });
+      return g;
+    };
+    const drawMarkers=()=>{
+      if(!Lref||!map)return;
+      if(layer)layer.remove();
+      layer=Lref.layerGroup().addTo(map);
+      const g=Object.entries(geoAgg());
+      if(!g.length)return;
+      const mxI=Math.max(...g.map(([,d])=>d.items)),mxR=Math.max(0.0001,...g.map(([,d])=>d.views/d.items));
+      for(const [k,d] of g){
+        const rate=d.views/d.items;
+        const m=Lref.circleMarker([d.lat,d.lon],{
+          radius:7+9*Math.sqrt(d.items/mxI),
+          stroke:locKey===k,color:"#423D34",weight:2,
+          fillColor:"#A8895B",fillOpacity:0.25+0.75*rate/mxR,
+          className:"glowdot"});
+        m.bindTooltip(`${d.titles[0]}${d.items>1?` +${d.items-1}`:""} · ${d.items} item${d.items===1?"":"s"} · ${d.views} views`,{direction:"top"});
+        m.on("click",()=>{locKey=locKey===k?null:k;redraw();});
+        m.addTo(layer);
+      }
+    };
+    const redraw=()=>{renderTimeline();renderSide();drawMarkers();};
+    renderTimeline();renderSide();
+
+    // Leaflet must initialise AFTER the box is attached to the DOM (lazyFill swaps it in
+    // when this loader resolves), or the container measures 0x0 and the map renders broken.
+    setTimeout(async()=>{
+      try{
+        Lref=await ensureLeaflet();
+        const pts=items.filter(x=>x.lat!=null);
+        map=Lref.map(mapEl,{attributionControl:false,scrollWheelZoom:false});
+        const dark=document.documentElement.dataset.theme==="dark";
+        Lref.tileLayer(`https://{s}.basemaps.cartocdn.com/${dark?"dark_all":"light_all"}/{z}/{x}/{y}{r}.png`,{maxZoom:19}).addTo(map);
+        map.invalidateSize();
+        if(pts.length)map.fitBounds(Lref.latLngBounds(pts.map(x=>[x.lat,x.lon])).pad(0.35));
+        else map.setView([52.758,9.907],15);
+        drawMarkers();
+      }catch(e){
+        mapEl.append(el("div",{class:"small mut",style:"padding:24px;text-align:center"},"map tiles unavailable (offline); year and view stats still work"));
+      }
+    },0);
+  });
   if(r.clusters&&r.clusters.length){
     v.append(el("div",{class:"eyebrow",style:"margin-top:8px;display:block"},"Content preferences by cluster"));
     const g=el("div",{class:"grid",style:"grid-template-columns:repeat(auto-fill,minmax(265px,1fr))"});
@@ -847,7 +1306,7 @@ async function renderUser(v){
   const c=model.counts||{};
   // ===== hero: engagement is PRIMARY (stats first); inferred personas secondary =====
   const beh=model.behavior||{};
-  const pct=x=>typeof x==="number"?Math.round(x*100)+"%":"—";
+  const pct=x=>typeof x==="number"?Math.round(x*100)+"%":"";
   const hero=el("div",{class:"card lift hero"});
   // primary heading = what the visitor actually engages with (behavioural, not a label)
   const topAff=(model.tag_affinity||[])[0];
@@ -871,10 +1330,9 @@ async function renderUser(v){
   // ===== LEFT: one card — demographics, then personalization answers below;
   //            survey completion shown as pills in the header. =====
   const KEYLABEL={personal_connection:"WW2 connection"};
-  const cap1=s=>s.replace(/^\w/,c=>c.toUpperCase());   // capitalize first letter only
   const kvList=(obj,capVal,stripQ)=>{const dl=el("dl",{class:"kv"});
     Object.entries(obj||{}).forEach(([k,a])=>dl.append(
-      el("dt",{title:k},cap1((stripQ?k.replace(/^q:(personalization_)?/,""):KEYLABEL[k]||k).replace(/_/g," "))),
+      el("dt",{title:k},cap1((stripQ?k.replace(/^(q:)?(personalization_)?/,""):KEYLABEL[k]||k).replace(/_/g," "))),
       el("dd",{},Array.isArray(a)?a.join(", "):(capVal?humanVal(k,a):String(a)))));
     return dl;};
   const spill=(label,done)=>el("span",{class:"statusbadge "+(done?"done":"pending"),title:done?"survey completed":"survey not completed"},
@@ -910,7 +1368,7 @@ async function renderUser(v){
     dm.append(el("div",{class:"eyebrow",style:"display:block;margin:16px 0 7px"},"Avoids"));
     dm.append(tagList(model.tag_aversion.map(t=>[t.key,t.weight]),{signed:true}));dmEmpty=false;
   }
-  if(dmEmpty)dm.append(el("div",{class:"small mut"},"No tag signal yet — visitor has not engaged with content."));
+  if(dmEmpty)dm.append(el("div",{class:"small mut"},"No tag signal yet: visitor has not engaged with content."));
   right.append(dm);
   // ----- RIGHT: trajectory -----
   if(exp.trajectory&&exp.trajectory.length)right.append(el("div",{class:"card"},cardhead("Trajectory"),
@@ -923,7 +1381,7 @@ async function renderUser(v){
   // ----- RIGHT: content engaged positively, with its tags -----
   if(model.liked_content&&model.liked_content.length){
     const lc=el("div",{class:"card"},cardhead("Engaged positively with"),
-      el("div",{class:"small mut",style:"margin-bottom:8px"},"content the visitor engaged with and the tags it carries — the basis for the inferred interests"));
+      el("div",{class:"small mut",style:"margin-bottom:8px"},"content the visitor engaged with and the tags it carries: the basis for the inferred interests"));
     for(const it of model.liked_content){
       lc.append(el("div",{style:"padding:8px 0;border-top:1px solid var(--line)"},
         el("div",{class:"row",style:"gap:8px;justify-content:space-between"},el("b",{class:"small"},it.title||it.id),el("span",{class:"small num mut"},"weight "+fmt(it.weight))),
@@ -1002,15 +1460,39 @@ const METHODS={
   ["clustering","k-means or fuzzy-c-means over tag-affinity then explainable visitor segments (the centroid is a readable tag profile).",null],
  ],
 };
+const DOCS_BASE="https://ai-engine-docs.eodyne.systems/";
 async function renderPersonas(v){
-  for(const [title,rows] of Object.entries(METHODS)){
-    const c=el("div",{class:"card"});c.append(cardhead(title));
-    rows.forEach(([name,desc,key],i)=>c.append(el("div",{class:"row",style:`align-items:flex-start;gap:13px;padding:10px 0;${i?'border-top:1px solid var(--line)':''}`},
-      key?el("span",{class:"sw",style:`background:${COLORS[key]};margin-top:5px`}):el("span",{style:"width:10px"}),
-      el("span",{class:"pill "+(key?"neutral":"bandit"),style:"min-width:132px;text-align:center"},name),
-      el("div",{style:"flex:1"},desc))));
-    v.append(c);
-  }
+  const docLink=url=>el("a",{class:"srclink",href:DOCS_BASE+url,target:"_blank",rel:"noopener",style:"margin-left:8px"},"docs ↗");
+  const section=(title,lead,url)=>v.append(
+    el("div",{class:"eyebrow",style:"display:block;margin:20px 0 4px"},title),
+    el("div",{class:"small mut",style:"margin:0 0 10px"},lead,url?docLink(url):""));
+
+  // 1. scoring signals: one tile per signal, keyed to the legend colours used everywhere
+  section("Scoring signals","Each candidate story is scored 0 to 1 on five independent signals; the colours match every score-breakdown bar in this dashboard.","recsys/signals/");
+  const sg=el("div",{class:"methodgrid"});
+  METHODS["Scoring signals (each scored 0 to 1)"].forEach(([name,desc,key])=>sg.append(
+    el("div",{class:"methodcard",style:`border-top-color:${COLORS[key]||'var(--accent)'}`},
+      el("h4",{},el("span",{class:"sw",style:`background:${COLORS[key]||'var(--accent)'}`}),cap1(name)),
+      el("p",{},desc))));
+  v.append(sg);
+
+  // 2. ranking pipeline: ordered steps, because order is the point
+  section("Ranking pipeline","The signals fuse into one explainable score, then the list is shaped for diversity and exploration, in this order.","recsys/ranking/");
+  const RANK_DOCS={"contextual bandit":"recsys/bandit-learning/"};
+  const steps=el("div",{class:"steps"});
+  METHODS["Ranking & exploration"].forEach(([name,desc],i)=>steps.append(
+    el("div",{class:"step"},
+      el("span",{class:"stepnum"},String(i+1)),
+      el("div",{},el("b",{style:"font-size:13.5px"},cap1(name)),RANK_DOCS[name]?docLink(RANK_DOCS[name]):"",
+        el("div",{class:"small mut",style:"margin-top:3px;line-height:1.5;max-width:640px"},desc)))));
+  v.append(el("div",{class:"card"},steps));
+
+  // 3. user model & segments
+  section("User model & segments","How the visitor model forms and how the cohort splits into readable segments.","user-representation/");
+  const ug=el("div",{class:"methodgrid"});
+  METHODS["User model & segments"].forEach(([name,desc])=>ug.append(
+    el("div",{class:"methodcard"},el("h4",{},cap1(name)),el("p",{},desc))));
+  v.append(ug);
 }
 
 /* ===== EVALUATION: synthetic visitors -> recommendation behaviour ===== */
@@ -1032,7 +1514,7 @@ function modelCard(persona){
     persona.description?el("div",{class:"small mut",style:"margin:-2px 0 8px"},persona.description):"",
     demo.length?el("div",{class:"row",style:"margin-bottom:8px;flex-wrap:wrap;gap:5px"},demo.map(([k,val])=>el("span",{class:"pill neutral"},k.replace(/^q:/,"")+": "+(Array.isArray(val)?val.join(", "):val)))):"",
     aff.length?valueBars(aff.map(([k,w])=>[k.split(":").slice(1).join(":")||k,w]),{max:1})
-              :el("div",{class:"small mut"},"No interest tags — persona relies on the cold/diverse fallback."));
+              :el("div",{class:"small mut"},"No interest tags: persona relies on the cold/diverse fallback."));
 }
 function metricsGrid(m){
   const g=el("div",{class:"grid"});
@@ -1225,7 +1707,7 @@ async function renderTenants(v){
       el("input",{id:"t_keys",class:"f",size:"22",placeholder:"api keys (space/comma sep, optional)"}),
       el("label",{class:"small mut",style:"display:flex;gap:5px;align-items:center"},el("input",{id:"t_gen",type:"checkbox"}),"mint a key"),
       el("button",{class:"primary",onclick:saveTenant},"Save")),
-    el("div",{class:"small mut",style:"margin-top:7px"},"Persisted to the tenant store on the PVC (",el("code",{},"TENANT_STORE_PATH"),") — no redeploy. Keys are hashed at rest; a minted key is shown once. Editing with the key box empty keeps existing keys.")));
+    el("div",{class:"small mut",style:"margin-top:7px"},"Persisted to the tenant store on the PVC (",el("code",{},"TENANT_STORE_PATH"),"): no redeploy. Keys are hashed at rest; a minted key is shown once. Editing with the key box empty keeps existing keys.")));
   const tbl=el("table");
   tbl.append(el("tr",{},el("th",{},"tenant"),el("th",{},"collection"),el("th",{},"content"),el("th",{},"api keys"),el("th",{},"source"),el("th",{},"actions")));
   for(const t of (rows||[])){
@@ -1276,7 +1758,7 @@ function mintedToast(id,key){
   const card=el("div",{class:"card",style:"margin:0;border-color:var(--accent);box-shadow:0 8px 30px var(--shadow)"},
     el("div",{class:"row",style:"justify-content:space-between"},el("b",{},"New key · "+id),
       el("button",{class:"userchip",onclick:()=>card.remove()},"dismiss")),
-    el("div",{class:"small mut",style:"margin:6px 0"},"Shown once — only its hash is stored. Copy it now."),
+    el("div",{class:"small mut",style:"margin:6px 0"},"Shown once: only its hash is stored. Copy it now."),
     el("code",{style:"display:block;word-break:break-all;padding:8px;margin-bottom:8px"},key),
     el("button",{class:"primary",onclick:()=>{navigator.clipboard&&navigator.clipboard.writeText(key);}},"Copy key"));
   host.append(card);
@@ -1286,7 +1768,7 @@ function mintedToast(id,key){
 const CFG_CATS=[
   {title:"Fusion weights",desc:"How much each scorer contributes to the final relevance score (each scorer outputs 0–1; aversion is a penalty).",
    fields:["fusion.semantic","fusion.tag","fusion.recency","fusion.aversion","fusion.geo"]},
-  {title:"Engagement signals",desc:"After each story, the engine scores how much the visitor liked it on a −1 (disliked) … +1 (loved) scale. These four weights decide how much each behaviour counts — they should add up to about 1. The two cut-offs below turn that score into a like / neutral / dislike.",
+  {title:"Engagement signals",desc:"After each story, the engine scores how much the visitor liked it on a −1 (disliked) … +1 (loved) scale. These four weights decide how much each behaviour counts; they should add up to about 1. The two cut-offs below turn that score into a like / neutral / dislike.",
    fields:["engagement.dwell","engagement.completion","engagement.revisit","engagement.survey","positive_threshold","negative_threshold","dwell_cap_ratio"]},
   {title:"Reading-time model",desc:"Estimates expected reading time, which dwell is measured against.",
    fields:["reading_speed_wps","img_extra_time"]},
@@ -1294,7 +1776,7 @@ const CFG_CATS=[
    fields:["half_life_days","soft_negative_weight"]},
   {title:"Candidate generation & diversity",desc:"Pool size, how many results, and how varied they are.",
    fields:["pool_per_generator","final_limit","mmr_lambda","cold_start_min_positives","filter_reshow_when_exhausted"]},
-  {title:"Geo",desc:"Location proximity scoring and radius — independent of tag filters.",
+  {title:"Geo",desc:"Location proximity scoring and radius, independent of tag filters.",
    fields:["geo_scale_m","geo_radius_m"]},
   {title:"Distractor / novelty",desc:"One deliberately off-profile item for exploration and serendipity.",
    fields:["distractor_enabled","distractor_strategy","distractor_probability","distractor_slots"]},
@@ -1311,8 +1793,8 @@ const CFG_HELP={
   "engagement.completion":["Read to the end","How much finishing counts. Tapping “next” is positive; leaving early / abandoning is negative."],
   "engagement.revisit":["Came back to it","How much returning to the same story counts as interest."],
   "engagement.survey":["Star rating","How much an explicit 1–5 rating counts (3 = neutral, 5 = loved)."],
-  "positive_threshold":["“Liked it” cut-off","Score at or above this is treated as a like — the story’s themes are added to the visitor’s taste."],
-  "negative_threshold":["“Disliked it” cut-off","Score at or below this is treated as a dislike — those themes get penalised in future picks."],
+  "positive_threshold":["“Liked it” cut-off","Score at or above this is treated as a like: the story’s themes are added to the visitor’s taste."],
+  "negative_threshold":["“Disliked it” cut-off","Score at or below this is treated as a dislike: those themes get penalised in future picks."],
   "dwell_cap_ratio":["Max reading credit","Caps how much extra time can count, so one very long visit can’t dominate (2 = up to twice the expected time)."],
   "reading_speed_wps":["Reading speed (wps)","Words per second for the estimate (~4.2 ≈ 250 wpm)."],
   "img_extra_time":["Image time (s)","Seconds added to the estimate for an image."],
@@ -1331,7 +1813,7 @@ const CFG_HELP={
   "distractor_slots":["Slots","1-based positions; one picked at random (e.g. [3,4])."],
   "ranking_mode":["Mode","static = weighted fusion; bandit = learned LinUCB."],
   "bandit_alpha":["Alpha","UCB exploration strength (0 = greedy)."],
-  "bandit_ridge":["Ridge","Prior strength — how tightly θ holds the fusion weights."],
+  "bandit_ridge":["Ridge","Prior strength: how tightly θ holds the fusion weights."],
   "bandit_explore":["Explore","Add the UCB bonus when serving with the bandit."],
   "bandit_online":["Online","Update weights live as reward events arrive (vs offline batch)."],
 };

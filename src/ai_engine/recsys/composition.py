@@ -2,7 +2,7 @@
 
 If REDIS_URL / QDRANT_API_URL are set, use the real adapters; otherwise fall back
 to in-memory fakes (with dev fixtures) so the service runs locally with no infra.
-This is the ONE place IO backends are chosen — everything else takes ports.
+This is the ONE place IO backends are chosen, everything else takes ports.
 """
 from __future__ import annotations
 import os
@@ -40,9 +40,9 @@ def _build_content_store() -> ContentStore:
         return QdrantContentStore(client, os.getenv("COLLECTION_NAME", "omeka-items"))
     # dev fallback: the hand-built fixture world
     from .testing.fakes import FakeContentStore
-    from .testing.fixtures import make_contents_and_vectors
+    from .testing.fixtures import make_contents_and_vectors, make_payloads
     contents, vectors = make_contents_and_vectors()
-    return FakeContentStore(contents, vectors)
+    return FakeContentStore(contents, vectors, payloads=make_payloads())
 
 
 def _build_stores():
@@ -87,7 +87,7 @@ def _build_config() -> RecConfig:
     """RecConfig from defaults, overridden by env so weights/limits are tunable
     WITHOUT a redeploy (a stop-gap until a learned ranker owns the weights).
 
-        RECSYS_W_{SEMANTIC,AFFINITY,TAG,RECENCY,AVERSION}   fusion weights (float)
+        RECSYS_W_{SEMANTIC,TAG,RECENCY,AVERSION}   fusion weights (float)
         RECSYS_MMR_LAMBDA                                    relevance<->diversity
         RECSYS_FINAL_LIMIT                                   items returned (int)
         RECSYS_DISTRACTOR_PROBABILITY                        0..1
@@ -103,7 +103,6 @@ def _build_config() -> RecConfig:
 
     f = cfg.fusion
     f.semantic = _f("RECSYS_W_SEMANTIC", f.semantic)
-    f.affinity = _f("RECSYS_W_AFFINITY", f.affinity)
     f.tag = _f("RECSYS_W_TAG", f.tag)
     f.recency = _f("RECSYS_W_RECENCY", f.recency)
     f.aversion = _f("RECSYS_W_AVERSION", f.aversion)
@@ -173,9 +172,9 @@ def build_components_for(spec, mgr) -> Components:
         content_store = QdrantContentStore(qc, spec.collection or os.getenv("COLLECTION_NAME", "omeka-items"))
     else:
         from .testing.fakes import FakeContentStore
-        from .testing.fixtures import make_contents_and_vectors
+        from .testing.fixtures import make_contents_and_vectors, make_payloads
         contents, vectors = make_contents_and_vectors()
-        content_store = FakeContentStore(contents, vectors)
+        content_store = FakeContentStore(contents, vectors, payloads=make_payloads())
 
     rc = mgr.redis_client
     p = spec.prefix
@@ -287,7 +286,7 @@ class ComponentManager:
 
     def list_tenants(self) -> list[dict]:
         """All tenants: config baseline + runtime-created, runtime wins. For the admin UI.
-        API keys are NEVER returned raw — only a count, so the admin view can't leak secrets."""
+        API keys are NEVER returned raw, only a count, so the admin view can't leak secrets."""
         out: dict[str, dict] = {}
         for tid in self.registry.ids():
             s = self.registry.get(tid)

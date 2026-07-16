@@ -16,9 +16,14 @@ class FakeContentStore:
     """ContentStore backed by dicts. search_vector = brute-force cosine;
     search_tags = tag-key overlap."""
 
-    def __init__(self, contents: dict[str, Content], vectors: dict[str, Vector]):
+    def __init__(self, contents: dict[str, Content], vectors: dict[str, Vector],
+                 payloads: Optional[dict[str, dict]] = None):
         self._contents = contents
         self._vectors = vectors
+        self._payloads = payloads or {}
+
+    def raw_payloads(self, ids: Sequence[str]) -> dict[str, dict]:
+        return {i: self._payloads[i] for i in ids if i in self._payloads}
 
     def get(self, ids: Sequence[str]) -> dict[str, Content]:
         return {i: self._contents[i] for i in ids if i in self._contents}

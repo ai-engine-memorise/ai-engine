@@ -4,7 +4,7 @@
                           (single object or list). Normalize -> buffer -> rebuild
                           the user model.
 - GET  /api/recommend: serve recommendations for a user (reads the user model).
-- GET  /api/usermodel: debug — inspect the current user model.
+- GET  /api/usermodel: debug, inspect the current user model.
 
 Mount `router` into the main service, or run `app` standalone. With no REDIS_URL /
 QDRANT_API_URL set it runs fully in-memory on dev fixtures.
@@ -163,7 +163,7 @@ def _tail_served(base: str, n: int, light: bool = True) -> list[dict]:
     log_served writes one parquet PER request into served/date=YYYY-MM-DD/, so the
     dataset is many tiny files. Reading them all to return a short tail is O(history),
     and even one busy day is O(requests/day). Strategy: walk date dirs newest-first
-    (they sort chronologically), and within each list files WITHOUT reading them —
+    (they sort chronologically), and within each list files WITHOUT reading them , 
     rank by mtime (≈ serve time) and read only the newest ~n parquet files. Cost is
     O(n) reads + cheap stat/sort over the newest day(s), not O(history).
 
@@ -446,7 +446,7 @@ def make_router(components: Components) -> APIRouter:
         demographics, the raw survey answers (presurvey + personalization), and the
         dynamic user model (tag affinities/aversions, engagement behaviour, and the
         content the visitor engaged with positively together with that content's
-        tags — i.e. *why* we think the visitor likes certain things)."""
+        tags, i.e. *why* we think the visitor likes certain things)."""
         from .survey import extract_demographics, split_survey_answers
 
         sig = c.model_store.get_signals(user_id)
@@ -597,9 +597,77 @@ def make_router(components: Components) -> APIRouter:
                 "n_seen": len(getattr(sig, "viewed", []) or []) if sig else 0,
                 "cold": bool(sig.is_cold) if sig else True,
                 "segment": seg.get(uid),
+                "demographics": (getattr(sig, "demographics", None) or {}) if sig else {},
             })
         rows.sort(key=lambda r: r["last_interaction"] or "", reverse=True)
         return {"result": rows[:limit]}
+
+    @ops.get("/cohort/stats")
+    def cohort_stats(
+        age: Optional[str] = Query(default=None),
+        gender: Optional[str] = Query(default=None),
+        nationality: Optional[str] = Query(default=None),
+        province: Optional[str] = Query(default=None),
+    ) -> dict:
+        """Cohort-wide aggregates for the Cohort tab: demographic distributions +
+        behaviour statistics (volumes, depth, how views end), optionally FILTERED to a
+        demographic slice. Each filter param takes one value or several comma-separated
+        values (OR within a field, AND across fields). Faceted counting: each demographic
+        field's distribution is computed against the OTHER active filters (so the selected
+        values can be switched), while the behaviour numbers respect ALL filters.
+        PII-guarded (counts only)."""
+        from .signals.signal_builder import aggregate_views
+        sigs = list(c.model_store.iter_signals() if hasattr(c.model_store, "iter_signals") else [])
+        filters = {k: set(v.split(",")) for k, v in (("age", age), ("gender", gender),
+                                                     ("nationality", nationality), ("province", province)) if v}
+
+        def matches(s, skip: Optional[str] = None) -> bool:
+            demo = getattr(s, "demographics", None) or {}
+            return all(str(demo.get(f, "")) in vals for f, vals in filters.items() if f != skip)
+
+        demographics: dict[str, dict[str, int]] = {}
+        for s in sigs:
+            for k, v in (getattr(s, "demographics", None) or {}).items():
+                if v in (None, "") or not matches(s, skip=str(k)):
+                    continue
+                field = demographics.setdefault(str(k), {})
+                field[str(v)] = field.get(str(v), 0) + 1
+
+        cohort = [s for s in sigs if matches(s)]
+        total_events = total_views = positive = negative = warm = 0
+        dwell_sum = 0.0
+        dwell_views = 0
+        end_reasons: dict[str, int] = {}
+        for s in cohort:
+            try:
+                evs = c.event_buffer.fetch_events(s.user_id)
+            except Exception:
+                evs = []
+            total_events += len(evs)
+            for a in aggregate_views(evs).values():
+                total_views += a.visits or 0
+                if a.dwell_seconds:
+                    dwell_sum += a.dwell_seconds
+                    dwell_views += a.visits or 1
+                if a.end_reason:
+                    r = a.end_reason.value
+                    end_reasons[r] = end_reasons.get(r, 0) + 1
+            positive += len(s.positives or {})
+            negative += len(s.negatives or {})
+            if not getattr(s, "is_cold", True):
+                warm += 1
+
+        n = len(cohort)
+        return {"result": {
+            "visitors": n, "total_visitors": len(sigs), "warm": warm, "cold": n - warm,
+            "events": total_events, "views": total_views,
+            "views_per_visitor": round(total_views / n, 1) if n else 0,
+            "avg_dwell_seconds": round(dwell_sum / dwell_views, 1) if dwell_views else 0,
+            "positive": positive, "negative": negative,
+            "end_reasons": end_reasons,
+            "demographics": demographics,
+            "filters": {k: sorted(v) for k, v in filters.items()},
+        }}
 
     @ops.get("/content/stats")
     def content_stats(limit: int = Query(default=30, ge=1, le=200)) -> dict:
@@ -627,7 +695,8 @@ def make_router(components: Components) -> APIRouter:
             for cid in s.positives:
                 positive[cid] = positive.get(cid, 0) + 1
             for k, w in s.tag_affinity.items():
-                theme[k] = theme.get(k, 0.0) + w
+                if w > 0:                      # themes = HOW MANY visitors lean toward the
+                    theme[k] = theme.get(k, 0) + 1   # tag, not an opaque summed weight
 
         all_cids = list(set(visits) | set(exposed) | set(positive))
         titles = {k: v.title for k, v in c.content_store.get(all_cids).items()} if all_cids else {}
@@ -648,8 +717,13 @@ def make_router(components: Components) -> APIRouter:
             })
         content.sort(key=lambda r: (r["views"], r["users"]), reverse=True)
 
-        themes = sorted(([lbl(k), round(w, 3)] for k, w in theme.items()),
-                        key=lambda kv: kv[1], reverse=True)[:15]
+        # popular themes: only content-describing taxonomy facets. Demographic-seeded
+        # affinities (person_who.*) describe who the visitor is, not what content is
+        # popular, so they are excluded. Keys stay FULL so the UI can group by facet.
+        _theme_facets = ("theme_what", "theme_how", "place_where", "location")
+        themes = sorted(([k, round(w, 3)] for k, w in theme.items()
+                         if k.split(":", 1)[0].split(".")[0] in _theme_facets),
+                        key=lambda kv: kv[1], reverse=True)[:40]
 
         clusters = []
         model = _load_cluster_model(getattr(c, "cluster_model_path", None))
@@ -676,6 +750,94 @@ def make_router(components: Components) -> APIRouter:
 
         return {"result": {"users": len(sigs), "content": content[:limit],
                            "themes": themes, "clusters": clusters}}
+
+    @ops.get("/content/spread")
+    def content_spread() -> dict:
+        """Supply vs demand across SPACE and TIME, for the bias-aware map and year view.
+
+        For every catalogue item (capped scroll) collect its coordinates and creation
+        years; for every visitor collect view events. Aggregates then report BOTH the
+        catalogue density (items: supply) and the engagement rate (views per item:
+        demand), so 'popular' can be read against how much content exists there/then."""
+        import re as _re
+        from .signals.signal_builder import aggregate_views
+
+        # ---- demand: views per content id across the cohort ----
+        sigs = list(c.model_store.iter_signals() if hasattr(c.model_store, "iter_signals") else [])
+        views: dict[str, int] = {}
+        for s in sigs:
+            try:
+                for cid, a in aggregate_views(c.event_buffer.fetch_events(s.user_id)).items():
+                    views[cid] = views.get(cid, 0) + (a.visits or 0)
+            except Exception:
+                continue
+        digits = lambda x: (_re.search(r"\d+", str(x)) or [str(x)])[0]
+
+        # ---- supply: iterate the catalogue (fake store dict, or a capped Qdrant scroll) ----
+        def _iter_payloads(cap: int = 2000):
+            store = c.content_store
+            if hasattr(store, "_payloads") and getattr(store, "_payloads"):
+                for cid, p in list(store._payloads.items())[:cap]:
+                    yield str(cid), p or {}
+                return
+            client = getattr(store, "client", None)
+            coll = getattr(store, "collection_name", None)
+            if client is None or not coll:
+                return
+            off, n = None, 0
+            while n < cap:
+                try:
+                    points, off = client.scroll(collection_name=coll, limit=256, offset=off,
+                                                with_payload=True, with_vectors=False)
+                except Exception:
+                    return
+                if not points:
+                    return
+                for p in points:
+                    yield str(p.id), (p.payload or {})
+                    n += 1
+                    if n >= cap:
+                        return
+                if off is None:
+                    return
+
+        def _latlon(p) -> Optional[tuple]:
+            if isinstance(p, dict):
+                lat, lon = p.get("lat"), p.get("lon") if "lon" in p else p.get("lng")
+                if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
+                    return float(lat), float(lon)
+                for v in p.values():
+                    hit = _latlon(v)
+                    if hit:
+                        return hit
+            return None
+
+        def _years(p) -> list[int]:
+            tm = (p.get("time_metadata") or {}) if isinstance(p, dict) else {}
+            raw = tm.get("dates_of_creation") or tm.get("date") or []
+            out = set()
+            for token in (raw if isinstance(raw, list) else [raw]):
+                for y in _re.findall(r"\b(1[89]\d\d|20\d\d)\b", str(token)):
+                    out.add(int(y))
+            return sorted(out)
+
+        out_items = []
+        n_items = n_geo = n_dated = 0
+        for cid, payload in _iter_payloads():
+            n_items += 1
+            v = views.get(cid, 0) or views.get(digits(cid), 0)
+            ll = _latlon(payload.get("location") or payload)
+            ys = _years(payload)
+            if ll:
+                n_geo += 1
+            if ys:
+                n_dated += 1
+            if ll or ys:
+                out_items.append({"id": cid, "title": payload.get("title") or str(cid),
+                                  "lat": ll[0] if ll else None, "lon": ll[1] if ll else None,
+                                  "years": ys, "views": v})
+        return {"result": {"items": out_items,
+                           "coverage": {"items": n_items, "with_geo": n_geo, "with_dates": n_dated}}}
 
     @ops.get("/content/{content_id}")
     def content_detail(content_id: str) -> dict:
@@ -771,7 +933,7 @@ def make_router(components: Components) -> APIRouter:
     @ops.get("/served/explain")
     def served_explain(request_id: str = Query(..., description="served impression request_id")) -> dict:
         """Explain a past recommendation: the served items, the visitor's current tag
-        model, and — per item — the overlap between the visitor's tag affinities and the
+        model, and, per item, the overlap between the visitor's tag affinities and the
         content's tags, plus the stored per-scorer breakdown (the other reasons it was
         ranked). Impressions logged before the breakdown was persisted ('legacy') still
         return live-computed tag overlap; has_breakdown flags that case for the UI."""
@@ -820,12 +982,17 @@ def make_router(components: Components) -> APIRouter:
 
         ids = [it.get("id") for it in items if it.get("id")]
         contents = c.content_store.get(ids) if ids else {}
+        try:  # thumbnail + source link live only in the raw payload
+            payloads = c.content_store.raw_payloads(ids) if ids else {}
+        except Exception:
+            payloads = {}
         has_breakdown = any(it.get("breakdown") for it in items)
 
         out_items = []
         for it in items:
             cid = it.get("id")
             ct = contents.get(cid)
+            p = payloads.get(cid) or {}
             content_tags = [t.key for t in getattr(ct, "tags", [])] if ct else []
             overlap = [
                 {"key": k, "user_weight": round(aff_norm[normalize_key(k)], 3)}
@@ -841,6 +1008,8 @@ def make_router(components: Components) -> APIRouter:
                 "breakdown": it.get("breakdown") or {},
                 "content_tags": content_tags,
                 "tag_overlap": overlap,
+                "image_url": p.get("image_url") or p.get("imageUrl") or p.get("thumbnail_url"),
+                "public_url": p.get("public_url") or p.get("publicUrl"),
             })
 
         # Persona-level view of the same user model (so the UI can speak the same language).
@@ -1042,7 +1211,7 @@ def make_tenant_admin_router(manager) -> APIRouter:
         resp = {"result": safe, "status": "saved"}
         if generated:
             resp["api_key"] = generated
-            resp["note"] = "store this key now — only its hash is kept, it cannot be retrieved later"
+            resp["note"] = "store this key now: only its hash is kept, it cannot be retrieved later"
         return resp
 
     @router.delete("/{tenant_id}")
@@ -1054,6 +1223,10 @@ def make_tenant_admin_router(manager) -> APIRouter:
 
 
 def create_app(components: Optional[Components] = None) -> FastAPI:
+    """Build the FastAPI app. Pass a fixed `Components` for single-tenant/tests;
+    omit it for the multi-tenant server (a `ComponentManager` + tenant middleware
+    resolve a per-tenant `Components` from the `X-Tenant-Id` header). Mounts the
+    `/api` router, the search router, health, and the inspector dashboard."""
     from fastapi.middleware.cors import CORSMiddleware
 
     # Swagger docs left on in prod (operator request). Note: /docs + /openapi.json
