@@ -544,7 +544,7 @@ function prettyKey(key){
 // humanize a stored demographic value: "45_54"->"45–54","65_plus"->"65+","male"->"Male"
 function humanVal(k,v){
   v=String(v);
-  if(k==="age")return v.replace(/_plus$/,"+").replace(/_/g,"–");
+  if(k==="age"){if(/^under[_\s]?\d+/i.test(v))return "<"+v.replace(/\D+/g,"");return v.replace(/_plus$/,"+").replace(/_/g,"–");}
   // underscores -> spaces (keep hyphens: "Zuid-Holland"); title-case each word
   return v.replace(/_/g," ").replace(/(^|[\s-])\w/g,c=>c.toUpperCase());
 }
@@ -786,8 +786,7 @@ async function drawCohortStats(box){
     cell(`${st.positive} / ${st.negative}`,"positive / negative","engagement outcomes",split)));
   box.append(statsCard);
 
-  // ordinal field (age) -> columns on tracks, every bucket shown, order never changes
-  const AGE_ORDER=["under_18","18_24","25_34","35_44","45_54","55_64","65_plus"];
+  // ordinal field (age) -> columns on tracks
   const colChart=(field,entries)=>{
     const m=Math.max(1,...entries.map(([,c])=>c)),sel=_coFilter[field]||[];
     const w=el("div",{class:"colchart"});
@@ -861,10 +860,11 @@ async function drawCohortStats(box){
       const dist=demo[field];
       let entries;
       if(field==="age"){
-        // ordinal, zero-fill only INTERIOR gaps (no empty edge buckets)
-        const idx=AGE_ORDER.filter(k=>k in dist).map(k=>AGE_ORDER.indexOf(k));
-        const span=idx.length?AGE_ORDER.slice(Math.min(...idx),Math.max(...idx)+1):[];
-        entries=span.map(k=>[k,dist[k]||0]).concat(Object.entries(dist).filter(([k])=>!AGE_ORDER.includes(k)));
+        // ordinal by the bucket's leading number; "under_16" sorts just before 16.
+        // No zero-fill: production mixes bucket schemes (16_18, 65_74, 65_plus).
+        const rank=v=>{const t=String(v);if(/^under/i.test(t))return (parseInt(t.replace(/\D+/g,""),10)||18)-0.5;
+          const n=parseInt(t,10);return isNaN(n)?999:n;};
+        entries=Object.entries(dist).sort((a,b)=>rank(a[0])-rank(b[0]));
       }else entries=Object.entries(dist).sort((a,b)=>String(a[0]).localeCompare(String(b[0])));  // alphabetical = stable
       const cellEl=el("div",{},el("div",{class:"eyebrow",style:"display:block;margin:6px 0 3px"},DEMO_LABEL[field]||cap1(field.replace(/_/g," "))));
       if(field==="age")cellEl.append(colChart(field,entries));
@@ -1004,7 +1004,9 @@ function makeSortable(tbl,cols,{rowClass,numeric=[]}={}){
     const arr=tbl.querySelector(`th[data-key="${key}"] .arrow`);if(arr)arr.textContent=sortDir>0?"↑":"↓";
   };
   const hrow=el("tr");
-  cols.forEach(([label,key,cls])=>hrow.append(el("th",{class:(cls?cls+" ":"")+"sortable","data-key":key,title:"sort by "+label,onclick:()=>sortBy(key)},label," ",el("span",{class:"arrow"}))));
+  cols.forEach(([label,key,cls,tip])=>{const attrs={class:(cls?cls+" ":"")+"sortable","data-key":key,onclick:()=>sortBy(key)};
+    if(tip)attrs["data-tip"]=tip;else attrs.title="sort by "+label;
+    hrow.append(el("th",attrs,label," ",el("span",{class:"arrow"})));});
   return hrow;
 }
 // applies BOTH the search text and the active demographic filters to the table
@@ -1094,13 +1096,16 @@ async function renderContent(v){
   v.append(el("div",{class:"row small mut",style:"margin-bottom:12px"},`${r.users} visitors / ${r.content.length} content items seen`));
   const tbl=el("table");
   // column meanings live on the headers as tooltips, not in a footer line
-  tbl.append(el("tr",{},
-    el("th",{},"content"),
-    el("th",{class:"num","data-tip":"total view events"},"views"),
-    el("th",{class:"num","data-tip":"unique visitors exposed"},"users"),
-    el("th",{class:"num","data-tip":"mean seconds per view"},"avg dwell"),
-    el("th",{style:"width:180px","data-tip":"share of exposed users with a positive interaction"},"positive rate")));
-  for(const x of r.content)tbl.append(el("tr",{style:"cursor:pointer",title:"open content card",onclick:()=>openContentDetail(x.content_id)},
+  tbl.append(makeSortable(tbl,[
+    ["content","title",null,null],
+    ["views","views","num","total view events"],
+    ["users","cusers","num","unique visitors exposed"],
+    ["avg dwell","dwell","num","mean seconds per view"],
+    ["positive rate","rate",null,"share of exposed users with a positive interaction"],
+  ],{rowClass:"crow",numeric:["views","cusers","dwell","rate"]}));
+  for(const x of r.content)tbl.append(el("tr",{class:"crow",style:"cursor:pointer",title:"open content card",onclick:()=>openContentDetail(x.content_id),
+    "data-s-title":String(x.title||x.content_id).toLowerCase(),"data-s-views":x.views,"data-s-cusers":x.users,
+    "data-s-dwell":x.avg_dwell||0,"data-s-rate":x.positive_rate||0},
     el("td",{},el("div",{},x.title||x.content_id),x.title?el("div",{class:"small mut num"},x.content_id):""),
     el("td",{class:"num"},x.views),
     el("td",{class:"num"},x.users),

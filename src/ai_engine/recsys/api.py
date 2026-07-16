@@ -597,7 +597,9 @@ def make_router(components: Components) -> APIRouter:
                 "n_seen": len(getattr(sig, "viewed", []) or []) if sig else 0,
                 "cold": bool(sig.is_cold) if sig else True,
                 "segment": seg.get(uid),
-                "demographics": (getattr(sig, "demographics", None) or {}) if sig else {},
+                "demographics": ({k: (canon_demo_value(k, v) or "")
+                                  for k, v in (getattr(sig, "demographics", None) or {}).items()}
+                                 if sig else {}),
             })
         rows.sort(key=lambda r: r["last_interaction"] or "", reverse=True)
         return {"result": rows[:limit]}
@@ -621,17 +623,21 @@ def make_router(components: Components) -> APIRouter:
         filters = {k: set(v.split(",")) for k, v in (("age", age), ("gender", gender),
                                                      ("nationality", nationality), ("province", province)) if v}
 
+        from .survey import canon_demo_value
+
         def matches(s, skip: Optional[str] = None) -> bool:
             demo = getattr(s, "demographics", None) or {}
-            return all(str(demo.get(f, "")) in vals for f, vals in filters.items() if f != skip)
+            return all((canon_demo_value(f, demo.get(f, "")) or "") in vals
+                       for f, vals in filters.items() if f != skip)
 
         demographics: dict[str, dict[str, int]] = {}
         for s in sigs:
             for k, v in (getattr(s, "demographics", None) or {}).items():
-                if v in (None, "") or not matches(s, skip=str(k)):
+                cv = canon_demo_value(str(k), v)   # folds language variants, drops junk
+                if cv is None or not matches(s, skip=str(k)):
                     continue
                 field = demographics.setdefault(str(k), {})
-                field[str(v)] = field.get(str(v), 0) + 1
+                field[cv] = field.get(cv, 0) + 1
 
         cohort = [s for s in sigs if matches(s)]
         total_events = total_views = positive = negative = warm = 0

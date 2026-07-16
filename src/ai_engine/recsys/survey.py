@@ -9,6 +9,7 @@ Personalization questions are explicit preferences: their answer VALUE must be t
 canonical taxonomy label (e.g. "Forced Labor") so it matches content tags 1:1.
 """
 from __future__ import annotations
+import re as _re
 from typing import Optional
 
 # Origins with their own country-specific content tags. Any other nationality rolls
@@ -74,6 +75,39 @@ def _canonical_label(v) -> str:
     """
     s = " ".join(str(v).replace("_", " ").replace("-", " ").split())
     return _LABEL_ALIASES.get(s.lower(), s)
+
+
+# Aggregation-level canonicalization of raw demographic answers. Production clients
+# answer in several languages and UI versions, so the same meaning arrives as
+# "No.", "Nee.", "no": fold spelling/language variants onto one token per meaning
+# and drop placeholder junk, WITHOUT touching the stored raw values.
+_DEMO_CANON = {
+    "gender": {"f": "female", "vrouw": "female", "m": "male", "man": "male",
+               "nonbinary": "non_binary", "x": "non_binary",
+               "prefer_not_to_say": "no_answer", "geen_antwoord": "no_answer"},
+    "personal_connection": {"ja": "yes", "nee": "no",
+                            "ik_weet_het_niet": "unknown", "weet_niet": "unknown",
+                            "i_dont_know": "unknown", "idk": "unknown", "dont_know": "unknown"},
+    "nationality": {"nederlandse": "dutch", "belgische": "belgian", "duitse": "german",
+                    "franse": "french", "poolse": "polish", "britse": "british",
+                    # country noun -> demonym, so "netherlands" and "dutch" fold together
+                    "netherlands": "dutch", "belgium": "belgian", "germany": "german",
+                    "france": "french", "poland": "polish", "uk": "british",
+                    "united_kingdom": "british", "new_zealand": "new_zealander"},
+}
+_DEMO_JUNK = {"select", "select___", "none", "null", "_", "n_a"}
+
+
+def canon_demo_value(field: str, value) -> Optional[str]:
+    """One canonical token per answer meaning, or None for placeholder junk.
+    Empty/junk gender collapses to 'no_answer' (a real survey outcome); junk in
+    any other field is dropped from distributions entirely."""
+    v = str(value or "").strip().lower().rstrip(".")
+    v = v.replace("'", "").replace("’", "")
+    v = _re.sub(r"[\s\-.]+", "_", v).strip("_") if v else ""
+    if not v or v in _DEMO_JUNK:
+        return "no_answer" if field == "gender" else None
+    return _DEMO_CANON.get(field, {}).get(v, v)
 
 
 def _clean(v):
