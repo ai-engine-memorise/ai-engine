@@ -807,16 +807,13 @@ def make_router(components: Components) -> APIRouter:
                 if off is None:
                     return
 
+        # same payload-shape handling as serving (qdrant geo field `locations`
+        # as object or list, or flat lat/lon keys)
+        from .adapters.qdrant_store import _extract_latlon
+
         def _latlon(p) -> Optional[tuple]:
-            if isinstance(p, dict):
-                lat, lon = p.get("lat"), p.get("lon") if "lon" in p else p.get("lng")
-                if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
-                    return float(lat), float(lon)
-                for v in p.values():
-                    hit = _latlon(v)
-                    if hit:
-                        return hit
-            return None
+            lat, lon = _extract_latlon(p if isinstance(p, dict) else {})
+            return (lat, lon) if lat is not None and lon is not None else None
 
         def _years(p) -> list[int]:
             tm = (p.get("time_metadata") or {}) if isinstance(p, dict) else {}
@@ -832,7 +829,7 @@ def make_router(components: Components) -> APIRouter:
         for cid, payload in _iter_payloads():
             n_items += 1
             v = views.get(cid, 0) or views.get(digits(cid), 0)
-            ll = _latlon(payload.get("location") or payload)
+            ll = _latlon(payload)
             ys = _years(payload)
             if ll:
                 n_geo += 1

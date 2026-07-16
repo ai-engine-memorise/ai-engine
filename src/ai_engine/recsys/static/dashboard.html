@@ -1141,7 +1141,12 @@ async function renderContent(v){
   lazyFill(spreadSlot,"loading collection map…",async box=>{
     const sp=await api("/api/content/spread");
     const items=((sp&&sp.items)||[]).filter(x=>x.lat!=null||(x.years&&x.years.length));
-    if(!items.length)return;
+    if(!items.length){
+      const cov=(sp&&sp.coverage)||{};
+      box.append(el("div",{class:"card"},cardhead("Collection map"),
+        el("div",{class:"small mut"},`no items with coordinates or creation dates found (scanned ${cov.items||0} catalogue items)`)));
+      return;
+    }
     let year=null,locKey=null;                          // active focus
     const YEARS=[...new Set(items.flatMap(x=>x.years||[]))].sort();
     const key=x=>x.lat!=null?x.lat.toFixed(4)+","+x.lon.toFixed(4):null;
