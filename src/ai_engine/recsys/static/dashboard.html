@@ -269,6 +269,10 @@ button.primary:hover{filter:brightness(1.05)}
 .err{color:#9C5B4F} code{background:var(--code);padding:1px 6px;border-radius:5px;font-size:12px;font-family:'Roboto Mono',monospace}
 .num{font-family:'Roboto Mono',monospace}
 .empty{padding:26px;text-align:center;color:var(--mut);border:1px dashed var(--line);border-radius:var(--rad)}
+/* lazy-loading section placeholder */
+.lazyload{display:flex;align-items:center;justify-content:center;gap:9px;padding:26px;color:var(--mut);font-size:13px;border:1px dashed var(--line);border-radius:var(--rad)}
+.lazyload .spin{width:15px;height:15px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:lspin .7s linear infinite;flex:none}
+@keyframes lspin{to{transform:rotate(360deg)}}
 .userchip{background:var(--code);border:1px solid var(--line);border-radius:7px;padding:3px 9px;font-size:12px;cursor:pointer;color:var(--fg);font-family:inherit;font-variant-numeric:tabular-nums}
 .userchip:hover{border-color:var(--accent);color:var(--accent)}
 details.members{margin-top:11px;border-top:1px solid var(--line);padding-top:9px}
@@ -378,7 +382,7 @@ button.ghost:hover{border-color:var(--accent)}
 </div>
 
 <script>
-const FEAT=["semantic","affinity","tag","recency","aversion","geo"];
+const FEAT=["semantic","tag","recency","aversion","geo"];
 const COLORS={semantic:"var(--c-semantic)",affinity:"var(--c-affinity)",tag:"var(--c-tag)",recency:"var(--c-recency)",aversion:"var(--c-aversion)",geo:"var(--c-geo)",popularity:"#999"};
 const $=(s,el=document)=>el.querySelector(s);
 const el=(t,a={},...kids)=>{const e=document.createElement(t);for(const k in a){if(k==="class")e.className=a[k];else if(k==="html")e.innerHTML=a[k];else if(k.startsWith("on"))e[k]=a[k];else e.setAttribute(k,a[k]);}for(const k of kids.flat())e.append(k&&k.nodeType?k:document.createTextNode(k??""));return e;};
@@ -404,15 +408,17 @@ function failCard(v,e){
   }
   v.append(el("div",{class:"card err"},String(e)));
 }
-// Discover known visitor ids (cluster members + recently served) so within-user
-// pages let you PICK a user from the section instead of typing one blindly.
-async function discoverUsers(){
-  const set=new Set();
-  try{const cl=await api("/api/clusters");(cl&&cl.profiles||[]).forEach(p=>(p.members||[]).forEach(u=>set.add(u)));}catch(e){}
-  try{const sv=await api("/api/served/recent?n=200");(sv||[]).forEach(r=>r.user_id&&set.add(r.user_id));}catch(e){}
-  return [...set].sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true}));
+// Fill `slot` lazily: show a spinner immediately, swap in the loader's output when it
+// resolves. The loader appends into the fresh container it is given. Keeps the page
+// shell paintable while slow endpoints (parquet scans, event-buffer sweeps) run.
+function lazyFill(slot,label,loader){
+  const ph=el("div",{class:"lazyload"},el("span",{class:"spin"}),label);
+  slot.append(ph);
+  const box=el("div");
+  Promise.resolve().then(()=>loader(box))
+    .then(()=>ph.replaceWith(box))
+    .catch(e=>{const w=el("div");failCard(w,e);ph.replaceWith(w);});
 }
-
 function breakdownBar(bd){
   const wrap=el("div",{class:"barwrap"});
   const pos=FEAT.filter(f=>f!=="aversion").map(f=>[f,Math.max(0,bd[f]||0)]);
@@ -496,7 +502,7 @@ const GROUPS=[
   {label:"Overview",   tabs:{Cohort:renderCohort,Content:renderContent,Traffic:renderTraffic}},
   {label:"Evaluation", tabs:{"Synthetic users":renderEval}},
   {label:"Admin",      tabs:{Policy:renderPolicy,Tenants:renderTenants,Config:renderConfig}},
-  {label:"Reference",  tabs:{Personas:renderPersonas}},
+  {label:"Reference",  tabs:{Methods:renderPersonas}},
 ];
 const ICON_OF={Cohort:"cohort",Content:"content",Policy:"policy",Traffic:"traffic","Synthetic users":"evaluate",Tenants:"tenants",Config:"config",Personas:"personas"};
 const SUBTITLE={
@@ -621,24 +627,36 @@ async function renderRecDetail(v){
 
 /* ===== COHORT: visitor search + table, segments below ===== */
 async function renderCohort(v){
-  const r=await api("/api/clusters").catch(()=>null);
-  const users=await discoverUsers();
-  const u2c={};                                  // visitor id -> its cluster profile
-  if(r&&r.profiles)r.profiles.forEach(p=>(p.members||[]).forEach(u=>u2c[u]=p));
-  // per-visitor activity (interactions / last seen / liked) for the table
-  const stats=await api("/api/users").catch(()=>[]);
-  const ustat={}; (stats||[]).forEach(s=>ustat[s.user_id]=s);
-  const rowIds=(stats&&stats.length)?stats.map(s=>s.user_id):users;   // /api/users is sorted by last seen
-  const tsShort=t=>t?String(t).replace("T"," ").slice(0,16):"—";
+  // both slow endpoints start immediately and run in parallel; each section fills in on its own
+  const clustersP=api("/api/clusters").catch(()=>null);
+  const statsP=api("/api/users").catch(()=>[]);      // parquet scan + event sweep server-side
 
-  // search (wide, full-width, magnifier icon; Enter or row-click opens)
+  // search (wide, full-width, magnifier icon; Enter or row-click opens) — paints instantly
   const search=el("input",{class:"searchbar",id:"usearch",placeholder:"Search visitor id…",
     oninput:filterUsers,onkeydown:e=>{if(e.key==="Enter"){const q=search.value.trim();if(q)openUser(q,"profile");}}});
   const icon=el("span",{class:"searchicon",html:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20.5 20.5l-4.2-4.2"/></svg>'});
   v.append(el("div",{class:"searchwrap"},icon,search));
 
-  // visitors table
-  if(rowIds.length){
+  const usersSlot=el("div"),segSlot=el("div");
+  v.append(usersSlot,segSlot);
+
+  // visitors table — lazy
+  lazyFill(usersSlot,"loading visitors…",async box=>{
+    const [r,stats]=await Promise.all([clustersP,statsP]);
+    const u2c={};                                  // visitor id -> its cluster profile
+    if(r&&r.profiles)r.profiles.forEach(p=>(p.members||[]).forEach(u=>u2c[u]=p));
+    const ustat={}; (stats||[]).forEach(s=>ustat[s.user_id]=s);
+    let rowIds=(stats&&stats.length)?stats.map(s=>s.user_id):null;   // /api/users is sorted by last seen
+    if(!rowIds){                                   // fallback discovery: cluster members + recently served
+      const set=new Set(Object.keys(u2c));
+      try{const sv=await api("/api/served/recent?n=200");(sv||[]).forEach(x=>x.user_id&&set.add(x.user_id));}catch(e){}
+      rowIds=[...set].sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true}));
+    }
+    const tsShort=t=>t?String(t).replace("T"," ").slice(0,16):"—";
+    if(!rowIds.length){
+      box.append(el("div",{class:"empty"},"No known visitors yet — ingest events, or type an id above and Open."));
+      return;
+    }
     const tbl=el("table",{id:"utbl"});
     tbl.append(el("tr",{},el("th",{},"visitor"),el("th",{},"segment"),
       el("th",{class:"num"},"views"),el("th",{class:"num"},"liked"),el("th",{},"last seen"),el("th",{style:"width:80px"},"")));
@@ -651,14 +669,19 @@ async function renderCohort(v){
         el("td",{class:"small mut num"},tsShort(s.last_interaction)),
         el("td",{},el("button",{class:"userchip",onclick:e=>{e.stopPropagation();openUser(u,"profile");}},"open"))));
     }
-    v.append(el("div",{class:"card"},cardhead(`Visitors (${rowIds.length})`),tbl,
+    box.append(el("div",{class:"card"},cardhead(`Visitors (${rowIds.length})`),tbl,
       el("div",{id:"unone",class:"small mut",style:"margin-top:8px;display:none"},"no visitor matches the search."),
       el("div",{class:"small mut",style:"margin-top:8px"},"views = interactions in the event buffer · liked = positive signals · last seen = latest interaction or served impression.")));
-  }else{
-    v.append(el("div",{class:"empty"},"No known visitors yet — ingest events, or type an id above and Open."));
-  }
+    filterUsers();                                 // re-apply anything typed while loading
+  });
 
-  // learned segments
+  // learned segments — lazy
+  lazyFill(segSlot,"loading segments…",async box=>{
+    const r=await clustersP;
+    renderSegments(box,r);
+  });
+}
+function renderSegments(v,r){
   if(r&&r.profiles&&r.profiles.length){
     const total=r.profiles.reduce((s,p)=>s+p.size,0)||1;
     v.append(el("div",{class:"eyebrow",style:"margin-top:14px;display:block"},`Segments · method ${r.method||"kmeans"}`));
@@ -717,14 +740,22 @@ async function renderPolicy(v){
     el("div",{class:"small mut",style:"margin-top:8px"},"Weight bars are zero-centered (right = positive, left = penalty). Confidence rises as a weight sees more data; a flat/empty bar means that signal has not fired yet, so its weight is still the prior.")));
 }
 async function renderTraffic(v){
-  const m=await api("/api/metrics");
-  const g=el("div",{class:"grid"});
-  const mc=(label,val)=>el("div",{class:"metric-card"},el("div",{class:"metric num"},String(val)),el("div",{class:"mut small"},label));
-  g.append(mc("ingested events",m.ingests),mc("recommends",m.recommends),mc("cold rate",(m.cold_rate*100).toFixed(0)+"%"),mc("avg pool",m.avg_pool),mc("distractor rate",(m.distractor_rate*100).toFixed(0)+"%"));
-  v.append(g);
-  v.append(el("div",{style:"height:14px"}));
-  try{
-    const rows=await api("/api/served/recent?n=40");
+  // both endpoints load in parallel; each section fills in on its own
+  const metricsSlot=el("div"),servedSlot=el("div");
+  v.append(metricsSlot,el("div",{style:"height:14px"}),servedSlot);
+
+  lazyFill(metricsSlot,"loading serving counters…",async box=>{
+    const m=await api("/api/metrics");
+    const g=el("div",{class:"grid"});
+    const mc=(label,val)=>el("div",{class:"metric-card"},el("div",{class:"metric num"},String(val)),el("div",{class:"mut small"},label));
+    g.append(mc("ingested events",m.ingests),mc("recommends",m.recommends),mc("cold rate",(m.cold_rate*100).toFixed(0)+"%"),mc("avg pool",m.avg_pool),mc("distractor rate",(m.distractor_rate*100).toFixed(0)+"%"));
+    box.append(g);
+  });
+
+  lazyFill(servedSlot,"loading served impressions…",async box=>{
+    let rows;
+    try{rows=await api("/api/served/recent?n=40");}
+    catch(e){box.append(el("div",{class:"empty"},"served log: "+e));return;}
     if(rows&&rows.length){
       const tbl=el("table");
       tbl.append(el("tr",{},el("th",{},"time"),el("th",{},"user"),el("th",{},"strategy"),el("th",{},"ranking"),el("th",{},"items"),el("th",{},"distractor")));
@@ -734,9 +765,9 @@ async function renderTraffic(v){
         el("td",{},el("span",{class:"pill "+(r.strategy||"warm")},r.strategy||"")),
         el("td",{class:"small mut"},r.ranking||""),el("td",{class:"num"},(r.items||[]).length),
         el("td",{class:"small mut"},r.distractor_id||"-")));
-      v.append(el("div",{class:"card"},cardhead("Recent served impressions"),tbl));
-    }else v.append(el("div",{class:"empty"},"No served impressions yet, set ",el("code",{},"EVENT_LOG_DIR")," and serve a request."));
-  }catch(e){v.append(el("div",{class:"empty"},"served log: "+e));}
+      box.append(el("div",{class:"card"},cardhead("Recent served impressions"),tbl));
+    }else box.append(el("div",{class:"empty"},"No served impressions yet, set ",el("code",{},"EVENT_LOG_DIR")," and serve a request."));
+  });
 }
 
 async function renderContent(v){
@@ -954,7 +985,6 @@ const PERSONAS={
 const METHODS={
  "Scoring signals (each scored 0 to 1)":[
   ["semantic","Cosine similarity to the visitor's taste centroid (their whole history).","semantic"],
-  ["affinity","Item-kNN: max similarity to ANY one liked item, stays sharp for multi-interest visitors where the centroid blurs.","affinity"],
   ["tag","Affinity-weighted overlap between the visitor's tags and the content's expert tags.","tag"],
   ["recency","Closeness to the MOST-RECENT view, sequence awareness ('more like what you just read').","recency"],
   ["aversion","Penalty (negative weight) for themes of content the visitor abandoned.","aversion"],
@@ -973,16 +1003,6 @@ const METHODS={
  ],
 };
 async function renderPersonas(v){
-  v.append(el("div",{class:"card small mut"},"How the engine reads a visitor, grounded in museum-visitor research: Falk (2009) visit identities and Pekarik, Doering & Karns (1999) experience preferences. The type comes from breadth of interest, engagement depth, and pace; every persona claim carries the evidence that produced it (Tintarev & Masthoff scrutability)."));
-  for(const [title,rows] of Object.entries(PERSONAS)){
-    const isFalk=title.indexOf("Falk")===0;
-    const c=el("div",{class:"card"});c.append(cardhead(title));
-    rows.forEach(([name,desc,how],i)=>c.append(el("div",{class:"row",style:`align-items:flex-start;gap:14px;padding:10px 0;${i?'border-top:1px solid var(--line)':''}`},
-      isFalk?personaPill(name,name,"min-width:128px;text-align:center"):el("span",{class:"pill bandit",style:"min-width:128px;text-align:center"},name),
-      el("div",{style:"flex:1"},el("div",{},desc),el("div",{class:"small mut",style:"margin-top:2px"},"inferred from "+how)))));
-    v.append(c);
-  }
-  v.append(el("div",{class:"eyebrow",style:"margin-top:6px;display:block"},"Methods"));
   for(const [title,rows] of Object.entries(METHODS)){
     const c=el("div",{class:"card"});c.append(cardhead(title));
     rows.forEach(([name,desc,key],i)=>c.append(el("div",{class:"row",style:`align-items:flex-start;gap:13px;padding:10px 0;${i?'border-top:1px solid var(--line)':''}`},
@@ -1265,7 +1285,7 @@ function mintedToast(id,key){
 /* ===== ADMIN: runtime config — categorized + explained ===== */
 const CFG_CATS=[
   {title:"Fusion weights",desc:"How much each scorer contributes to the final relevance score (each scorer outputs 0–1; aversion is a penalty).",
-   fields:["fusion.semantic","fusion.affinity","fusion.tag","fusion.recency","fusion.aversion","fusion.geo"]},
+   fields:["fusion.semantic","fusion.tag","fusion.recency","fusion.aversion","fusion.geo"]},
   {title:"Engagement signals",desc:"After each story, the engine scores how much the visitor liked it on a −1 (disliked) … +1 (loved) scale. These four weights decide how much each behaviour counts — they should add up to about 1. The two cut-offs below turn that score into a like / neutral / dislike.",
    fields:["engagement.dwell","engagement.completion","engagement.revisit","engagement.survey","positive_threshold","negative_threshold","dwell_cap_ratio"]},
   {title:"Reading-time model",desc:"Estimates expected reading time, which dwell is measured against.",
@@ -1283,7 +1303,6 @@ const CFG_CATS=[
 ];
 const CFG_HELP={
   "fusion.semantic":["Semantic","Similarity to the visitor's whole-history taste centroid."],
-  "fusion.affinity":["Affinity","Max similarity to any single liked item (sharp for multi-interest)."],
   "fusion.tag":["Tag","Affinity-weighted overlap of visitor tags with the item's expert tags."],
   "fusion.recency":["Recency","Similarity to the most-recent view (sequence awareness)."],
   "fusion.aversion":["Aversion","Penalty (negative) for overlap with abandoned themes."],
