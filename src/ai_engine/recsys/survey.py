@@ -105,7 +105,9 @@ def canon_demo_value(field: str, value) -> Optional[str]:
     v = str(value or "").strip().lower().rstrip(".")
     v = v.replace("'", "").replace("’", "")
     v = _re.sub(r"[\s\-.]+", "_", v).strip("_") if v else ""
-    if not v or v in _DEMO_JUNK:
+    # values with no letter/digit at all (zero-width chars, dashes, emoji …) render
+    # as blank labels: treat them exactly like an empty answer
+    if not v or v in _DEMO_JUNK or not _re.search(r"[a-z0-9]", v):
         return "no_answer" if field == "gender" else None
     return _DEMO_CANON.get(field, {}).get(v, v)
 

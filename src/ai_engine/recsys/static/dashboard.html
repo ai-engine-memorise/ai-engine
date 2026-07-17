@@ -931,7 +931,8 @@ async function renderCohort(v){
       tbl.append(el("tr",attrs,
         el("td",{},el("b",{},u)),
         el("td",{},p?personaPill("Cluster "+p.cluster+(p.falk_hint?" · "+p.falk_hint:""),Object.keys(PERSONA_COLORS).find(k=>(p.falk_hint||"").startsWith(k))):""),
-        el("td",{class:"num"},s.n_interactions!=null?s.n_interactions:0),
+        el("td",{class:"num"},s.n_interactions?s.n_interactions
+          :el("span",{class:"small mut","data-tip":s.n_served?`served ${s.n_served} recommendation${s.n_served===1?"":"s"}, no events ingested`:"no recorded activity"},"0")),
         el("td",{class:"num",style:s.n_liked?"color:var(--c-affinity);font-weight:600":"color:var(--mut)"},s.n_liked||0),
         el("td",{class:"small mut num"},tsShort(s.last_interaction)),
         el("td",{},el("button",{class:"userchip",onclick:e=>{e.stopPropagation();openUser(u,"profile");}},"open"))));

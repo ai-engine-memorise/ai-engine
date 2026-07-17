@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 from .composition import Components, build_components
 from .adapters.rudderstack import normalize_events
 from .contracts.models import UserSignals
-from .survey import survey_affinity
+from .survey import survey_affinity, canon_demo_value, demo_label
 
 
 class PreviewSpec(BaseModel):
@@ -614,21 +614,32 @@ def make_router(components: Components) -> APIRouter:
                 for u in (p.get("members") or []):
                     ids.add(u); seg[u] = label
         base = _log_base(c)
+        n_served: dict[str, int] = {}
         if base:
             try:
                 import pyarrow.parquet as pq
+            except ImportError:
+                pq = None
+            if pq is not None:
+                # per-file failures skip that file only, never the rest of the scan
                 for f in glob.glob(os.path.join(base, "served", "**", "*.parquet"), recursive=True):
                     try:
-                        for r in pq.read_table(f, columns=["user_id", "ts"]).to_pylist():
-                            u, ts = r.get("user_id"), r.get("ts")
-                            if u:
-                                ids.add(u)
-                                if ts and ts > served_last.get(u, ""):
-                                    served_last[u] = ts
+                        srows = pq.read_table(f, columns=["user_id", "ts"]).to_pylist()
                     except Exception:
-                        continue
-            except Exception:
-                pass
+                        try:
+                            srows = pq.read_table(f).to_pylist()
+                        except Exception:
+                            continue
+                    for r in srows:
+                        u, ts = r.get("user_id"), r.get("ts")
+                        if not u:
+                            continue
+                        u = str(u)
+                        ids.add(u)
+                        n_served[u] = n_served.get(u, 0) + 1
+                        ts = str(ts) if ts else ""
+                        if ts and ts > served_last.get(u, ""):
+                            served_last[u] = ts
         rows = []
         for uid in ids:
             try:
@@ -640,6 +651,7 @@ def make_router(components: Components) -> APIRouter:
             rows.append({
                 "user_id": uid,
                 "n_interactions": len(evs),
+                "n_served": n_served.get(uid, 0),
                 "last_interaction": last.isoformat() if last else served_last.get(uid),
                 "n_liked": len(sig.positives) if sig else 0,
                 "n_seen": len(getattr(sig, "viewed", []) or []) if sig else 0,
@@ -670,8 +682,6 @@ def make_router(components: Components) -> APIRouter:
         sigs = [s for s, _ in pairs]
         filters = {k: set(v.split(",")) for k, v in (("age", age), ("gender", gender),
                                                      ("nationality", nationality), ("province", province)) if v}
-
-        from .survey import canon_demo_value, demo_label
 
         def matches(s, skip: Optional[str] = None) -> bool:
             demo = getattr(s, "demographics", None) or {}
