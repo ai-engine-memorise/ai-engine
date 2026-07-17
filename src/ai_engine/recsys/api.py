@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import time
 from datetime import datetime, timezone
 from typing import Any, Optional, Union
 from uuid import uuid4
@@ -217,22 +218,47 @@ def _tail_served(base: str, n: int, light: bool = True) -> list[dict]:
     return out
 
 
+def _dash_cached(c, key: str, ttl: float, build):
+    """Tiny per-tenant TTL cache for dashboard read models, hung off Components.
+
+    Dashboard endpoints recompute heavy scans on every page view; serving never
+    reads through here. Ingest drops the volatile keys (see /api/ingest) so the
+    numbers stay live, and the TTL bounds staleness for everything else."""
+    cache = getattr(c, "_dash_cache", None)
+    if cache is None:
+        cache = {}
+        try:
+            c._dash_cache = cache
+        except Exception:          # exotic Components impl: fall back to uncached
+            return build()
+    hit = cache.get(key)
+    now = time.monotonic()
+    if hit is not None and now - hit[0] < ttl:
+        return hit[1]
+    val = build()
+    cache[key] = (now, val)
+    return val
+
+
 def _cohort_view_aggs(c) -> list[tuple]:
     """[(signals, {content_id: ViewAgg})] for every visitor in the model store.
 
     THE cohort demand scan (docs/debt-payload-scatter.md D2): one implementation
-    shared by /content/stats, /cohort/stats and /content/spread, and the single
-    seam to add caching to when the scan gets slow at production scale."""
-    from .signals.signal_builder import aggregate_views
-    sigs = list(c.model_store.iter_signals() if hasattr(c.model_store, "iter_signals") else [])
-    out = []
-    for s in sigs:
-        try:
-            aggs = aggregate_views(c.event_buffer.fetch_events(s.user_id))
-        except Exception:
-            aggs = {}
-        out.append((s, aggs))
-    return out
+    shared by /content/stats, /cohort/stats and /content/spread. Cached for 60s
+    (invalidated on ingest) — at production scale the raw scan is one redis
+    round-trip per visitor and dominated dashboard load times."""
+    def build():
+        from .signals.signal_builder import aggregate_views
+        sigs = list(c.model_store.iter_signals() if hasattr(c.model_store, "iter_signals") else [])
+        out = []
+        for s in sigs:
+            try:
+                aggs = aggregate_views(c.event_buffer.fetch_events(s.user_id))
+            except Exception:
+                aggs = {}
+            out.append((s, aggs))
+        return out
+    return _dash_cached(c, "cohort_aggs", 60.0, build)
 
 
 def _iter_catalogue(c, cap: int = 2000):
@@ -419,6 +445,12 @@ def make_router(components: Components) -> APIRouter:
             c.updater.refresh(u, c.event_buffer, now=now, demographics=demographics)
         metrics["ingests"] += len(events)
         bandit_updates = _online_bandit_update(c, events)
+        # new events change visitor rows and cohort aggregates immediately;
+        # the served-log scan cache is unaffected by ingest and keeps its TTL
+        cache = getattr(c, "_dash_cache", None)
+        if cache:
+            cache.pop("users_rows", None)
+            cache.pop("cohort_aggs", None)
         return {"status": "ok", "ingested": len(events), "users": sorted(users),
                 "bandit_updates": bandit_updates}
 
@@ -601,78 +633,80 @@ def make_router(components: Components) -> APIRouter:
     @ops.get("/users")
     def users_list(limit: int = Query(default=500, ge=1, le=5000)) -> dict:
         """Per-visitor summary for the cohort table: interaction count, last interaction,
-        liked / seen totals, cold flag, and segment. Enumerated from the durable served log
-        + cluster members; counts/timestamps from the event buffer (PII -> guarded)."""
-        import glob
-        ids: set = set()
-        served_last: dict[str, str] = {}
-        seg: dict[str, str] = {}
-        model = _load_cluster_model(getattr(c, "cluster_model_path", None))
-        if model:
-            for p in model.get("profiles", []):
-                label = f"Cluster {p.get('cluster')}" + (f" · {p['falk_hint']}" if p.get("falk_hint") else "")
-                for u in (p.get("members") or []):
-                    ids.add(u); seg[u] = label
-        base = _log_base(c)
-        n_served: dict[str, int] = {}
-        if base:
-            try:
-                import pyarrow.parquet as pq
-            except ImportError:
-                pq = None
-            if pq is not None:
-                # per-file failures skip that file only, never the rest of the scan
-                for f in glob.glob(os.path.join(base, "served", "**", "*.parquet"), recursive=True):
-                    try:
-                        srows = pq.read_table(f, columns=["user_id", "ts"]).to_pylist()
-                    except Exception:
+        liked / seen totals, cold flag, and segment. Visitors are enumerated from the
+        MODEL STORE (every ingested visitor has signals; replay the event log to restore
+        them after a store wipe) — not by scanning the whole parquet event log per
+        request, which is what made this endpoint take seconds in production. The served
+        log contributes serve counts and visitors who were served but never ingested;
+        that scan is cached for 5 min, the assembled rows for 60s (dropped on ingest)."""
+        def build_served():
+            import glob
+            n_served: dict[str, int] = {}
+            served_last: dict[str, str] = {}
+            base = _log_base(c)
+            if base:
+                try:
+                    import pyarrow.parquet as pq
+                except ImportError:
+                    pq = None
+                if pq is not None:
+                    # per-file failures skip that file only, never the rest of the scan
+                    for f in glob.glob(os.path.join(base, "served", "**", "*.parquet"), recursive=True):
                         try:
-                            srows = pq.read_table(f).to_pylist()
+                            srows = pq.read_table(f, columns=["user_id", "ts"]).to_pylist()
                         except Exception:
-                            continue
-                    for r in srows:
-                        u, ts = r.get("user_id"), r.get("ts")
-                        if not u:
-                            continue
-                        u = str(u)
-                        ids.add(u)
-                        n_served[u] = n_served.get(u, 0) + 1
-                        ts = str(ts) if ts else ""
-                        if ts and ts > served_last.get(u, ""):
-                            served_last[u] = ts
-                # the event log itself: covers visitors who sent events (even only an
-                # identify) but were never served — keeps this list consistent with
-                # /api/cohort/stats, which counts everyone in the log
-                for f in glob.glob(os.path.join(base, "date=*", "*.parquet")):
-                    try:
-                        erows = pq.read_table(f, columns=["user_id"]).to_pylist()
-                    except Exception:
-                        continue
-                    for r in erows:
-                        if r.get("user_id"):
-                            ids.add(str(r["user_id"]))
-        rows = []
-        for uid in ids:
-            try:
-                evs = c.event_buffer.fetch_events(uid)
-            except Exception:
-                evs = []
-            last = max((e.ts for e in evs if e.ts), default=None)
-            sig = c.model_store.get_signals(uid)
-            rows.append({
-                "user_id": uid,
-                "n_interactions": len(evs),
-                "n_served": n_served.get(uid, 0),
-                "last_interaction": last.isoformat() if last else served_last.get(uid),
-                "n_liked": len(sig.positives) if sig else 0,
-                "n_seen": len(getattr(sig, "viewed", []) or []) if sig else 0,
-                "cold": bool(sig.is_cold) if sig else True,
-                "segment": seg.get(uid),
-                "demographics": ({k: (canon_demo_value(k, v) or "")
-                                  for k, v in (getattr(sig, "demographics", None) or {}).items()}
-                                 if sig else {}),
-            })
-        rows.sort(key=lambda r: r["last_interaction"] or "", reverse=True)
+                            try:
+                                srows = pq.read_table(f).to_pylist()
+                            except Exception:
+                                continue
+                        for r in srows:
+                            u, ts = r.get("user_id"), r.get("ts")
+                            if not u:
+                                continue
+                            u = str(u)
+                            n_served[u] = n_served.get(u, 0) + 1
+                            ts = str(ts) if ts else ""
+                            if ts and ts > served_last.get(u, ""):
+                                served_last[u] = ts
+            return n_served, served_last
+
+        def build_rows():
+            seg: dict[str, str] = {}
+            model = _load_cluster_model(getattr(c, "cluster_model_path", None))
+            if model:
+                for p in model.get("profiles", []):
+                    label = f"Cluster {p.get('cluster')}" + (f" · {p['falk_hint']}" if p.get("falk_hint") else "")
+                    for u in (p.get("members") or []):
+                        seg[u] = label
+            n_served, served_last = _dash_cached(c, "served_scan", 300.0, build_served)
+            sigs = {s.user_id: s for s in
+                    (c.model_store.iter_signals() if hasattr(c.model_store, "iter_signals") else [])}
+            ids = set(sigs) | set(seg) | set(n_served)
+            rows = []
+            for uid in ids:
+                sig = sigs.get(uid)
+                try:
+                    evs = c.event_buffer.fetch_events(uid)
+                except Exception:
+                    evs = []
+                last = max((e.ts for e in evs if e.ts), default=None)
+                rows.append({
+                    "user_id": uid,
+                    "n_interactions": len(evs),
+                    "n_served": n_served.get(uid, 0),
+                    "last_interaction": last.isoformat() if last else served_last.get(uid),
+                    "n_liked": len(sig.positives) if sig else 0,
+                    "n_seen": len(getattr(sig, "viewed", []) or []) if sig else 0,
+                    "cold": bool(sig.is_cold) if sig else True,
+                    "segment": seg.get(uid),
+                    "demographics": ({k: (canon_demo_value(k, v) or "")
+                                      for k, v in (getattr(sig, "demographics", None) or {}).items()}
+                                     if sig else {}),
+                })
+            rows.sort(key=lambda r: r["last_interaction"] or "", reverse=True)
+            return rows
+
+        rows = _dash_cached(c, "users_rows", 60.0, build_rows)
         return {"result": rows[:limit]}
 
     @ops.get("/cohort/stats")
@@ -1153,6 +1187,7 @@ def make_router(components: Components) -> APIRouter:
         for uid in users:
             c.updater.refresh(uid, c.event_buffer, now=now,
                               demographics=c.demographics.get_demographics(uid))
+        getattr(c, "_dash_cache", {}).clear()   # everything just changed
         return {"result": {"files": len(files), "events": len(events),
                            "visitors": len(users), "skipped": skipped}}
 
