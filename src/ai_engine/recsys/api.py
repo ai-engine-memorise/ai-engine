@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 
 from .composition import Components, build_components
 from .adapters.rudderstack import normalize_events
-from .contracts.models import UserSignals
+from .contracts.models import UserSignals, InteractionEvent
 from .survey import survey_affinity, canon_demo_value, demo_label
 
 
@@ -1092,6 +1092,58 @@ def make_router(components: Components) -> APIRouter:
         for name in RecConfig.model_fields:
             setattr(c.cfg, name, getattr(new_cfg, name))
         c.recommender.policy = _build_policy(c.cfg)
+
+    @admin.post("/replay-events")
+    def replay_events() -> dict:
+        """Rebuild THIS tenant's Redis state (event buffers + visitor models) from its
+        durable parquet event log — disaster recovery after a redis wipe, without
+        cluster access. Re-feeds every logged event through the same path /api/ingest
+        uses. Idempotent: the buffer dedupes identical events, so re-running is safe."""
+        import json as _json
+        base = _log_base(c)
+        if not base or not os.path.isdir(base):
+            raise HTTPException(status_code=404, detail="no event log directory")
+        try:
+            import pyarrow.parquet as pq
+        except ImportError:
+            raise HTTPException(status_code=503, detail="pyarrow not installed")
+        from .contracts.enums import EndReason
+        import glob as _glob
+
+        files = sorted(_glob.glob(os.path.join(base, "date=*", "*.parquet")))
+        events, skipped = [], 0
+        for f in files:
+            try:
+                rows = pq.read_table(f).to_pylist()
+            except Exception:
+                skipped += 1
+                continue
+            for r in rows:
+                try:
+                    events.append(InteractionEvent(
+                        user_id=r["user_id"], event=r["event"],
+                        ts=datetime.fromisoformat(r["ts"]) if r.get("ts") else None,
+                        session_id=r.get("session_id"), request_id=r.get("request_id"),
+                        content_id=r.get("content_id"), dwell_seconds=r.get("dwell_seconds"),
+                        end_reason=EndReason(r["end_reason"]) if r.get("end_reason") else None,
+                        query_text=r.get("query_text"), clicked_id=r.get("clicked_id"),
+                        impressions=_json.loads(r.get("impressions") or "[]"),
+                        survey_answers=_json.loads(r.get("survey_answers") or "{}"),
+                        raw=_json.loads(r.get("raw") or "{}"),
+                    ))
+                except Exception:
+                    skipped += 1
+        events.sort(key=lambda e: e.ts or datetime(1970, 1, 1, tzinfo=timezone.utc))
+        users: set[str] = set()
+        for e in events:
+            c.event_buffer.append(e)  # type: ignore[attr-defined]
+            users.add(e.user_id)
+        now = datetime.now(timezone.utc)
+        for uid in users:
+            c.updater.refresh(uid, c.event_buffer, now=now,
+                              demographics=c.demographics.get_demographics(uid))
+        return {"result": {"files": len(files), "events": len(events),
+                           "visitors": len(users), "skipped": skipped}}
 
     @admin.get("/config")
     def get_config() -> dict:

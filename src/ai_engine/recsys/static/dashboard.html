@@ -1853,11 +1853,22 @@ async function exportEvents(btn){
   }catch(e){alert("export failed: "+e);}
   btn.textContent=old;btn.disabled=false;
 }
+// rebuild visitor models from the durable parquet log (recovery after a redis wipe)
+async function replayEvents(btn){
+  if(!confirm("Rebuild visitor models from the event log? Safe to re-run (idempotent); takes a moment."))return;
+  const old=btn.textContent;btn.textContent="replaying…";btn.disabled=true;
+  try{
+    const r=await postJSON("/api/replay-events",{});
+    alert(`replayed ${r.events} events for ${r.visitors} visitors (${r.files} files, ${r.skipped} skipped)`);
+    paint();
+  }catch(e){alert("replay failed: "+e);btn.textContent=old;btn.disabled=false;}
+}
 async function renderConfig(v){
   const xbtn=el("button",{class:"userchip",onclick:e=>exportEvents(e.target)},"download event log (.tar.gz)");
-  v.append(el("div",{class:"card"},cardhead("Data export"),
-    el("div",{class:"small mut",style:"margin:-2px 0 9px"},"the tenant's complete raw record: every ingested event and served impression (parquet), for off-site backup"),
-    xbtn));
+  const rbtn=el("button",{class:"userchip",onclick:e=>replayEvents(e.target)},"rebuild models from event log");
+  v.append(el("div",{class:"card"},cardhead("Data export & recovery"),
+    el("div",{class:"small mut",style:"margin:-2px 0 9px"},"export: the tenant's complete raw record (every ingested event and served impression, parquet), for off-site backup. Rebuild: replay that log back into the live visitor models, e.g. after a redis wipe."),
+    el("div",{class:"row",style:"gap:8px"},xbtn,rbtn)));
   let cfg; try{cfg=await api("/api/config");}catch(e){failCard(v,e);return;}
   const t=$("#tenant").value.trim();
   const flat={};
