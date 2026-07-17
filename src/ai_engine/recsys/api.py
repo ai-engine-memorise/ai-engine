@@ -640,6 +640,17 @@ def make_router(components: Components) -> APIRouter:
                         ts = str(ts) if ts else ""
                         if ts and ts > served_last.get(u, ""):
                             served_last[u] = ts
+                # the event log itself: covers visitors who sent events (even only an
+                # identify) but were never served — keeps this list consistent with
+                # /api/cohort/stats, which counts everyone in the log
+                for f in glob.glob(os.path.join(base, "date=*", "*.parquet")):
+                    try:
+                        erows = pq.read_table(f, columns=["user_id"]).to_pylist()
+                    except Exception:
+                        continue
+                    for r in erows:
+                        if r.get("user_id"):
+                            ids.add(str(r["user_id"]))
         rows = []
         for uid in ids:
             try:

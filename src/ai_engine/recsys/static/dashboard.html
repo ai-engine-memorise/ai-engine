@@ -30,7 +30,7 @@
   --sidebar:#16150F; --sidebar-fg:#E8E1D3; --sidebar-mut:#8E8472; --sidebar-line:#ffffff10;
 }
 :root{--serif:'Source Serif 4',Georgia,serif}
-:root{--c-semantic:#4F6276;--c-affinity:#5E7355;--c-tag:#A8895B;--c-recency:#7A5C6E;--c-aversion:#9C5B4F;--c-geo:#4E7E78;--maxw:1320px;--rad:12px;--side-w:248px;--side-w-min:64px}
+:root{--c-semantic:#4F6276;--c-affinity:#5E7355;--c-tag:#A8895B;--c-recency:#7A5C6E;--c-aversion:#9C5B4F;--c-geo:#4E7E78;--rad:12px;--side-w:248px;--side-w-min:64px}
 *{box-sizing:border-box}
 body{margin:0;font-family:var(--serif);font-size:14.5px;line-height:1.55;background:var(--bg);color:var(--fg);-webkit-font-smoothing:antialiased}
 h1,h2,h3,.mont{font-family:Montserrat,sans-serif;font-weight:600;letter-spacing:-.015em}
@@ -41,13 +41,13 @@ aside.sidebar{position:sticky;top:0;height:100vh;width:var(--side-w);flex:0 0 va
   background:var(--sidebar);color:var(--sidebar-fg);display:flex;flex-direction:column;
   border-right:1px solid var(--sidebar-line);transition:width .18s ease;z-index:30}
 body.nav-min aside.sidebar{width:var(--side-w-min);flex-basis:var(--side-w-min)}
-.side-brand{display:flex;align-items:center;gap:10px;height:58px;padding:0 16px;flex:0 0 auto;
+.side-brand{display:flex;align-items:center;gap:10px;height:58px;padding:0 16px 0 22px;flex:0 0 auto;
   border-bottom:1px solid var(--sidebar-line);white-space:nowrap;overflow:hidden}
 .ring{width:24px;height:24px;flex:0 0 auto}
 .ring .r{fill:none;stroke:var(--accent);stroke-width:2;transform-origin:center;animation:spin 9s linear infinite}
 .ring .c{fill:var(--accent);transform-origin:center;animation:pulse 1.9s ease-in-out infinite}
 @keyframes spin{to{transform:rotate(360deg)}}@keyframes pulse{0%,100%{opacity:.45}50%{opacity:1}}
-.side-brand .name{font-family:Montserrat,sans-serif;font-weight:700;font-size:14.5px}
+.side-brand .name{font-family:Montserrat,sans-serif;font-weight:700;font-size:18px;user-select:none;-webkit-user-select:none}
 .side-brand .name span{color:var(--accent)}
 .side-brand .brand-logo{width:27px;height:27px;object-fit:contain;flex:0 0 auto}
 body.nav-min .side-brand .name{display:none}
@@ -58,24 +58,34 @@ body.nav-min .side-brand{justify-content:center;padding:0 6px;gap:2px}
 body.nav-min .side-toggle{margin:0}
 body.nav-min .side-toggle svg{transform:rotate(180deg)}
 
-nav.side-nav{flex:1 1 auto;overflow-y:auto;padding:10px 10px 14px}
+/* top padding tuned so the first item's top edge lines up with the page title (Qdrant-style) */
+nav.side-nav{flex:1 1 auto;overflow-y:auto;padding:20px 10px 14px}
 nav.side-nav::-webkit-scrollbar{width:7px}nav.side-nav::-webkit-scrollbar-thumb{background:#ffffff18;border-radius:9px}
-.navgroup{margin-bottom:12px}
-.grouplbl{font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--sidebar-mut);font-weight:700;padding:6px 10px 4px}
-body.nav-min .grouplbl{text-align:center;font-size:8px;padding:6px 0 4px;letter-spacing:.04em}
-.navitem{display:flex;align-items:center;gap:11px;width:100%;border:0;background:transparent;color:var(--sidebar-fg);
-  padding:9px 11px;border-radius:9px;font-family:inherit;font-weight:600;font-size:13.5px;cursor:pointer;text-align:left;
-  margin:1px 0;transition:.13s;white-space:nowrap;position:relative}
-.navitem svg{flex:0 0 18px;width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;opacity:.82}
+.navitem{display:flex;align-items:center;gap:17px;width:100%;border:0;background:transparent;color:var(--sidebar-fg);
+  padding:10px 12px;border-radius:9px;font-family:Montserrat,sans-serif;font-weight:500;font-size:15px;cursor:pointer;text-align:left;
+  margin:2px 0;transition:.13s;white-space:nowrap;position:relative;overflow:hidden}
+/* MUI-style press ripple */
+.ripple{position:absolute;border-radius:50%;background:currentColor;opacity:.22;transform:scale(0);
+  animation:ripple .55s ease-out forwards;pointer-events:none}
+@keyframes ripple{to{transform:scale(1);opacity:0}}
+.navitem svg{flex:0 0 20px;width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;opacity:.82}
 .navitem:hover{background:#ffffff10}
 .navitem.on{background:var(--accent);color:#221a0c}
 [data-theme="dark"] .navitem.on{color:#1c1b18}
 .navitem.on svg{opacity:1}
 body.nav-min .navitem{justify-content:center;padding:10px 0}
 body.nav-min .navitem .lbl{display:none}
-body.nav-min .navitem.on::after{content:"";position:absolute;right:-10px;top:8px;bottom:8px;width:3px;border-radius:3px;background:var(--accent)}
+body.nav-min .navitem.on::after{content:"";position:absolute;right:0;top:8px;bottom:8px;width:3px;border-radius:3px;background:var(--accent)}  /* right:0 — overflow:hidden (ripple) would clip anything outside */
 
-.side-foot{flex:0 0 auto;border-top:1px solid var(--sidebar-line);padding:13px 14px;display:flex;align-items:center;gap:8px}
+.side-docs-wrap{flex:0 0 auto;padding:2px 10px 8px}
+.side-docs{display:inline-flex;align-items:center;gap:6px;padding:6px 0 6px 12px;color:var(--sidebar-mut);
+  text-decoration:none;font-family:Montserrat,sans-serif;font-weight:500;font-size:12.5px;white-space:nowrap}
+.side-docs .ext{width:11px;height:11px;flex:0 0 auto}
+.side-docs:hover{color:var(--sidebar-fg)}
+.side-docs:hover .lbl{text-decoration:underline}
+body.nav-min .side-docs{padding:6px 0;width:100%;justify-content:center}
+body.nav-min .side-docs .lbl{display:none}
+.side-foot{flex:0 0 auto;border-top:1px solid var(--sidebar-line);padding:13px 14px 13px 22px;display:flex;align-items:center;gap:8px}
 .foot-tenant{font-family:'Roboto Mono',monospace;font-weight:400;font-size:11px;color:var(--sidebar-mut);
   letter-spacing:.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .side-foot .conn{margin-left:auto;flex:0 0 auto}
@@ -85,22 +95,24 @@ body.nav-min .navitem.on::after{content:"";position:absolute;right:-10px;top:8px
 body.nav-min .side-foot{justify-content:center;padding:13px 0}
 body.nav-min .foot-lbl,body.nav-min .foot-tenant{display:none}
 body.nav-min .side-foot .conn{margin:0}
+.side-version{font-family:'Roboto Mono',monospace;font-size:11px;color:var(--sidebar-mut);white-space:nowrap;flex:0 0 auto}
+.side-version:empty{display:none}
+body.nav-min .side-version{display:none}
 
 /* ===== main ===== */
 main{flex:1 1 auto;min-width:0}
-.page{max-width:var(--maxw);margin:0 auto;padding:26px 52px 80px}
-.pagehead{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:0 0 20px;flex-wrap:wrap}
-.pagehead .eyebrow{margin:0 0 5px}
-.pagehead h1{margin:0;font-size:23px;color:var(--primary-dark)}
+.page{max-width:none;margin:0;padding:18px 28px 90px}
+.pagehead{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:0 0 22px;flex-wrap:wrap}
+.pagehead h1{margin:0;font-size:34px;font-weight:700;color:var(--primary-dark)}
 [data-theme="dark"] .pagehead h1{color:var(--fg)}
 .pagehead .sub{font-size:13px;color:var(--mut);margin-top:5px;max-width:560px}
-.eyebrow{font-size:11px;letter-spacing:.11em;text-transform:uppercase;color:var(--accent);font-weight:700}
+.eyebrow{font-size:11.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--accent);font-weight:700}
 .iconbtn{background:var(--panel);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:7px 9px;cursor:pointer;line-height:1}
 .iconbtn:hover{border-color:var(--accent)}
 
 /* top bar */
 .topbar{position:sticky;top:0;z-index:25;display:flex;align-items:center;gap:12px;
-  padding:10px 52px;background:var(--panel);border-bottom:1px solid var(--line)}
+  padding:14px 28px;background:var(--panel);border-bottom:1px solid var(--line)}
 .tb-field{display:flex;align-items:center;gap:7px}
 .tb-field label{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut);font-weight:700}
 .tb-field input{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 9px;font:inherit;font-size:13px;color:var(--fg);width:130px}
@@ -120,16 +132,17 @@ main{flex:1 1 auto;min-width:0}
 [data-theme="dark"] .themeswitch .knob{transform:translateX(30px)}
 
 /* visitor search + drill-down */
-.searchwrap{position:relative;margin-bottom:16px}
+.searchwrap{position:relative;margin-bottom:20px}
 .searchicon{position:absolute;left:15px;top:50%;transform:translateY(-50%);color:var(--mut);line-height:0;pointer-events:none}
-.searchicon svg{width:18px;height:18px}
+.searchicon svg{width:22px;height:22px}
 .searchbar{width:100%;background:var(--panel);border:1px solid var(--line);border-radius:10px;
-  padding:12px 15px 12px 44px;font:inherit;font-size:15px;color:var(--fg)}
+  padding:11px 16px 11px 46px;font:inherit;font-size:15px;color:var(--fg)}
+.searchbar:hover{border-color:var(--accent)}
 .searchbar:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-t)}
 .searchbar::placeholder{color:var(--mut)}
 .urow:hover{background:var(--accent-t)}
 .subtabs{display:flex;gap:4px;margin:0 0 18px;border-bottom:1px solid var(--line)}
-.subtab{border:0;background:transparent;color:var(--mut);font:inherit;font-weight:600;font-size:13.5px;
+.subtab{border:0;background:transparent;color:var(--mut);font-family:Montserrat,sans-serif;font-weight:500;font-size:14px;
   padding:9px 16px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:.13s}
 .subtab:hover{color:var(--fg)}
 .subtab.on{color:var(--accent);border-bottom-color:var(--accent)}
@@ -181,15 +194,27 @@ main{flex:1 1 auto;min-width:0}
 .cfgctl input.f:focus,.cfgctl select.f:focus{background:var(--panel);border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-t)}
 .cfgctl select.f{cursor:pointer;font-family:Montserrat,sans-serif}
 .cfgctl input[type=checkbox]{width:20px;height:20px;cursor:pointer;accent-color:var(--accent)}
+/* fusion-weight bar slider (edit = draggable thumb, read-only = plain bar) */
+.wslider{display:flex;align-items:center;gap:10px;width:100%;max-width:200px}
+.wslider input[type=range]{-webkit-appearance:none;appearance:none;flex:1;min-width:0;height:12px;border-radius:7px;
+  border:0;outline:none;cursor:pointer;margin:0}
+.wslider input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:17px;height:17px;border-radius:50%;
+  background:var(--panel);border:2.5px solid var(--wc,var(--accent));box-shadow:0 1px 3px var(--shadow);cursor:grab}
+.wslider input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;
+  background:var(--panel);border:2.5px solid var(--wc,var(--accent));box-shadow:0 1px 3px var(--shadow);cursor:grab}
+.wslider input[type=range]:disabled{cursor:default}
+.wslider input[type=range]:disabled::-webkit-slider-thumb{opacity:0}
+.wslider input[type=range]:disabled::-moz-range-thumb{opacity:0}
+.wslider .wval{font-size:12.5px;width:42px;text-align:right;flex:0 0 auto}
 .cfgctl input:disabled,.cfgctl select:disabled{background:var(--code);color:var(--fg);opacity:.9;cursor:default;border-color:transparent}
 
 /* key icon rotated −45° for a hanging-key look */
 .tb-icon svg,.keyglyph svg{transform:rotate(-45deg)}
 
-.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--rad);padding:16px 18px;margin-bottom:14px;
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--rad);padding:22px 24px;margin-bottom:20px;
       transition:border-color .2s,box-shadow .2s,transform .2s}
 .card.lift:hover{border-color:var(--accent);box-shadow:0 6px 20px var(--shadow);transform:translateY(-2px)}
-.cardhead{font-family:Montserrat,sans-serif;font-weight:600;font-size:15px;margin:0 0 13px;color:var(--primary-dark)}
+.cardhead{font-family:Montserrat,sans-serif;font-weight:600;font-size:16px;margin:0 0 16px;color:var(--primary-dark)}
 [data-theme="dark"] .cardhead{color:var(--fg)}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .mut{color:var(--mut)} .small{font-size:12px}
@@ -207,12 +232,30 @@ main{flex:1 1 auto;min-width:0}
 [data-theme="dark"] .pill.bandit{color:#8fb4d8}[data-theme="dark"] .pill.distractor{color:#d89a8e}
 
 /* tables */
-table{width:100%;border-collapse:collapse;font-size:13px}
-th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
-th{color:var(--mut);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.06em}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:14px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{color:var(--mut);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.07em;
+  font-family:Montserrat,sans-serif;background:var(--code);border-bottom:none;padding-top:11px;padding-bottom:11px}
+tr:last-child td{border-bottom:0}
+/* tables bleed to the card edges so row separators run the full width (Qdrant-style) */
+.card>table{width:calc(100% + 48px);margin-left:-24px;margin-right:-24px}
+.card>table th:first-child,.card>table td:first-child{padding-left:24px}
+.card>table th:last-child,.card>table td:last-child{padding-right:24px}
+/* table as the card's first element: header band sits flush with the card top */
+.card>table:first-child{margin-top:-22px}
+.card>table:first-child th:first-child{border-top-left-radius:var(--rad)}
+.card>table:first-child th:last-child{border-top-right-radius:var(--rad)}
+/* ...and as the last element: no dead space under the final row */
+.card>table:last-child{margin-bottom:-22px}
+.card>table:last-child tr:last-child td:first-child{border-bottom-left-radius:var(--rad)}
+.card>table:last-child tr:last-child td:last-child{border-bottom-right-radius:var(--rad)}
+td b{font-family:Montserrat,sans-serif;font-weight:600}
 tbody tr{transition:background .12s}
 tbody tr:hover{background:var(--accent-t)}
-td:first-child,th:first-child{padding-left:2px} td:last-child,th:last-child{padding-right:2px}
+/* visitors table: no row-hover wash; the id itself is the link */
+#utbl tr:hover{background:transparent}
+.vlink{cursor:pointer}
+.vlink:hover{text-decoration:underline;color:var(--accent)}
 
 /* bars */
 .barwrap{display:flex;height:16px;border-radius:8px;overflow:hidden;background:var(--track);min-width:150px}
@@ -267,6 +310,8 @@ input.f:focus,select.f:focus{outline:none;border-color:var(--accent);box-shadow:
 button.primary{background:var(--accent);color:#221a0c;border:1px solid transparent;border-radius:8px;padding:7px 16px;font:inherit;font-weight:600;cursor:pointer}
 [data-theme="dark"] button.primary{color:#1c1b18}
 button.primary:hover{filter:brightness(1.05)}
+button.primary.danger{background:var(--c-aversion);color:#fff}
+button.primary:disabled{opacity:.45;cursor:default;filter:none}
 .err{color:#9C5B4F} code{background:var(--code);padding:1px 6px;border-radius:5px;font-size:12px;font-family:'Roboto Mono',monospace}
 .num{font-family:'Roboto Mono',monospace}
 .empty{padding:26px;text-align:center;color:var(--mut);border:1px dashed var(--line);border-radius:var(--rad)}
@@ -278,7 +323,7 @@ button.primary:hover{filter:brightness(1.05)}
 .tchip.hit .fb{color:#5E7355;border-color:#5E735555;background:transparent}
 .tchip.hit .w{color:#5E7355;opacity:.75}
 /* cohort statistics */
-.distrow{display:grid;grid-template-columns:minmax(95px,155px) minmax(0,1fr) 70px;gap:10px;align-items:center;margin:6px 0}
+.distrow{display:grid;grid-template-columns:minmax(95px,155px) minmax(0,1fr) 70px;gap:12px;align-items:center;margin:9px 0}
 /* instant tooltip (native title is too slow to discover) */
 [data-tip]{position:relative;cursor:help}
 [data-tip]:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);
@@ -289,8 +334,8 @@ th.sortable:hover{color:var(--fg)}
 th.sortable .arrow{display:inline-block;width:11px;font-size:10px;color:var(--accent)}  /* fixed width: arrow can't shift columns */
 .distrow.click{cursor:pointer;border-radius:6px}
 .distrow.click:hover>.small:first-child{color:var(--fg)}
-.statrow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 20px}
-.statcell .statval{font-family:Montserrat,sans-serif;font-size:20px;font-weight:700;color:var(--primary-dark);line-height:1.2}
+.statrow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px 24px}
+.statcell .statval{font-family:Montserrat,sans-serif;font-size:25px;font-weight:700;color:var(--primary-dark);line-height:1.2}
 [data-theme="dark"] .statcell .statval{color:var(--accent)}
 .colchart{display:flex;align-items:flex-end;justify-content:center;gap:6px;margin:4px 0 2px}
 .colchart .col{flex:1;max-width:46px;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:0;padding:0;cursor:pointer;font:inherit}
@@ -359,6 +404,17 @@ th.sortable .arrow{display:inline-block;width:11px;font-size:10px;color:var(--ac
 .lazyload{display:flex;align-items:center;justify-content:center;gap:9px;padding:26px;color:var(--mut);font-size:13px;border:1px dashed var(--line);border-radius:var(--rad)}
 .lazyload .spin{width:15px;height:15px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:lspin .7s linear infinite;flex:none}
 @keyframes lspin{to{transform:rotate(360deg)}}
+/* kebab action menu (⋮) */
+.kebab{position:relative;display:inline-block}
+.kebab>button{background:transparent;border:0;color:var(--mut);cursor:pointer;padding:4px 12px;border-radius:8px;font-size:18px;line-height:1}
+.kebab>button:hover{background:var(--accent-t);color:var(--fg)}
+.kmenu{position:absolute;right:0;top:calc(100% + 4px);z-index:80;background:var(--panel);border:1px solid var(--line);
+  border-radius:10px;box-shadow:0 12px 30px var(--shadow);min-width:170px;padding:6px;display:none}
+.kmenu.show{display:block}
+.kmenu button{display:block;width:100%;text-align:left;background:transparent;border:0;padding:8px 11px;border-radius:7px;
+  font-family:Montserrat,sans-serif;font-size:13px;color:var(--fg);cursor:pointer}
+.kmenu button:hover{background:var(--accent-t)}
+.kmenu button.danger{color:var(--c-aversion)}
 .userchip{background:var(--code);border:1px solid var(--line);border-radius:7px;padding:3px 9px;font-size:12px;cursor:pointer;color:var(--fg);font-family:inherit;font-variant-numeric:tabular-nums}
 .userchip:hover{border-color:var(--accent);color:var(--accent)}
 details.members{margin-top:11px;border-top:1px solid var(--line);padding-top:9px}
@@ -410,14 +466,21 @@ button.ghost:hover{border-color:var(--accent)}
   <aside class="sidebar">
     <div class="side-brand">
       <img class="brand-logo" src="/static/favicon/ai-engine-search-white-512.png" alt="AI-Engine"/>
-      <span class="name">AI&#8209;Engine&nbsp;<span>Dashboard</span></span>
+      <span class="name">AI&#8209;<span>Engine</span></span>
       <button class="side-toggle" id="navtoggle" title="collapse sidebar">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 6l-6 6 6 6"/></svg>
       </button>
     </div>
     <nav class="side-nav" id="tabs"></nav>
+    <div class="side-docs-wrap">
+      <a class="side-docs" href="https://ai-engine-docs.eodyne.systems" target="_blank" rel="noopener" title="documentation">
+        <span class="lbl">Docs</span>
+        <svg class="ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      </a>
+    </div>
     <div class="side-foot">
       <span class="foot-tenant" id="tenantname" title="active tenant"></span>
+      <span class="side-version" id="appver" title="running release"></span>
       <span class="conn" id="conn" title="not connected"><span class="dot"></span></span>
     </div>
   </aside>
@@ -585,12 +648,11 @@ function tagList(pairs,{signed=false,top=6,hi=null}={}){
 const ICONS={
   cohort:'<circle cx="9" cy="8" r="3"/><circle cx="17" cy="10" r="2.4"/><path d="M3 19c0-3 3-5 6-5s6 2 6 5M15 18c.4-2 2-3 4-3s3 .7 3.5 2"/>',
   content:'<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
-  policy:'<path d="M4 19V5M4 19h16M8 16V9M12 16V6M16 16v-4"/>',
   traffic:'<path d="M4 12h4l2 5 4-12 2 7h4"/>',
   request:'<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',
   user:'<circle cx="12" cy="8" r="3.4"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"/>',
   history:'<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>',
-  tenants:'<rect x="4" y="9" width="7" height="11" rx="1"/><rect x="13" y="4" width="7" height="16" rx="1"/><path d="M16 8h1M16 11h1M16 14h1"/>',
+  tenants:'<g transform="rotate(-45 12 12)"><circle cx="7" cy="12" r="3.7"/><circle cx="7" cy="12" r="1" fill="currentColor" stroke="none"/><path d="M10.7 12H21M18 12v3.4M14.7 12v2.6"/></g>',
   config:'<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>',
   personas:'<path d="M4 14c0 3 3 5 5 5 1.5 0 2-1 3-1s1.5 1 3 1c2 0 5-2 5-5 0-4-3-9-5-9-1.5 0-2 1-3 1s-1.5-1-3-1c-2 0-5 5-5 9Z"/>',
   evaluate:'<path d="M9 3h6M10 3v6l-4.5 8a2 2 0 0 0 1.8 3h9.4a2 2 0 0 0 1.8-3L14 9V3M7.5 15h9"/>',
@@ -601,27 +663,16 @@ const slug=n=>n.toLowerCase().replace(/\s+/g,"-");
 const GROUPS=[
   {label:"Overview",   tabs:{Cohort:renderCohort,Content:renderContent,Traffic:renderTraffic}},
   {label:"Evaluation", tabs:{"Synthetic users":renderEval}},
-  {label:"Admin",      tabs:{Policy:renderPolicy,Tenants:renderTenants,Config:renderConfig}},
-  {label:"Reference",  tabs:{Methods:renderPersonas}},
+  {label:"Admin",      tabs:{"Access Tokens":renderTenants,Config:renderConfig}},
 ];
-const ICON_OF={Cohort:"cohort",Content:"content",Policy:"policy",Traffic:"traffic","Synthetic users":"evaluate",Tenants:"tenants",Config:"config",Methods:"info"};
-const SUBTITLE={
-  Cohort:"Search any visitor, or browse the learned segments. Open a visitor for their model, history and live recommendations.",
-  Content:"Which items get seen, liked and abandoned across all visitors.",
-  Policy:"The ranking policy: fusion weights, bandit theta and training health.",
-  Traffic:"Serving counters and the tail of the served-impression log.",
-  "Synthetic users":"Probe recommender behaviour with built-in or prompt-built personas: across scenarios, with metrics.",
-  Tenants:"Create, inspect and delete tenant slices at runtime (no redeploy).",
-  Config:"Live RecConfig: edit, apply and persist runtime overrides.",
-  Methods:"How the engine reads a visitor: the research behind the labels.",
-};
+const ICON_OF={Cohort:"cohort",Content:"content",Traffic:"traffic","Synthetic users":"evaluate","Access Tokens":"tenants",Config:"config"};
 const ALL=Object.assign({},...GROUPS.map(g=>g.tabs));
-const SCOPE={};GROUPS.forEach(g=>Object.keys(g.tabs).forEach(t=>SCOPE[t]=g.label));
 const BY_SLUG={};Object.keys(ALL).forEach(n=>BY_SLUG[slug(n)]=n);
 let current="Cohort";
 let userCtx=null;            // {id, sub} when drilled into a single visitor (from the Cohort table)
 let recCtx=null;             // request_id when drilled into a single recommendation (from the Traffic table)
 let cfgTab=null;             // active Config category subtab
+let cohortTab="overview";    // Cohort subtab: overview | stats
 let cfgEdit=false;           // Config is read-only until Edit is clicked
 const USER_SUBS=[["profile","Profile",renderUser],["history","History",renderHistory],["recommend","Recommend",renderRequest]];
 
@@ -636,7 +687,7 @@ function paint(){
   if(recCtx){renderRecDetail(v);return;}
   if(userCtx){renderUserDetail(v);return;}
   v.append(el("div",{class:"pagehead"},
-    el("div",{},el("div",{class:"eyebrow"},SCOPE[current]),el("h1",{},current)),
+    el("div",{},el("h1",{},current)),
     el("button",{class:"iconbtn",title:"refresh",onclick:paint},"↻")));
   const host=el("div");v.append(host);
   ALL[current](host).catch(e=>failCard(host,e));
@@ -662,7 +713,7 @@ function openRec(rid){
 }
 async function renderRecDetail(v){
   v.append(el("div",{class:"pagehead"},
-    el("div",{},el("div",{class:"eyebrow"},"Traffic"),el("h1",{},"Recommendation")),
+    el("div",{},el("h1",{},"Recommendation")),
     el("button",{class:"iconbtn",title:"back to traffic",onclick:()=>{location.hash="#/traffic";}},"←")));
   const host=el("div");v.append(host);
   let d;
@@ -741,6 +792,23 @@ async function renderRecDetail(v){
 
 /* ===== COHORT STATISTICS: demographic slices double as filters ===== */
 let _coFilter={};                    // {field: [raw values]}, multi-select, persists across repaints
+let _coBaseline=null;                // unfiltered demographics snapshot — freezes chart layout under filters
+// the four headline activity cells of the Statistics card
+function cohortStatRow(st){
+  const cell=(val,label,sub,extra)=>el("div",{class:"statcell"},
+    el("div",{class:"statval num"},String(val)),
+    el("div",{class:"small mut"},label),
+    sub?el("div",{class:"small mut",style:"opacity:.75;margin-top:2px"},sub):"",extra||"");
+  const outcomes=st.positive+st.negative;
+  const split=outcomes?el("div",{class:"barwrap",style:"margin-top:7px;height:8px;min-width:0;gap:2px;max-width:150px"},
+    el("div",{class:"seg",style:`width:${100*st.positive/outcomes}%;background:var(--c-affinity)`,title:st.positive+" positive"}),
+    el("div",{class:"seg",style:`width:${100*st.negative/outcomes}%;background:var(--c-aversion)`,title:st.negative+" negative"})):"";
+  return el("div",{class:"statrow"},
+    cell(st.visitors,"visitors",`${st.warm} warm · ${st.cold} cold`),
+    cell(st.events,"interactions",`${st.views_per_visitor} views per visitor`),
+    cell((st.avg_dwell_seconds||0)+"s","avg dwell per view",`${st.views} content views`),
+    cell(`${st.positive} / ${st.negative}`,"positive / negative","engagement outcomes",split));
+}
 async function drawCohortStats(box){
   const qs=Object.entries(_coFilter).map(([k,v])=>k+"="+encodeURIComponent(v.join(","))).join("&");
   const st=await api("/api/cohort/stats"+(qs?"?"+qs:""));
@@ -758,10 +826,9 @@ async function drawCohortStats(box){
   const SLBL=st.labels||{};                       // server-owned value labels (D3)
   const lab=(f,v)=>(SLBL[f]&&SLBL[f][v])||humanVal(f,v);
 
-  // section header: title + active filter chips (the statistics zone reads as its own block)
-  // min-height reserves the chip row's space up front, so toggling a filter never shifts the layout
-  const head=el("div",{class:"row",style:"gap:9px;flex-wrap:wrap;align-items:center;margin:0 0 8px;min-height:28px"},
-    el("span",{class:"eyebrow"},"Cohort statistics"));
+  // active-filter chip row: height is RESERVED even when empty, so toggling a
+  // filter never pushes the layout below it down
+  const head=el("div",{class:"row",style:"gap:9px;flex-wrap:wrap;align-items:center;min-height:30px;margin:0 0 8px"});
   const fl=Object.entries(_coFilter);
   if(fl.length){
     fl.forEach(([f,vals])=>vals.forEach(val=>head.append(el("button",{class:"filterchip",title:"remove this filter",onclick:()=>setF(f,val)},
@@ -772,20 +839,8 @@ async function drawCohortStats(box){
   box.append(head);
 
   // activity: one flat card with stat cells, not a row of boxed tiles
-  const cell=(val,label,sub,extra)=>el("div",{class:"statcell"},
-    el("div",{class:"statval num"},String(val)),
-    el("div",{class:"small mut"},label),
-    sub?el("div",{class:"small mut",style:"opacity:.75;margin-top:2px"},sub):"",extra||"");
-  const outcomes=st.positive+st.negative;
-  const split=outcomes?el("div",{class:"barwrap",style:"margin-top:7px;height:8px;min-width:0;gap:2px;max-width:150px"},
-    el("div",{class:"seg",style:`width:${100*st.positive/outcomes}%;background:var(--c-affinity)`,title:st.positive+" positive"}),
-    el("div",{class:"seg",style:`width:${100*st.negative/outcomes}%;background:var(--c-aversion)`,title:st.negative+" negative"})):"";
-  const statsCard=el("div",{class:"card",style:"margin:0 0 12px;padding-top:12px;padding-bottom:12px"});
-  statsCard.append(el("div",{class:"statrow"},
-    cell(st.visitors,"visitors",`${st.warm} warm · ${st.cold} cold`),
-    cell(st.events,"interactions",`${st.views_per_visitor} views per visitor`),
-    cell((st.avg_dwell_seconds||0)+"s","avg dwell per view",`${st.views} content views`),
-    cell(`${st.positive} / ${st.negative}`,"positive / negative","engagement outcomes",split)));
+  const statsCard=el("div",{class:"card",style:"margin:0 0 26px;padding-top:18px;padding-bottom:18px"});
+  statsCard.append(cohortStatRow(st));
   box.append(statsCard);
 
   // ordinal field (age) -> columns on tracks
@@ -850,31 +905,37 @@ async function drawCohortStats(box){
     return d;
   };
 
-  // demographics: fields side by side in one compact card; ORDER IS FIXED, never
-  // re-sorted by counts, so applying a filter cannot shuffle the layout
+  // demographics: fields side by side in one compact card. LAYOUT IS FROZEN against
+  // the unfiltered baseline: field order, category rows and chart type are all taken
+  // from the full cohort's distribution, and a filter only changes counts/widths —
+  // categories never appear/disappear and charts never switch type, so nothing moves.
   const FIELD_ORDER=["age","gender","nationality","province","personal_connection"];
   const demo=st.demographics||{};
-  const dfields=FIELD_ORDER.filter(f=>demo[f]).concat(Object.keys(demo).filter(f=>!FIELD_ORDER.includes(f)));
+  if(!fl.length)_coBaseline=demo;                 // (re)capture on every unfiltered load
+  const baseDemo=_coBaseline||demo;
+  const dfields=FIELD_ORDER.filter(f=>baseDemo[f]).concat(Object.keys(baseDemo).filter(f=>!FIELD_ORDER.includes(f)));
   if(dfields.length){
     // same card as the stat row: one compact statistics block, table right below
-    const fg=el("div",{style:"display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:6px 36px;align-items:start;max-width:780px;margin:0 auto;width:100%"});
+    const fg=el("div",{style:"display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px 64px;align-items:start;width:100%"});
     for(const field of dfields){
-      const dist=demo[field];
-      let entries;
+      const cur=demo[field]||{};
+      // baseline categories, zero-filled where the filtered slice has none
+      const keys=Object.keys(baseDemo[field]);
+      let entries=keys.map(k=>[k,cur[k]||0]);
       if(field==="age"){
         // ordinal by the bucket's leading number; "under_16" sorts just before 16.
-        // No zero-fill: production mixes bucket schemes (16_18, 65_74, 65_plus).
         const rank=v=>{const t=String(v);if(/^under/i.test(t))return (parseInt(t.replace(/\D+/g,""),10)||18)-0.5;
           const n=parseInt(t,10);return isNaN(n)?999:n;};
-        entries=Object.entries(dist).sort((a,b)=>rank(a[0])-rank(b[0]));
-      }else entries=Object.entries(dist).sort((a,b)=>String(a[0]).localeCompare(String(b[0])));  // alphabetical = stable
+        entries.sort((a,b)=>rank(a[0])-rank(b[0]));
+      }else entries.sort((a,b)=>String(a[0]).localeCompare(String(b[0])));  // alphabetical = stable
       const cellEl=el("div",{},el("div",{class:"eyebrow",style:"display:block;margin:6px 0 3px"},DEMO_LABEL[field]||cap1(field.replace(/_/g," "))));
+      const nz=entries.filter(([,c])=>c>0).length;   // chart type follows the filtered slice
       if(field==="age")cellEl.append(colChart(field,entries));
-      else if(entries.length<=3)cellEl.append(pieChart(field,entries));
+      else if(nz<=3)cellEl.append(pieChart(field,entries.filter(([,c])=>c>0)));
       else cellEl.append(distList(entries.slice(0,8).map(([val,cnt])=>({label:lab(field,val),count:cnt,value:val})),field));
       fg.append(cellEl);
     }
-    statsCard.append(el("div",{style:"border-top:1px solid var(--line);margin:12px 0 8px"}),fg);
+    statsCard.append(el("div",{style:"border-top:1px solid var(--line);margin:18px 0 14px"}),fg);
   }
 }
 
@@ -885,7 +946,20 @@ async function renderCohort(v){
   const statsP=api("/api/users").catch(()=>[]);      // parquet scan + event sweep server-side
 
   const statsSlot=el("div"),usersSlot=el("div"),segSlot=el("div");
-  v.append(statsSlot,usersSlot,segSlot);
+  // subtabs: Overview = everything, Statistics = just the cohort statistics.
+  // Pure visibility toggle — nothing refetches on switch.
+  const bar=el("div",{class:"subtabs"});
+  const showTab=()=>{
+    const ov=cohortTab==="overview";
+    statsSlot.style.display=ov?"none":"";
+    usersSlot.style.display=ov?"":"none";
+    segSlot.style.display=ov?"":"none";
+    bar.querySelectorAll(".subtab").forEach(b=>b.classList.toggle("on",b.dataset.k===cohortTab));
+  };
+  [["overview","Visitors"],["stats","Statistics"]].forEach(([k,label])=>
+    bar.append(el("button",{class:"subtab","data-k":k,onclick:()=>{cohortTab=k;showTab();}},label)));
+  v.append(bar,statsSlot,usersSlot,segSlot);
+  showTab();
 
   // cohort statistics: interactive, demographic values act as filters
   lazyFill(statsSlot,"loading cohort statistics…",box=>drawCohortStats(box));
@@ -903,7 +977,6 @@ async function renderCohort(v){
       rowIds=[...set].sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true}));
     }
     const tsShort=t=>t?String(t).replace("T"," ").slice(0,16):"";
-    box.append(el("div",{class:"eyebrow",style:"display:block;margin:16px 0 8px"},"Visitors"));
     // search lives with the table it filters; Enter opens the typed id directly
     const search=el("input",{class:"searchbar",id:"usearch",placeholder:"Search visitor id…",
       oninput:filterUsers,onkeydown:e=>{if(e.key==="Enter"){const q=search.value.trim();if(q)openUser(q,"profile");}}});
@@ -915,13 +988,12 @@ async function renderCohort(v){
     box.append(el("div",{class:"searchwrap"},icon,search));
     const tbl=el("table",{id:"utbl"});
     const hrow=makeSortable(tbl,
-      [["visitor","visitor"],["segment","segment"],["views","views","num"],["positive","positive","num"],["last seen","last"]],
+      [[`visitor (${rowIds.length})`,"visitor"],["segment","segment"],["views","views","num"],["positive","positive","num"],["last seen","last"]],
       {rowClass:"urow",numeric:["views","positive"]});
-    hrow.append(el("th",{style:"width:80px"},""));
     tbl.append(hrow);
     for(const u of rowIds){const p=u2c[u], s=ustat[u]||{};
       const dmo=s.demographics||{};
-      const attrs={class:"urow","data-id":String(u).toLowerCase(),style:"cursor:pointer",onclick:()=>openUser(u,"profile")};
+      const attrs={class:"urow","data-id":String(u).toLowerCase()};
       ["age","gender","nationality","province"].forEach(f=>attrs["data-f-"+f]=dmo[f]!=null?String(dmo[f]):"");
       attrs["data-s-visitor"]=String(u).toLowerCase();
       attrs["data-s-segment"]=p?"cluster "+p.cluster:"";
@@ -929,17 +1001,15 @@ async function renderCohort(v){
       attrs["data-s-positive"]=s.n_liked||0;
       attrs["data-s-last"]=s.last_interaction||"";
       tbl.append(el("tr",attrs,
-        el("td",{},el("b",{},u)),
+        el("td",{},el("b",{class:"vlink",title:"open visitor",onclick:()=>openUser(u,"profile")},u)),
         el("td",{},p?personaPill("Cluster "+p.cluster+(p.falk_hint?" · "+p.falk_hint:""),Object.keys(PERSONA_COLORS).find(k=>(p.falk_hint||"").startsWith(k))):""),
         el("td",{class:"num"},s.n_interactions?s.n_interactions
           :el("span",{class:"small mut","data-tip":s.n_served?`served ${s.n_served} recommendation${s.n_served===1?"":"s"}, no events ingested`:"no recorded activity"},"0")),
         el("td",{class:"num",style:s.n_liked?"color:var(--c-affinity);font-weight:600":"color:var(--mut)"},s.n_liked||0),
-        el("td",{class:"small mut num"},tsShort(s.last_interaction)),
-        el("td",{},el("button",{class:"userchip",onclick:e=>{e.stopPropagation();openUser(u,"profile");}},"open"))));
+        el("td",{class:"small mut num"},tsShort(s.last_interaction))));
     }
-    box.append(el("div",{class:"card"},cardhead(`Visitors (${rowIds.length})`),tbl,
-      el("div",{id:"unone",class:"small mut",style:"margin-top:8px;display:none"},"no visitor matches the search."),
-      el("div",{class:"small mut",style:"margin-top:8px"},"views = interactions in the event buffer · positive = positive signals · last seen = latest interaction or served impression.")));
+    box.append(el("div",{class:"card"},tbl,
+      el("div",{id:"unone",style:"display:none;text-align:center;color:var(--mut);padding:30px 0 12px"},"No results")));
     setTimeout(filterUsers,0);   // apply any active demographic filter once the table is in the DOM
   });
 
@@ -1021,7 +1091,9 @@ function filterUsers(){const s=$("#usearch");const q=(s&&s.value||"").toLowerCas
     tr.style.display=hit?"":"none";if(hit)shown++;
   }
   const none=$("#unone");if(none)none.style.display=shown?"none":"";}
-async function renderPolicy(v){
+// Live policy state (mode, training health, prior-vs-learned weights).
+// Shown inside Config -> Ranking policy, right where the scorer params are edited.
+async function policyCards(v){
   const p=await api("/api/policy");
   const h=p.health;
   v.append(el("div",{class:"card"},el("div",{class:"row"},
@@ -1057,8 +1129,6 @@ async function renderTraffic(v){
 
   lazyFill(metricsSlot,"loading serving counters…",async box=>{
     const m=await api("/api/metrics");
-    box.append(el("div",{class:"row",style:"align-items:center;margin:0 0 8px;min-height:28px"},
-      el("span",{class:"eyebrow"},"Serving statistics")));
     const cell=(val,label,sub)=>el("div",{class:"statcell"},
       el("div",{class:"statval num"},String(val)),
       el("div",{class:"small mut"},label),
@@ -1074,7 +1144,6 @@ async function renderTraffic(v){
     let rows;
     try{rows=await api("/api/served/recent?n=40");}
     catch(e){box.append(el("div",{class:"empty"},"served log: "+e));return;}
-    box.append(el("div",{class:"eyebrow",style:"display:block;margin:2px 0 8px"},"Served impressions"));
     if(rows&&rows.length){
       const tbl=el("table");
       tbl.append(makeSortable(tbl,
@@ -1088,7 +1157,7 @@ async function renderTraffic(v){
         el("td",{},el("span",{class:"pill "+(r.strategy||"warm")},r.strategy||"")),
         el("td",{class:"small mut"},r.ranking||""),el("td",{class:"num"},(r.items||[]).length),
         el("td",{class:"small mut"},r.distractor_id||"-")));
-      box.append(el("div",{class:"card"},cardhead("Recent served impressions"),tbl));
+      box.append(el("div",{class:"card"},tbl));
     }else box.append(el("div",{class:"empty"},"No served impressions yet, set ",el("code",{},"EVENT_LOG_DIR")," and serve a request."));
   });
 }
@@ -1116,7 +1185,7 @@ async function renderContent(v){
     el("td",{},el("div",{style:"display:flex;gap:8px;align-items:center;flex-wrap:nowrap"},
       el("div",{class:"barwrap",style:"flex:1;max-width:120px;height:12px"},el("div",{class:"seg",style:`width:${100*(x.positive_rate||0)}%;background:var(--c-affinity)`})),
       el("span",{class:"small mut num",style:"white-space:nowrap"},Math.round(100*(x.positive_rate||0))+"%")))));
-  v.append(el("div",{class:"card"},cardhead("Content engagement across visitors (most viewed first)"),tbl));
+  v.append(el("div",{class:"card"},tbl));
   // popular themes: full taxonomy keys from the server, grouped by facet so a story
   // theme is never ranked against an area or a story type. Value shown = share of the
   // cohort leaning toward the tag; the exact visitor count appears on hover.
@@ -1529,13 +1598,19 @@ function modelCard(persona){
     aff.length?valueBars(aff.map(([k,w])=>[k.split(":").slice(1).join(":")||k,w]),{max:1})
               :el("div",{class:"small mut"},"No interest tags: persona relies on the cold/diverse fallback."));
 }
-function metricsGrid(m){
-  const g=el("div",{class:"grid"});
-  const mc=(label,val)=>el("div",{class:"metric-card"},el("div",{class:"metric num"},val==null?"–":String(val)),el("div",{class:"mut small"},label));
-  g.append(mc("items",m.n_items),mc("targets",m.n_targets),mc("avg score",m.avg_target_score),
-           mc("diversity",m.intra_list_diversity),mc("distinct tags",m.distinct_tags),
-           mc("distractor",m.distractor_present?"yes":"no"));
-  return g;
+// one quiet line of metrics instead of a wall of metric cards
+function metricsLine(m){
+  const w=el("div",{class:"row",style:"gap:14px;flex-wrap:wrap;align-items:baseline"});
+  const parts=[[m.n_items,"items"],[m.n_targets,"targets"],[m.avg_target_score,"avg score"],
+               [m.intra_list_diversity,"diversity"],[m.distinct_tags,"distinct tags"],
+               [m.distractor_present?"yes":"no","distractor"]];
+  parts.forEach(([val,lab],i)=>{
+    if(i)w.append(el("span",{class:"mut small",style:"opacity:.45"},"·"));
+    w.append(el("span",{style:"display:inline-flex;gap:6px;align-items:baseline"},
+      el("b",{class:"num",style:"font-size:14.5px"},val==null?0:String(val)),
+      el("span",{class:"mut small"},lab)));
+  });
+  return w;
 }
 // tag chips from an item's content tags (facet:label), capped
 function itemTags(it,max=6){
@@ -1559,15 +1634,15 @@ function itemRow(it){
 }
 function scenarioCard(s){
   const m=s.metrics||{}, c=el("div",{class:"card"});
-  c.append(el("div",{class:"row",style:"margin-bottom:6px"},
-    el("b",{},s.name),
+  c.append(el("div",{class:"row",style:"margin-bottom:10px;align-items:center"},
+    el("span",{class:"cardhead",style:"margin:0"},cap1(s.name)),
     el("span",{class:"pill "+(s.strategy||"warm")},s.strategy||""),
     s.filter?el("span",{class:"pill neutral"},"filter: "+s.filter):"",
     (s.diagnostics&&s.diagnostics.reason)?el("span",{class:"mut small"},s.diagnostics.reason):""));
-  c.append(metricsGrid(m));
+  c.append(metricsLine(m));
   const fs=Object.entries(m.facet_spread||{});
-  if(fs.length)c.append(el("div",{style:"margin-top:8px"},el("span",{class:"small mut"},"facet spread:  "),fs.map(([f,n])=>el("span",{class:"tag"},f+" ×"+n))));
-  const host=el("div",{style:"margin-top:10px"});
+  if(fs.length)c.append(el("div",{style:"margin-top:9px"},el("span",{class:"small mut"},"facet spread:  "),fs.map(([f,n])=>el("span",{class:"tag"},f+" ×"+n))));
+  const host=el("div",{style:"margin-top:14px;border-top:1px solid var(--line);padding-top:12px"});
   if((s.items||[]).length)s.items.forEach(it=>host.append(itemRow(it)));
   else host.append(el("div",{class:"empty"},"No items for this scenario."));
   c.append(host);
@@ -1670,32 +1745,73 @@ async function renderEval(v){
   let personas;
   try{personas=await api("/api/eval/personas");}catch(e){failCard(v,e);return;}
   // ----- section 1: synthetic visitor (creator + model) -----
-  const sel=el("select",{id:"ev_personasel",class:"f",style:"min-width:210px",onchange:e=>{
+  // workbench layout: left = build the visitor + run controls, right = results
+  const left=el("div"),right=el("div");
+
+  const sel=el("select",{id:"ev_personasel",class:"f",style:"width:100%",onchange:e=>{
     if(e.target.value==="__prompt__")return;
     setPersona(personas[+e.target.value]);
   }});
   personas.forEach((p,i)=>sel.append(el("option",{value:String(i)},p.name+" · "+p.type)));
   sel.append(el("option",{value:"__prompt__"},"(from prompt)"));
-  v.append(el("div",{class:"card"},cardhead("1 · Synthetic visitor"),
-    el("div",{class:"row"},sel),
-    el("div",{class:"row",style:"margin-top:9px"},
-      el("input",{id:"ev_prompt",class:"f",style:"flex:1;min-width:280px",placeholder:"…or describe a visitor: ‘a young student drawn to resistance and Barrack 3’"}),
-      el("button",{class:"userchip",onclick:buildFromPrompt},"Build from prompt")),
-    el("div",{class:"small mut",style:"margin-top:7px"},"Built from the personalization survey fields; grounded in this tenant's real tag vocabulary. The model below is what the recommender sees.")));
-  v.append(el("div",{id:"ev_model"}));
-  // ----- section 2: run recommendations (below the model) -----
-  v.append(el("div",{class:"card"},cardhead("2 · Run recommendations"),
-    el("div",{class:"row"},
-      el("input",{id:"ev_filter",class:"f",size:"20",placeholder:"filter tag (e.g. AiARLocationBarrack3)"}),
-      el("label",{class:"small mut",style:"display:flex;gap:5px;align-items:center"},el("input",{id:"ev_cold",type:"checkbox"}),"add cold-start baseline"),
-      el("button",{class:"primary",onclick:runEval},"Run")),
-    el("div",{class:"small mut",style:"margin-top:7px"},"Same engine path as live serving (no events). Click any result to open its full item card. Metrics: list diversity, tag spread, distractor placement, cold vs warm.")));
-  v.append(el("div",{id:"ev_results"},el("div",{class:"empty"},"Pick a visitor, then Run.")));
+
+  left.append(el("div",{class:"card"},cardhead("Synthetic visitor"),
+    sel,
+    el("div",{class:"small mut",style:"margin:12px 0 6px"},"…or describe one:"),
+    el("input",{id:"ev_prompt",class:"f",style:"width:100%",placeholder:"e.g. a young student drawn to resistance and Barrack 3",
+      onkeydown:e=>{if(e.key==="Enter")buildFromPrompt();}}),
+    el("button",{class:"userchip",style:"margin-top:8px",onclick:buildFromPrompt},"Build from prompt")));
+  left.append(el("div",{id:"ev_model"}));
+  left.append(el("div",{class:"card"},cardhead("Run recommendations"),
+    el("input",{id:"ev_filter",class:"f",style:"width:100%",placeholder:"filter tag (optional)",
+      onkeydown:e=>{if(e.key==="Enter")runEval();}}),
+    el("label",{class:"small mut",style:"display:flex;gap:7px;align-items:center;margin:10px 0"},
+      el("input",{id:"ev_cold",type:"checkbox"}),"compare against a cold-start baseline"),
+    el("button",{class:"primary",style:"width:100%",onclick:runEval},"Run"),
+    el("div",{class:"small mut",style:"margin-top:9px"},"Same engine path as live serving, no events involved.")));
+
+  right.append(el("div",{id:"ev_results"},el("div",{class:"empty"},"Pick or describe a visitor on the left, then Run. Results land here — click any item for its full card.")));
+  v.append(el("div",{class:"pgrid"},left,right));
   if(personas.length)setPersona(personas[0]);
 }
 
 /* ===== ADMIN: tenants (PVC-backed registry + API-key management) ===== */
 const splitKeys=s=>s.split(/[\s,]+/).map(x=>x.trim()).filter(Boolean);
+// styled confirm dialog; resolves true when the action button is clicked.
+// challenge: string the user must retype before the action button unlocks.
+function confirmModal({title,body,action,danger,challenge}){
+  return new Promise(res=>{
+    const done=val=>{ov.remove();res(val);};
+    const ov=el("div",{class:"overlay show",onclick:e=>{if(e.target===ov)done(false);}});
+    const btn=el("button",{class:"primary"+(danger?" danger":""),onclick:()=>done(true)},action||"Confirm");
+    const mbody=el("div",{class:"mbody"},el("p",{},body));
+    if(challenge){
+      btn.disabled=true;
+      const inp=el("input",{class:"f",style:"width:100%",placeholder:challenge,autocomplete:"off",spellcheck:"false",
+        oninput:()=>{btn.disabled=inp.value.trim()!==challenge;},
+        onkeydown:e=>{if(e.key==="Enter"&&!btn.disabled)done(true);}});
+      mbody.append(el("div",{class:"small mut",style:"margin:2px 0 6px"},"Type ",el("code",{},challenge)," to confirm:"),inp);
+      setTimeout(()=>inp.focus(),60);
+    }
+    ov.append(el("div",{class:"modal"},
+      el("div",{class:"mhead"},el("h2",{},title)),
+      mbody,
+      el("div",{class:"mfoot",style:"justify-content:flex-end"},
+        el("button",{class:"ghost",onclick:()=>done(false)},"Cancel"),btn)));
+    document.body.append(ov);
+  });
+}
+// ⋮ dropdown; actions = [[label, fn, danger?], ...] (falsy entries skipped)
+function kebabMenu(actions){
+  const menu=el("div",{class:"kmenu"});
+  actions.filter(Boolean).forEach(([label,fn,danger])=>
+    menu.append(el("button",{class:danger?"danger":"",onclick:e=>{e.stopPropagation();menu.classList.remove("show");fn();}},label)));
+  const btn=el("button",{title:"actions",onclick:e=>{e.stopPropagation();
+    document.querySelectorAll(".kmenu.show").forEach(m=>{if(m!==menu)m.classList.remove("show");});
+    menu.classList.toggle("show");}},"⋮");
+  return el("div",{class:"kebab"},btn,menu);
+}
+document.addEventListener("click",()=>document.querySelectorAll(".kmenu.show").forEach(m=>m.classList.remove("show")));
 async function postTenant(body){
   const r=await fetch(base()+"/api/tenants",{method:"POST",headers:{...headers(),"Content-Type":"application/json"},body:JSON.stringify(body)});
   if(!r.ok){alert("tenant save failed: "+r.status);return null;}
@@ -1712,26 +1828,28 @@ async function renderTenants(v){
       el("input",{id:"t_keys",class:"f",size:"22",placeholder:"api keys (space/comma sep, optional)"}),
       el("label",{class:"small mut",style:"display:flex;gap:5px;align-items:center"},el("input",{id:"t_gen",type:"checkbox"}),"mint a key"),
       el("button",{class:"primary",onclick:saveTenant},"Save")),
-    el("div",{class:"small mut",style:"margin-top:7px"},"Persisted to the tenant store on the PVC (",el("code",{},"TENANT_STORE_PATH"),"): no redeploy. Keys are hashed at rest; a minted key is shown once. Editing with the key box empty keeps existing keys.")));
+    ));
   const tbl=el("table");
-  tbl.append(el("tr",{},el("th",{},"tenant"),el("th",{},"collection"),el("th",{},"content"),el("th",{},"api keys"),el("th",{},"source"),el("th",{},"actions")));
+  tbl.append(el("tr",{},el("th",{},"tenant"),el("th",{},"collection"),el("th",{},"content"),el("th",{},"api keys"),el("th",{},"source"),el("th",{style:"text-align:right"},"actions")));
   for(const t of (rows||[])){
     const n=t.api_keys_count||0, rt=t.source==="runtime";
     tbl.append(el("tr",{},
       el("td",{},el("b",{},t.tenant_id)),
       el("td",{},t.collection||el("span",{class:"mut"},"(default)")),
-      el("td",{class:"num"},t.content_count==null?el("span",{class:"mut"},"-"):t.content_count),
+      el("td",{class:"num"},t.content_count==null?"":t.content_count),
       el("td",{},el("span",{class:"pill "+(n?"warm":"neutral")},n+" key"+(n===1?"":"s"))),
-      el("td",{},el("span",{class:"pill "+(rt?"bandit":"neutral")},t.source||"runtime")),
-      el("td",{},el("div",{class:"row",style:"gap:5px"},
-        el("button",{class:"userchip",title:"act on this tenant (global key only)",onclick:()=>{$("#tenant").value=t.tenant_id;localStorage.setItem("ins_tenant",t.tenant_id);loadWhoami();setTab("Cohort");}},"use"),
-        el("button",{class:"userchip",title:"prefill the form",onclick:()=>{$("#t_id").value=t.tenant_id;$("#t_col").value=t.collection||"";$("#t_keys").value="";$("#t_id").scrollIntoView({block:"center"});}},"edit"),
-        el("button",{class:"userchip",title:"mint a new key for this tenant",onclick:()=>mintKey(t.tenant_id,t.collection)},"＋ key"),
-        n?el("button",{class:"userchip",title:"remove ALL keys",onclick:()=>clearKeys(t.tenant_id,t.collection)},"clear keys"):"",
-        rt?el("button",{class:"userchip",onclick:()=>delTenant(t.tenant_id)},"delete"):"" ))));
+      el("td",{},el("span",{class:"pill "+(rt?"bandit":"neutral"),
+        "data-tip":rt?"created here at runtime, persisted to the PVC store — editable and deletable"
+                     :"deploy baseline from TENANTS_PATH — read-only"},t.source||"runtime")),
+      el("td",{style:"text-align:right"},kebabMenu([
+        ["use this tenant",()=>{$("#tenant").value=t.tenant_id;localStorage.setItem("ins_tenant",t.tenant_id);loadWhoami();setTab("Cohort");}],
+        ["edit",()=>{$("#t_id").value=t.tenant_id;$("#t_col").value=t.collection||"";$("#t_keys").value="";$("#t_id").scrollIntoView({block:"center"});}],
+        ["mint key",()=>mintKey(t.tenant_id,t.collection)],
+        n?["clear keys",()=>clearKeys(t.tenant_id,t.collection),true]:null,
+        rt?["delete tenant",()=>delTenant(t.tenant_id),true]:null]))));
   }
-  v.append(el("div",{class:"card"},cardhead("Tenants on the store"),tbl,
-    el("div",{class:"small mut",style:"margin-top:8px"},"source ",el("span",{class:"pill neutral"},"config")," = ",el("code",{},"TENANTS_PATH")," deploy baseline (read-only). ",el("span",{class:"pill bandit"},"runtime")," = created here, persisted to the PVC store (editable / deletable). A per-tenant key pins its tenant; the global key + the top-bar tenant acts on any.")));
+  v.append(el("div",{class:"card"},tbl,
+    ));
 }
 async function saveTenant(){
   const id=$("#t_id").value.trim();
@@ -1748,25 +1866,37 @@ async function mintKey(id,col){
   if(j){paint(); if(j.api_key)mintedToast(id,j.api_key);}
 }
 async function clearKeys(id,col){
-  if(!confirm("Remove ALL API keys for '"+id+"'? Clients using them are locked out immediately."))return;
+  if(!await confirmModal({title:"Clear all keys · "+id,
+    body:"Remove ALL API keys for this tenant? Clients using them are locked out immediately.",
+    action:"Clear keys",danger:true,challenge:id}))return;
   const j=await postTenant({tenant_id:id,collection:col||null,replace_keys:true}); if(j)paint();
 }
 async function delTenant(id){
-  if(!confirm("Delete tenant '"+id+"'? (its data keys stay in the store until they expire)")) return;
+  if(!await confirmModal({title:"Delete tenant · "+id,
+    body:"Delete this tenant? Its data keys stay in the store until they expire.",
+    action:"Delete",danger:true,challenge:id}))return;
   const r=await fetch(base()+"/api/tenants/"+encodeURIComponent(id),{method:"DELETE",headers:headers()});
   if(!r.ok){ alert("delete failed: "+r.status); return; }
   paint();
 }
-// Toast lives on <body>, so it survives the page repaint that follows a mint.
+// Minted key: a proper centered modal (survives the repaint that follows a mint).
+// No click-outside dismiss — the key is shown once, so closing must be deliberate.
 function mintedToast(id,key){
-  const host=$("#toast"); if(!host)return alert("New key for "+id+":\n"+key);
-  const card=el("div",{class:"card",style:"margin:0;border-color:var(--accent);box-shadow:0 8px 30px var(--shadow)"},
-    el("div",{class:"row",style:"justify-content:space-between"},el("b",{},"New key · "+id),
-      el("button",{class:"userchip",onclick:()=>card.remove()},"dismiss")),
-    el("div",{class:"small mut",style:"margin:6px 0"},"Shown once: only its hash is stored. Copy it now."),
-    el("code",{style:"display:block;word-break:break-all;padding:8px;margin-bottom:8px"},key),
-    el("button",{class:"primary",onclick:()=>{navigator.clipboard&&navigator.clipboard.writeText(key);}},"Copy key"));
-  host.append(card);
+  const status=el("span",{class:"mstatus ok",style:"margin-right:auto"});
+  const copy=()=>{if(navigator.clipboard){navigator.clipboard.writeText(key);
+    status.textContent="copied ✓";setTimeout(()=>{status.textContent="";},1800);}};
+  const ov=el("div",{class:"overlay show"});
+  ov.append(el("div",{class:"modal"},
+    el("div",{class:"mhead"},
+      el("span",{class:"keyglyph",style:"margin:0;line-height:0",html:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="12" r="3.7"/><circle cx="7" cy="12" r="1" fill="currentColor" stroke="none"/><path d="M10.7 12H21M18 12v3.4M14.7 12v2.6"/></svg>'}),
+      el("h2",{},"New API key · "+id)),
+    el("div",{class:"mbody"},
+      el("p",{},"Shown once: only its hash is stored. Copy it before closing."),
+      el("code",{style:"display:block;word-break:break-all;padding:11px 13px;background:var(--code);border:1px solid var(--line);border-radius:9px;font-size:13px;cursor:pointer",title:"click to copy",onclick:copy},key)),
+    el("div",{class:"mfoot"},status,
+      el("button",{class:"ghost",onclick:copy},"Copy"),
+      el("button",{class:"primary",onclick:()=>ov.remove()},"Done"))));
+  document.body.append(ov);
 }
 
 /* ===== ADMIN: runtime config — categorized + explained ===== */
@@ -1826,6 +1956,20 @@ const CFG_TAB={"Fusion weights":"Fusion","Engagement signals":"Engagement","Read
 const CFG_ENUMS={distractor_strategy:["max_dissimilar","unexplored_theme","random"],ranking_mode:["static","bandit"]};
 function _cfgCtl(path,val){
   let inp;
+  // fusion weights edit as colored bars (same colors as the policy weights table):
+  // read-only = a filled bar, edit mode = a draggable slider with live value
+  if(path.startsWith("fusion.")&&typeof val==="number"){
+    const f=path.slice(7),c=COLORS[f]||"var(--accent)",neg=f==="aversion";
+    const wrap=el("div",{class:"wslider"});
+    inp=el("input",{type:"range",min:neg?-1:0,max:neg?0:1,step:"0.01",value:String(val)});
+    inp.dataset.t="num";inp.dataset.path=path;
+    const out=el("span",{class:"wval num"},Number(val).toFixed(2));
+    const paintFill=()=>{const v=Number(inp.value),pct=Math.round(100*Math.abs(v));
+      inp.style.background=`linear-gradient(to ${neg?"left":"right"},${c} 0 ${pct}%,var(--track) ${pct}% 100%)`;
+      inp.style.setProperty("--wc",c);out.textContent=Number(v).toFixed(2);};
+    inp.oninput=paintFill;paintFill();
+    wrap.append(inp,out);return wrap;
+  }
   if(CFG_ENUMS[path]){inp=el("select",{class:"f"});CFG_ENUMS[path].forEach(o=>{const op=el("option",{value:o},o);if(o===val)op.selected=true;inp.append(op);});inp.dataset.t="str";}
   else if(typeof val==="boolean"){inp=el("input",{type:"checkbox"});inp.checked=val;inp.dataset.t="bool";}
   else if(typeof val==="number"){inp=el("input",{class:"f",type:"number",step:Number.isInteger(val)?"1":"any",value:String(val)});inp.dataset.t="num";}
@@ -1855,7 +1999,9 @@ async function exportEvents(btn){
 }
 // rebuild visitor models from the durable parquet log (recovery after a redis wipe)
 async function replayEvents(btn){
-  if(!confirm("Rebuild visitor models from the event log? Safe to re-run (idempotent); takes a moment."))return;
+  if(!await confirmModal({title:"Rebuild visitor models",
+    body:"Replay the event log back into the live visitor models? Safe to re-run; takes a moment.",
+    action:"Rebuild"}))return;
   const old=btn.textContent;btn.textContent="replaying…";btn.disabled=true;
   try{
     const r=await postJSON("/api/replay-events",{});
@@ -1908,7 +2054,13 @@ async function renderConfig(v){
     card.append(cardhead(c.title));
     if(c.desc)card.append(el("div",{class:"small mut",style:"margin:-7px 0 6px"},c.desc));
     c.fields.forEach(f=>card.append(cfgRow(f,flat[f])));
-    panel.append(card);form.append(panel);
+    panel.append(card);
+    // the live policy state lives with the params that shape it
+    if(c.title==="Ranking policy"){
+      const slot=el("div");panel.append(slot);
+      lazyFill(slot,"loading live policy state…",box=>policyCards(box));
+    }
+    form.append(panel);
   });
   v.append(form);
   if(!cfgEdit)for(const e of form.querySelectorAll("[data-path]"))e.disabled=true;   // read-only until Edit
@@ -1935,23 +2087,24 @@ async function saveConfig(){
   $("#cfgstatus").textContent=r.ok?"applied ✓":("error "+r.status); if(r.ok){cfgEdit=false;setTimeout(paint,400);}
 }
 async function resetConfig(){
-  if(!confirm("Drop the runtime override and revert to the env/default baseline?"))return;
+  if(!await confirmModal({title:"Reset config",
+    body:"Drop the runtime override and revert to the env/default baseline?",
+    action:"Reset",danger:true}))return;
   const r=await fetch(base()+"/api/config/reset",{method:"POST",headers:headers()});
   $("#cfgstatus").textContent=r.ok?"reset ✓":("error "+r.status); if(r.ok){cfgEdit=false;setTimeout(paint,400);}
 }
 
 /* ===== sidebar nav ===== */
 function buildNav(){const nav=$("#tabs");nav.innerHTML="";
+  // flat list, no category labels
   GROUPS.forEach(g=>{
-    const grp=el("div",{class:"navgroup"},el("div",{class:"grouplbl"},g.label));
     for(const name of Object.keys(g.tabs)){
       const ic=ICONS[ICON_OF[name]]||"";
       const b=el("button",{class:"navitem",title:name,onclick:()=>setTab(name)},
         el("span",{class:"ico",html:`<svg viewBox="0 0 24 24">${ic}</svg>`}).firstChild,
         el("span",{class:"lbl"},name));
-      b.dataset.t=name;grp.append(b);
-    }
-    nav.append(grp);});}
+      b.dataset.t=name;nav.append(b);
+    }});}
 
 /* ===== API-key modal ===== */
 const overlay=$("#overlay"),mstatus=$("#mstatus");
@@ -1979,7 +2132,9 @@ async function connect(){
   setTimeout(()=>{closeModal();paint();},350);
 }
 function setConn(ok){const c=$("#conn");c.classList.toggle("ok",!!ok);c.title=ok?"connected":"not connected";}
-async function ping(){try{const r=await fetch(base()+"/health");setConn(r.ok);if(r.ok)loadWhoami();}catch(e){setConn(false);}}
+async function ping(){try{const r=await fetch(base()+"/health");setConn(r.ok);if(r.ok){loadWhoami();
+  try{const v=(await r.json()).version;if(v&&v!=="unknown")$("#appver").textContent="· v"+String(v).replace(/^v/,"");}catch(e){}
+}}catch(e){setConn(false);}}
 // Tenant is key-derived (never spoofable). Show the resolved name + scope in the sidebar.
 async function loadWhoami(){
   try{const w=await api("/api/whoami");
@@ -2018,6 +2173,14 @@ $("#keytoggle").onclick=()=>{const i=$("#key"),b=$("#keytoggle");const show=i.ty
 $("#key").addEventListener("keydown",e=>{if(e.key==="Enter")connect();});
 overlay.addEventListener("click",e=>{if(e.target===overlay)closeModal();});
 window.addEventListener("hashchange",applyHash);
+// MUI-style ripple on sidebar buttons: spawn a circle at the press point, sized to
+// cover the button, fade it out. Delegated so rebuilt nav items keep working.
+document.addEventListener("pointerdown",e=>{
+  const b=e.target.closest(".navitem");if(!b)return;
+  const r=b.getBoundingClientRect(),d=Math.max(r.width,r.height)*2;
+  const s=el("span",{class:"ripple",style:`width:${d}px;height:${d}px;left:${e.clientX-r.left-d/2}px;top:${e.clientY-r.top-d/2}px`});
+  b.append(s);s.addEventListener("animationend",()=>s.remove());
+});
 
 buildNav();ping();
 // land on the requested page (deep-link) or default; show the key dialog first run.
