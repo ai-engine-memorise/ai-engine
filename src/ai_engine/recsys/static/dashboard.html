@@ -1840,7 +1840,23 @@ function cfgRow(path,val){
       el("div",{class:"cfgpath"},path)),
     el("div",{class:"cfgctl"},_cfgCtl(path,val)));
 }
+// download the tenant's full parquet event log as tar.gz (fetch carries the key header)
+async function exportEvents(btn){
+  const old=btn.textContent;btn.textContent="preparing…";btn.disabled=true;
+  try{
+    const r=await fetch(base()+"/api/export/events",{headers:headers()});
+    if(!r.ok)throw new Error(r.status+" "+r.statusText);
+    const blob=await r.blob();
+    const a=el("a",{href:URL.createObjectURL(blob),download:`event-log-${new Date().toISOString().slice(0,10)}.tar.gz`});
+    document.body.append(a);a.click();a.remove();
+  }catch(e){alert("export failed: "+e);}
+  btn.textContent=old;btn.disabled=false;
+}
 async function renderConfig(v){
+  const xbtn=el("button",{class:"userchip",onclick:e=>exportEvents(e.target)},"download event log (.tar.gz)");
+  v.append(el("div",{class:"card"},cardhead("Data export"),
+    el("div",{class:"small mut",style:"margin:-2px 0 9px"},"the tenant's complete raw record: every ingested event and served impression (parquet), for off-site backup"),
+    xbtn));
   let cfg; try{cfg=await api("/api/config");}catch(e){failCard(v,e);return;}
   const t=$("#tenant").value.trim();
   const flat={};

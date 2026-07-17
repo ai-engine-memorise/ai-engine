@@ -800,6 +800,29 @@ def make_router(components: Components) -> APIRouter:
         return {"result": {"users": len(sigs), "content": content[:limit],
                            "themes": themes, "clusters": clusters}}
 
+    @ops.get("/export/events")
+    def export_events():
+        """Download the tenant's durable parquet log (ingested events + served
+        impressions + registry) as one tar.gz: the complete raw record, for
+        backups without cluster access. Guarded like every ops route."""
+        import tarfile
+        import tempfile
+        from fastapi.responses import FileResponse
+        from starlette.background import BackgroundTask
+        base = _log_base(c)
+        if not base or not os.path.isdir(base):
+            raise HTTPException(status_code=404, detail="no event log directory")
+        tmp = tempfile.NamedTemporaryFile(suffix=".tar.gz", delete=False)
+        try:
+            with tarfile.open(tmp.name, mode="w:gz") as tar:
+                tar.add(base, arcname=os.path.basename(base.rstrip("/")) or "event-log")
+        except Exception:
+            os.unlink(tmp.name)
+            raise
+        fname = f"event-log-{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.tar.gz"
+        return FileResponse(tmp.name, media_type="application/gzip", filename=fname,
+                            background=BackgroundTask(os.unlink, tmp.name))
+
     @ops.get("/content/spread")
     def content_spread() -> dict:
         """Supply vs demand across SPACE and TIME, for the bias-aware map and year view.
