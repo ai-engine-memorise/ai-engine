@@ -278,11 +278,23 @@ class ComponentManager:
             return TenantSpec(**{k: v for k, v in d.items() if k in fields})
         return self.registry.get(tenant_id)
 
+    @staticmethod
+    def _spec_fingerprint(spec) -> tuple:
+        """The spec fields that shape a Components build. When any of them changes
+        (tenant edited in the admin UI, store file changed by another replica), the
+        cached Components is stale and must be rebuilt — caching on tenant_id alone
+        served the wrong Qdrant collection until a save or restart."""
+        import json as _json
+        return (spec.collection, spec.prefix, spec.bandit_state_path, spec.cluster_model_path,
+                _json.dumps(spec.config_overrides, sort_keys=True) if spec.config_overrides else "")
+
     def get(self, tenant_id) -> Components:
         spec = self._spec(tenant_id)
-        if spec.tenant_id not in self._cache:
-            self._cache[spec.tenant_id] = build_components_for(spec, self)
-        return self._cache[spec.tenant_id]
+        fp = self._spec_fingerprint(spec)
+        hit = self._cache.get(spec.tenant_id)
+        if hit is None or hit[0] != fp:
+            self._cache[spec.tenant_id] = (fp, build_components_for(spec, self))
+        return self._cache[spec.tenant_id][1]
 
     def list_tenants(self) -> list[dict]:
         """All tenants: config baseline + runtime-created, runtime wins. For the admin UI.
