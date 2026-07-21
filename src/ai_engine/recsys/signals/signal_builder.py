@@ -138,11 +138,15 @@ def build_user_signals(
             positives[cid] = max(strength, 0.0) * decay
             if content:
                 for tag in content.tags:
+                    if tag.facet == "place_where.camp_areas":
+                        continue    # AR areas are a proximity filter, never a taste signal
                     tag_affinity[tag.key] = tag_affinity.get(tag.key, 0.0) + positives[cid] * tag.weight
         elif outcome == Outcome.negative:
             negatives[cid] = abs(strength) * decay
             if content:                       # the THEMES of disliked content -> aversion
                 for tag in content.tags:
+                    if tag.facet == "place_where.camp_areas":
+                        continue
                     tag_aversion[tag.key] = tag_aversion.get(tag.key, 0.0) + negatives[cid] * tag.weight
 
     # soft negatives: shown in an impression set but never engaged
