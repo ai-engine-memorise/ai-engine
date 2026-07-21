@@ -181,8 +181,14 @@ def build_components_for(spec, mgr) -> Components:
     if rc is not None:
         from .adapters.redis_store import RedisEventBuffer, RedisUserModelStore, RedisImpressionStore
         from .adapters.config_store import RedisConfigStore
-        event_buffer = RedisEventBuffer(rc, key_prefix=f"{p}:evt")
-        model_store = RedisUserModelStore(rc, key_prefix=f"{p}:umodel")
+        # dashboards + serving both read these; MODEL_TTL_DAYS controls how long a
+        # visitor stays known without new events (models are re-derivable via replay,
+        # so a long TTL costs only a little redis memory - 7d made the cohort forget
+        # everyone between museum visits)
+        window_days = int(os.getenv("EVENT_WINDOW_DAYS", "30"))
+        model_ttl = int(float(os.getenv("MODEL_TTL_DAYS", "90")) * 86400)
+        event_buffer = RedisEventBuffer(rc, key_prefix=f"{p}:evt", window_days=window_days)
+        model_store = RedisUserModelStore(rc, key_prefix=f"{p}:umodel", ttl_seconds=model_ttl)
         impressions = RedisImpressionStore(rc, key_prefix=f"{p}:imp")
         config_store = RedisConfigStore(rc, key=f"{p}:recsys:config")
     else:

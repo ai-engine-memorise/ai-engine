@@ -87,7 +87,14 @@ _DEMO_CANON = {
                "prefer_not_to_say": "no_answer", "geen_antwoord": "no_answer"},
     "personal_connection": {"ja": "yes", "nee": "no",
                             "ik_weet_het_niet": "unknown", "weet_niet": "unknown",
-                            "i_dont_know": "unknown", "idk": "unknown", "dont_know": "unknown"},
+                            "i_dont_know": "unknown", "idk": "unknown", "dont_know": "unknown",
+                            # declined-to-answer, all languages/phrasings -> one bucket
+                            "i_do_not_want_to_answer": "no_answer",
+                            "i_dont_want_to_answer": "no_answer",
+                            "ik_wil_geen_antwoord_geven": "no_answer",
+                            "geen_antwoord": "no_answer",
+                            "prefer_not_to_say": "no_answer",
+                            "liever_niet": "no_answer"},
     "nationality": {"nederlandse": "dutch", "belgische": "belgian", "duitse": "german",
                     "franse": "french", "poolse": "polish", "britse": "british",
                     # country noun -> demonym, so "netherlands" and "dutch" fold together
