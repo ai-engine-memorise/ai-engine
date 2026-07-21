@@ -18,7 +18,16 @@ CORE_COUNTRIES = {"netherlands", "germany", "poland"}
 # demonym (canonical nationality answer) -> country noun used by content From: tags
 _DEMONYM_COUNTRY = {"dutch": "Netherlands", "german": "Germany", "polish": "Poland",
                     "belgian": "Belgium", "french": "France", "british": "United Kingdom",
-                    "american": "United States", "israeli": "Israel"}
+                    "american": "United States", "israeli": "Israel",
+                    "canadian": "Canada", "danish": "Denmark", "swedish": "Sweden",
+                    "norwegian": "Norway", "finnish": "Finland", "irish": "Ireland",
+                    "spanish": "Spain", "italian": "Italy", "portuguese": "Portugal",
+                    "greek": "Greece", "austrian": "Austria", "swiss": "Switzerland",
+                    "czech": "Czechia", "ukrainian": "Ukraine", "russian": "Russia",
+                    "turkish": "Turkey", "moroccan": "Morocco", "japanese": "Japan",
+                    "chinese": "China", "indian": "India", "brazilian": "Brazil",
+                    "australian": "Australia", "afghan": "Afghanistan",
+                    "albanian": "Albania", "new_zealander": "New Zealand"}
 
 SURVEY_EVENTS = ("SURVEY_SUBMITTED", "SURVEY_ANSWERED")
 # events whose answers/traits seed demographics + persona affinity. IDENTIFY is the
