@@ -190,12 +190,32 @@ def build_components_for(spec, mgr) -> Components:
         event_buffer = RedisEventBuffer(rc, key_prefix=f"{p}:evt", window_days=window_days)
         model_store = RedisUserModelStore(rc, key_prefix=f"{p}:umodel", ttl_seconds=model_ttl)
         impressions = RedisImpressionStore(rc, key_prefix=f"{p}:imp")
-        config_store = RedisConfigStore(rc, key=f"{p}:recsys:config")
+        # config override: durable file on the PVC when the log volume exists
+        # (survives deploys + redis wipes; operator-set values must stick),
+        # redis otherwise
+        log_base = os.getenv("EVENT_LOG_DIR")
+        if log_base:
+            from .adapters.config_store import FileConfigStore
+            config_store = FileConfigStore(os.path.join(log_base, "registry", f"config-{spec.tenant_id}.json"))
+            if config_store.get() is None:      # one-time migration of a live redis override
+                try:
+                    legacy = RedisConfigStore(rc, key=f"{p}:recsys:config").get()
+                    if legacy:
+                        config_store.set(legacy)
+                except Exception:
+                    pass
+        else:
+            config_store = RedisConfigStore(rc, key=f"{p}:recsys:config")
     else:
         from .testing.fakes import FakeEventSource, InMemoryUserModelStore, InMemoryImpressionStore
-        from .adapters.config_store import InMemoryConfigStore
         event_buffer, model_store, impressions = FakeEventSource(), InMemoryUserModelStore(), InMemoryImpressionStore()
-        config_store = InMemoryConfigStore()
+        log_base = os.getenv("EVENT_LOG_DIR")
+        if log_base:                            # dev without redis: same durable file
+            from .adapters.config_store import FileConfigStore
+            config_store = FileConfigStore(os.path.join(log_base, "registry", f"config-{spec.tenant_id}.json"))
+        else:
+            from .adapters.config_store import InMemoryConfigStore
+            config_store = InMemoryConfigStore()
 
     override = config_store.get()
     if override:
