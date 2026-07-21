@@ -790,6 +790,42 @@ async function renderRecDetail(v){
 }
 
 
+/* ===== COHORT SNAPSHOT: full-log totals + flat export ===== */
+async function drawSnapshot(box){
+  const st=await api("/api/export/snapshot");
+  const cell=(val,label,sub)=>el("div",{class:"statcell"},
+    el("div",{class:"statval num"},String(val??0)),
+    el("div",{class:"small mut"},label),
+    sub?el("div",{class:"small mut",style:"opacity:.75;margin-top:2px"},sub):"");
+  box.append(el("div",{class:"card",style:"padding-top:18px;padding-bottom:18px"},
+    el("div",{class:"statrow",style:"grid-template-columns:repeat(5,minmax(0,1fr))"},
+      cell(st.total_visitors,"visitors","distinct ids in the full log"),
+      cell(st.anonymous_visitors,"anonymous","never answered a survey"),
+      cell(st.total_events,"events","all recorded interactions"),
+      cell(st.content_views,"content views",`${st.content_view_events} view events`),
+      cell(st.survey_responded_visitors,"survey responded","visitors with answers"))));
+  const dl=async(btn,path,filename)=>{
+    const old=btn.textContent;btn.textContent="preparing…";btn.disabled=true;
+    try{
+      const r=await fetch(base()+path,{headers:headers()});
+      if(!r.ok)throw new Error(r.status+" "+r.statusText);
+      const blob=await r.blob();
+      const a=el("a",{href:URL.createObjectURL(blob),download:filename});
+      document.body.append(a);a.click();a.remove();
+    }catch(e){alert("download failed: "+e);}
+    btn.textContent=old;btn.disabled=false;
+  };
+  const day=new Date().toISOString().slice(0,10);
+  const csvBtn=el("button",{class:"primary"},"Download CSV snapshot");
+  csvBtn.onclick=()=>dl(csvBtn,"/api/export/snapshot?format=csv",`events-snapshot-${day}.csv`);
+  const pqBtn=el("button",{class:"ghost"},"Download raw parquet (.tar.gz)");
+  pqBtn.onclick=()=>dl(pqBtn,"/api/export/events",`event-log-${day}.tar.gz`);
+  box.append(el("div",{class:"card"},cardhead("Export"),
+    el("div",{class:"small mut",style:"margin:-6px 0 12px"},
+      "CSV: one row per event over the complete durable log, complex fields as JSON strings — opens directly in Excel / pandas. Parquet: the raw immutable log partitions, for programmatic use and off-site backup."),
+    el("div",{class:"row",style:"gap:10px"},csvBtn,pqBtn)));
+}
+
 /* ===== COHORT STATISTICS: demographic slices double as filters ===== */
 let _coFilter={};                    // {field: [raw values]}, multi-select, persists across repaints
 let _coBaseline=null;                // unfiltered demographics snapshot — freezes chart layout under filters
@@ -945,20 +981,23 @@ async function renderCohort(v){
   const clustersP=api("/api/clusters").catch(()=>null);
   const statsP=api("/api/users").catch(()=>[]);      // parquet scan + event sweep server-side
 
-  const statsSlot=el("div"),usersSlot=el("div"),segSlot=el("div");
-  // subtabs: Overview = everything, Statistics = just the cohort statistics.
-  // Pure visibility toggle — nothing refetches on switch.
+  const statsSlot=el("div"),usersSlot=el("div"),segSlot=el("div"),snapSlot=el("div");
+  // subtabs: Visitors = table, Statistics = cohort statistics, Snapshot = full-log
+  // export + headline totals. Pure visibility toggle — nothing refetches on switch
+  // (the snapshot loads lazily the first time its tab opens: full parquet scan).
   const bar=el("div",{class:"subtabs"});
+  let snapLoaded=false;
   const showTab=()=>{
-    const ov=cohortTab==="overview";
-    statsSlot.style.display=ov?"none":"";
-    usersSlot.style.display=ov?"":"none";
-    segSlot.style.display=ov?"":"none";
+    statsSlot.style.display=cohortTab==="stats"?"":"none";
+    usersSlot.style.display=cohortTab==="overview"?"":"none";
+    segSlot.style.display=cohortTab==="overview"?"":"none";
+    snapSlot.style.display=cohortTab==="snapshot"?"":"none";
+    if(cohortTab==="snapshot"&&!snapLoaded){snapLoaded=true;lazyFill(snapSlot,"loading snapshot…",box=>drawSnapshot(box));}
     bar.querySelectorAll(".subtab").forEach(b=>b.classList.toggle("on",b.dataset.k===cohortTab));
   };
-  [["overview","Visitors"],["stats","Statistics"]].forEach(([k,label])=>
+  [["overview","Visitors"],["stats","Statistics"],["snapshot","Snapshot"]].forEach(([k,label])=>
     bar.append(el("button",{class:"subtab","data-k":k,onclick:()=>{cohortTab=k;showTab();}},label)));
-  v.append(bar,statsSlot,usersSlot,segSlot);
+  v.append(bar,statsSlot,usersSlot,segSlot,snapSlot);
   showTab();
 
   // cohort statistics: interactive, demographic values act as filters
@@ -988,8 +1027,8 @@ async function renderCohort(v){
     box.append(el("div",{class:"searchwrap"},icon,search));
     const tbl=el("table",{id:"utbl"});
     const hrow=makeSortable(tbl,
-      [[`visitor (${rowIds.length})`,"visitor"],["segment","segment"],["views","views","num"],["positive","positive","num"],["last seen","last"]],
-      {rowClass:"urow",numeric:["views","positive"]});
+      [[`visitor (${rowIds.length})`,"visitor"],["segment","segment"],["views","views","num"],["events","events","num"],["positive","positive","num"],["last seen","last"]],
+      {rowClass:"urow",numeric:["views","events","positive"]});
     tbl.append(hrow);
     for(const u of rowIds){const p=u2c[u], s=ustat[u]||{};
       const dmo=s.demographics||{};
@@ -997,12 +1036,14 @@ async function renderCohort(v){
       ["age","gender","nationality","province"].forEach(f=>attrs["data-f-"+f]=dmo[f]!=null?String(dmo[f]):"");
       attrs["data-s-visitor"]=String(u).toLowerCase();
       attrs["data-s-segment"]=p?"cluster "+p.cluster:"";
-      attrs["data-s-views"]=s.n_interactions!=null?s.n_interactions:0;
+      attrs["data-s-views"]=s.n_views!=null?s.n_views:0;
+      attrs["data-s-events"]=s.n_interactions!=null?s.n_interactions:0;
       attrs["data-s-positive"]=s.n_liked||0;
       attrs["data-s-last"]=s.last_interaction||"";
       tbl.append(el("tr",attrs,
         el("td",{},el("b",{class:"vlink",title:"open visitor",onclick:()=>openUser(u,"profile")},u)),
         el("td",{},p?personaPill("Cluster "+p.cluster+(p.falk_hint?" · "+p.falk_hint:""),Object.keys(PERSONA_COLORS).find(k=>(p.falk_hint||"").startsWith(k))):""),
+        el("td",{class:"num","data-tip":"content views (paired start/end)"},s.n_views||el("span",{class:"mut"},"0")),
         el("td",{class:"num"},s.n_interactions?s.n_interactions
           :el("span",{class:"small mut","data-tip":s.n_served?`served ${s.n_served} recommendation${s.n_served===1?"":"s"}, no events ingested`:"no recorded activity"},"0")),
         el("td",{class:"num",style:s.n_liked?"color:var(--c-affinity);font-weight:600":"color:var(--mut)"},s.n_liked||0),
@@ -1479,25 +1520,72 @@ async function renderUser(v){
 async function renderHistory(v){
   let h;try{h=await api(`/api/usermodel/history?user_id=${encodeURIComponent($("#uid").value)}`);}catch(e){failCard(v,e);return;}
   if(!h||!h.event_count){v.append(el("div",{class:"empty"},"No activity for ",el("b",{},$("#uid").value),". Ingest events for this user first."));return;}
-  v.append(el("div",{class:"row small mut",style:"margin-bottom:12px"},`${h.event_count} events / ${h.aggregates.length} content items engaged`));
-  const dwell=d=>d!=null?Math.round(d)+"s":"-";
+  const dwell=d=>d!=null?Math.round(d)+"s":"";
+  const dur=s=>{if(s==null)return "";s=Math.round(s);return s>=3600?`${Math.floor(s/3600)}h ${Math.floor(s%3600/60)}m`:s>=60?`${Math.floor(s/60)}m ${s%60}s`:s+"s"};
+
+  // ----- sessions: duration, content viewed, survey timings -----
+  if((h.sessions||[]).length){
+    const st=el("table");
+    st.append(el("tr",{},el("th",{},"session"),el("th",{},"start"),el("th",{},"duration"),
+      el("th",{},"views"),el("th",{},"events"),el("th",{},"surveys")));
+    for(const s of h.sessions){
+      const sv=(s.surveys||[]).map(x=>el("span",{class:"pill "+(x.ended==="SURVEY_SUBMITTED"?"warm":"neutral"),
+        style:"margin:1px","data-tip":`${x.ended==="SURVEY_SUBMITTED"?"submitted":"dismissed"} after ${dur(x.duration_seconds)}`},
+        (x.survey?x.survey+" · ":"")+dur(x.duration_seconds)));
+      st.append(el("tr",{},
+        el("td",{class:"small num"},s.session_id||el("span",{class:"mut"},"(no session)")),
+        el("td",{class:"small mut num"},(s.start||"").replace("T"," ").slice(0,19)),
+        el("td",{class:"num"},dur(s.duration_seconds)),
+        el("td",{class:"num"},s.n_views||el("span",{class:"mut"},"0")),
+        el("td",{class:"num mut"},s.n_events),
+        el("td",{},sv.length?sv:el("span",{class:"small mut"},"0"))));
+    }
+    v.append(el("div",{class:"card"},cardhead("Sessions"),st));
+  }
+
   const at=el("table");
   at.append(el("tr",{},el("th",{},"content"),el("th",{},"visits"),el("th",{},"dwell"),el("th",{},"end reason"),el("th",{},"outcome")));
   for(const a of h.aggregates){const oc=a.outcome==="positive"?"warm":a.outcome==="negative"?"distractor":"neutral";
     at.append(el("tr",{},
-      el("td",{},el("div",{},a.title||a.content_id),a.title?el("div",{class:"small mut num"},a.content_id):""),
+      el("td",{},el("div",{class:"vlink",title:"open content card",onclick:()=>openContentDetail(a.content_id)},a.title||a.content_id),
+        a.title?el("div",{class:"small mut num"},a.content_id):""),
       el("td",{class:"num"},a.visits),el("td",{class:"num"},dwell(a.dwell_seconds)),
-      el("td",{class:"small mut"},a.end_reason||"-"),el("td",{},el("span",{class:"pill "+oc},a.outcome))));}
+      el("td",{class:"small mut"},a.end_reason||""),el("td",{},el("span",{class:"pill "+oc},a.outcome))));}
   v.append(el("div",{class:"card"},cardhead("Engaged content"),at));
+
+  // ----- timeline: click a row to expand its full metadata (survey/panel ids …) -----
   const et=el("table");
-  et.append(el("tr",{},el("th",{},"time"),el("th",{},"event"),el("th",{},"content"),el("th",{},"dwell"),el("th",{},"reason")));
-  for(const e of h.events)et.append(el("tr",{},
-    el("td",{class:"small mut num"},(e.ts||"").replace("T"," ").slice(0,19)),
-    el("td",{class:"small"},(e.event||"").replace("CONTENT_","").replace(/_/g," ").toLowerCase()),
-    el("td",{class:"small"},e.title||e.content_id||"-"),
-    el("td",{class:"num small"},e.dwell_seconds!=null?Math.round(e.dwell_seconds)+"s":""),
-    el("td",{class:"small mut"},e.end_reason||"")));
-  v.append(el("div",{class:"card"},cardhead("Event timeline"),et));
+  et.append(el("tr",{},el("th",{style:"width:18px"},""),el("th",{},"time"),el("th",{},"event"),el("th",{},"content"),el("th",{},"dwell"),el("th",{},"reason")));
+  for(const e of h.events){
+    const meta={...(e.meta||{})};
+    if(e.session_id)meta.session_id=e.session_id;
+    if(e.request_id)meta.request_id=e.request_id;
+    const hasMeta=Object.keys(meta).length>0;
+    const caret=el("span",{class:"small mut",style:"display:inline-block;transition:transform .12s"},hasMeta?"▸":"");
+    const row=el("tr",{style:hasMeta?"cursor:pointer":""},
+      el("td",{},caret),
+      el("td",{class:"small mut num"},(e.ts||"").replace("T"," ").slice(0,19)),
+      el("td",{class:"small"},(e.event||"").replace("CONTENT_","").replace(/_/g," ").toLowerCase()),
+      el("td",{class:"small"},e.content_id
+        ?el("span",{class:"vlink",title:"open content card",onclick:ev=>{ev.stopPropagation();openContentDetail(e.content_id);}},e.title||e.content_id)
+        :""),
+      el("td",{class:"num small"},e.dwell_seconds!=null?Math.round(e.dwell_seconds)+"s":""),
+      el("td",{class:"small mut"},e.end_reason||""));
+    et.append(row);
+    if(hasMeta){
+      const chips=Object.entries(meta).map(([k,val])=>el("span",{class:"tchip",style:"margin:2px"},
+        el("span",{class:"fb"},k),
+        el("span",{},typeof val==="object"?JSON.stringify(val):String(val))));
+      const detail=el("tr",{style:"display:none"},
+        el("td",{}),
+        el("td",{colspan:"5",style:"padding-top:4px;padding-bottom:10px"},
+          el("div",{class:"row",style:"gap:2px;flex-wrap:wrap"},chips)));
+      et.append(detail);
+      row.onclick=()=>{const open=detail.style.display==="none";
+        detail.style.display=open?"":"none";caret.style.transform=open?"rotate(90deg)":"";};
+    }
+  }
+  v.append(el("div",{class:"card"},cardhead(`Event timeline (${h.event_count})`),et));
 }
 
 const PERSONAS={

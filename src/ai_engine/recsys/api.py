@@ -610,15 +610,73 @@ def make_router(components: Components) -> APIRouter:
         } for cid, a in aggs.items()]
         agg_rows.sort(key=lambda r: r["last_ts"] or "", reverse=True)
 
+        def ev_meta(e) -> dict:
+            """Compact disambiguation payload for the timeline: everything in the raw
+            event's details/context (panel ids, survey ids, state names …) that the
+            fixed columns don't already show. Lets the operator tell WHICH survey was
+            presented or WHICH panel started without leaving the dashboard."""
+            raw = e.raw or {}
+            props = raw.get("properties") or {}
+            det = props.get("details") or {}
+            ctx = props.get("context") or {}
+            out: dict = {}
+            for k, v in {**det, **{k2: v2 for k2, v2 in ctx.items() if k2 != "candidates"}}.items():
+                if v not in (None, "", []) and k not in ("reason", "request_id", "session_id"):
+                    out[k] = v
+            if ctx.get("candidates"):
+                out["candidates"] = len(ctx["candidates"])
+            for k, v in props.items():   # scalar props outside the known containers
+                if k not in ("content", "details", "context", "answers") and isinstance(v, (str, int, float, bool)) and v != "":
+                    out[k] = v
+            if e.survey_answers:
+                out["answers"] = e.survey_answers
+            return out
+
         ev_rows = [{
             "ts": e.ts.isoformat() if e.ts else None, "event": e.event,
             "content_id": e.content_id, "title": titles.get(e.content_id, ""),
             "dwell_seconds": e.dwell_seconds,
             "end_reason": e.end_reason.value if e.end_reason else None,
             "request_id": e.request_id, "session_id": e.session_id,
+            "meta": ev_meta(e),
         } for e in sorted(events, key=lambda e: e.ts, reverse=True)[:limit]]
 
+        # ----- per-session summary: duration, content viewed, survey timings -----
+        by_session: dict[str, list] = {}
+        for e in events:                                   # events sorted asc
+            by_session.setdefault(e.session_id or "", []).append(e)
+        session_rows = []
+        for sid, evs in by_session.items():
+            tss = [e.ts for e in evs if e.ts]
+            surveys = []
+            presented = None
+            for e in evs:
+                if e.event == "SURVEY_PRESENTED":
+                    presented = e
+                elif presented is not None and e.event in ("SURVEY_SUBMITTED", "SURVEY_DISMISSED"):
+                    surveys.append({
+                        "presented_ts": presented.ts.isoformat() if presented.ts else None,
+                        "duration_seconds": round((e.ts - presented.ts).total_seconds(), 1)
+                                            if (e.ts and presented.ts) else None,
+                        "ended": e.event,
+                        "survey": (ev_meta(presented).get("survey_id")
+                                   or ev_meta(presented).get("survey")
+                                   or ev_meta(presented).get("survey_name")),
+                    })
+                    presented = None
+            session_rows.append({
+                "session_id": sid or None,
+                "start": min(tss).isoformat() if tss else None,
+                "end": max(tss).isoformat() if tss else None,
+                "duration_seconds": round((max(tss) - min(tss)).total_seconds(), 1) if len(tss) > 1 else 0,
+                "n_events": len(evs),
+                "n_views": sum(1 for e in evs if e.event == "CONTENT_VIEW_STARTED"),
+                "surveys": surveys,
+            })
+        session_rows.sort(key=lambda r: r["start"] or "", reverse=True)
+
         return {"result": {"user_id": user_id, "event_count": len(events),
+                           "sessions": session_rows,
                            "aggregates": agg_rows, "events": ev_rows}}
 
     @ops.get("/clusters")
@@ -671,6 +729,7 @@ def make_router(components: Components) -> APIRouter:
             return n_served, served_last
 
         def build_rows():
+            from .signals.signal_builder import aggregate_views
             seg: dict[str, str] = {}
             model = _load_cluster_model(getattr(c, "cluster_model_path", None))
             if model:
@@ -690,8 +749,14 @@ def make_router(components: Components) -> APIRouter:
                 except Exception:
                     evs = []
                 last = max((e.ts for e in evs if e.ts), default=None)
+                try:      # views = CONTENT views (paired start/end via aggregate_views),
+                          # NOT raw event count — sessions/panels/surveys are events too
+                    n_views = sum((a.visits or 0) for a in aggregate_views(evs).values())
+                except Exception:
+                    n_views = 0
                 rows.append({
                     "user_id": uid,
+                    "n_views": n_views,
                     "n_interactions": len(evs),
                     "n_served": n_served.get(uid, 0),
                     "last_interaction": last.isoformat() if last else served_last.get(uid),
@@ -854,6 +919,68 @@ def make_router(components: Components) -> APIRouter:
 
         return {"result": {"users": len(sigs), "content": content[:limit],
                            "themes": themes, "clusters": clusters}}
+
+    @ops.get("/export/snapshot")
+    def export_snapshot(format: Optional[str] = Query(default=None, description="csv -> flat CSV download; default: headline stats JSON")) -> Any:
+        """Cohort snapshot over the FULL durable event log (not the 30-day buffer):
+        headline stats, or with format=csv the flat event table itself — one row per
+        event, complex fields as JSON strings — for inspection outside the platform."""
+        def load_rows():
+            base = _log_base(c)
+            rows: list[dict] = []
+            if base:
+                try:
+                    import pyarrow.parquet as pq
+                except ImportError:
+                    raise HTTPException(status_code=503, detail="pyarrow not installed")
+                import glob as _glob
+                for f in sorted(_glob.glob(os.path.join(base, "date=*", "*.parquet"))):
+                    try:
+                        rows.extend(pq.read_table(f).to_pylist())
+                    except Exception:
+                        continue
+            rows.sort(key=lambda r: str(r.get("ts") or ""))
+            return rows
+
+        if format == "csv":
+            import csv as _csv
+            import io
+            rows = load_rows()
+            cols = ["ts", "user_id", "event", "content_id", "session_id", "request_id",
+                    "dwell_seconds", "end_reason", "query_text", "clicked_id",
+                    "impressions", "survey_answers", "raw"]
+            buf = io.StringIO()
+            w = _csv.DictWriter(buf, fieldnames=cols, extrasaction="ignore")
+            w.writeheader()
+            for r in rows:
+                w.writerow(r)
+            from fastapi.responses import Response
+            day = datetime.now(timezone.utc).date().isoformat()
+            return Response(buf.getvalue(), media_type="text/csv",
+                            headers={"Content-Disposition": f'attachment; filename="events-snapshot-{day}.csv"'})
+
+        def build_stats():
+            rows = load_rows()
+            users: set = set()
+            responded: set = set()
+            content_views = view_events = 0
+            for r in rows:
+                u = r.get("user_id")
+                if u:
+                    users.add(u)
+                ev = str(r.get("event") or "")
+                if ev.startswith("CONTENT_VIEW"):
+                    view_events += 1
+                    if ev == "CONTENT_VIEW_STARTED":
+                        content_views += 1
+                sa = r.get("survey_answers")
+                if u and sa and sa not in ("{}", "null", ""):
+                    responded.add(u)
+            return {"total_events": len(rows), "total_visitors": len(users),
+                    "survey_responded_visitors": len(responded),
+                    "anonymous_visitors": len(users) - len(responded),
+                    "content_views": content_views, "content_view_events": view_events}
+        return {"result": _dash_cached(c, "snapshot_stats", 300.0, build_stats)}
 
     @ops.get("/export/events")
     def export_events():
