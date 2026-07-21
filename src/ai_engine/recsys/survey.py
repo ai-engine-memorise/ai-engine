@@ -85,6 +85,7 @@ _DEMO_CANON = {
     "gender": {"f": "female", "vrouw": "female", "m": "male", "man": "male",
                "nonbinary": "non_binary", "x": "non_binary",
                "prefer_not_to_say": "no_answer", "geen_antwoord": "no_answer"},
+    "email_shared": {"ja": "yes", "true": "yes", "nee": "no", "false": "no"},
     "personal_connection": {"ja": "yes", "nee": "no",
                             "ik_weet_het_niet": "unknown", "weet_niet": "unknown",
                             "i_dont_know": "unknown", "idk": "unknown", "dont_know": "unknown",
@@ -230,6 +231,18 @@ def extract_demographics(answers: dict) -> dict:
         vals = _vals(answers, *qids)
         if vals:
             out[field] = vals[0]
+    # email: PII-guarded to a pure yes/no flag — did the visitor leave an address?
+    # The address itself NEVER enters the stored demographics.
+    for k, v in answers.items():
+        if "email" in str(k).lower():
+            sv = str(_clean(v) or "").strip().lower()
+            if sv in ("", "no", "nee", "false", "none", "null"):
+                out["email_shared"] = "no"
+            elif "@" in sv or sv in ("yes", "ja", "true"):
+                out["email_shared"] = "yes"
+            else:
+                out["email_shared"] = "no"
+            break
     return out
 
 
