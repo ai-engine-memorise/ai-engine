@@ -298,11 +298,18 @@ class ComponentManager:
 
     def _spec(self, tenant_id):
         from .tenancy import TenantSpec
-        d = self.tenant_store.get(tenant_id) if tenant_id else None   # runtime store wins
+        base = self.registry.get(tenant_id)
+        d = self.tenant_store.get(tenant_id) if tenant_id else None   # runtime store wins...
         if d:
             fields = TenantSpec.__dataclass_fields__
-            return TenantSpec(**{k: v for k, v in d.items() if k in fields})
-        return self.registry.get(tenant_id)
+            merged = {k: v for k, v in d.items() if k in fields}
+            # ...but only for fields it actually sets: a store entry created for key
+            # management must not erase the Git baseline's collection/path mapping
+            for attr in ("collection", "bandit_state_path", "cluster_model_path", "redis_prefix"):
+                if merged.get(attr) is None and getattr(base, attr, None) is not None:
+                    merged[attr] = getattr(base, attr)
+            return TenantSpec(**merged)
+        return base
 
     @staticmethod
     def _spec_fingerprint(spec) -> tuple:
