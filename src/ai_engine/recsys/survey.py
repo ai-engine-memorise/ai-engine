@@ -15,6 +15,10 @@ from typing import Optional
 # Origins with their own country-specific content tags. Any other nationality rolls
 # up to the `International` tag (see survey_affinity). Compared casefolded.
 CORE_COUNTRIES = {"netherlands", "germany", "poland"}
+# demonym (canonical nationality answer) -> country noun used by content From: tags
+_DEMONYM_COUNTRY = {"dutch": "Netherlands", "german": "Germany", "polish": "Poland",
+                    "belgian": "Belgium", "french": "France", "british": "United Kingdom",
+                    "american": "United States", "israeli": "Israel"}
 
 SURVEY_EVENTS = ("SURVEY_SUBMITTED", "SURVEY_ANSWERED")
 # events whose answers/traits seed demographics + persona affinity. IDENTIFY is the
@@ -415,10 +419,12 @@ def survey_affinity(answers: dict) -> dict[str, float]:
         if v in _GENDER:
             out[f"person_who.gender_and_age:{_GENDER[v]}"] = 0.3
     for v in _vals(answers, *_NAT_QIDS):
-        country = str(v).replace("_", " ").title()
+        raw = str(v).strip().casefold().replace(" ", "_")
+        # answers arrive as demonyms ("dutch"); the core-country set and the
+        # content's From: tags use country nouns - map before comparing, or a
+        # Dutch visitor gets the International rollup (and misses NL content)
+        country = _DEMONYM_COUNTRY.get(raw, str(v).replace("_", " ").title())
         out[f"person_who.city_village_country:From: {country}"] = 0.4
-        # rollup: visitors whose origin is not one of the prominently-tagged
-        # countries also match content tagged `International` (the complement set).
         if country.strip().casefold() not in CORE_COUNTRIES:
             out["person_who.city_village_country:International"] = 0.3
     # visitor's NL province -> person_who.province_netherlands, the facet the content
@@ -431,8 +437,14 @@ def survey_affinity(answers: dict) -> dict[str, float]:
     # explicit preference questions: value IS the taxonomy label -> strong weight.
     # canonicalize the value so slug/underscore/spelling variants still match content.
     for qid, facet in _PERSONALIZATION.items():
+        if facet == "place_where.camp_areas":
+            continue    # AR areas are a proximity FILTER, not a taste signal:
+                        # every recommendation is already within the site
         for v in _vals(answers, qid):
-            if v:
-                out[f"{facet}:{_canonical_label(v)}"] = 1.0
+            if not v:
+                continue
+            if str(v).strip().isdigit():
+                continue    # bare content ids (interest picks) are not taxonomy labels
+            out[f"{facet}:{_canonical_label(v)}"] = 1.0
 
     return out
