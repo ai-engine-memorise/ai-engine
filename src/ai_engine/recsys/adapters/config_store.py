@@ -43,6 +43,38 @@ class RedisConfigStore:
         self.client.delete(self.key)
 
 
+class FileConfigStore:
+    """Durable override on the PVC (same volume as the event log / tenant registry).
+
+    Survives pod restarts, image updates AND a redis wipe — an operator-set value
+    like final_limit must not silently revert to baseline on the next deploy."""
+    def __init__(self, path: str):
+        import os
+        self.path = path
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    def get(self) -> Optional[dict]:
+        try:
+            with open(self.path, encoding="utf-8") as fh:
+                return json.load(fh)
+        except (OSError, ValueError):
+            return None
+
+    def set(self, data: dict) -> None:
+        import os
+        tmp = self.path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(data, fh)
+        os.replace(tmp, self.path)           # atomic: readers never see a torn file
+
+    def clear(self) -> None:
+        import os
+        try:
+            os.remove(self.path)
+        except OSError:
+            pass
+
+
 class InMemoryConfigStore:
     """Dev / test fallback (no Redis)."""
     def __init__(self):
