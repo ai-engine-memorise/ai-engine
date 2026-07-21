@@ -38,6 +38,7 @@ class PreviewSpec(BaseModel):
 class EvalRun(BaseModel):
     """Run a synthetic persona across scenarios (module-level so FastAPI reads it as a body)."""
     spec: PreviewSpec = Field(default_factory=PreviewSpec)
+    user_id: Optional[str] = None            # use an EXISTING visitor's live model instead of a spec
     scenarios: Optional[list[dict]] = None   # [{name, filter?, near_lat?, near_lon?, geo_radius_m?}]
     cold: bool = False                        # also run an empty (cold-start) baseline
 
@@ -158,7 +159,7 @@ def _served_record(request_id: str, user_id: str, items: list, out: dict, filter
     }
 
 
-def _tail_served(base: str, n: int, light: bool = True) -> list[dict]:
+def _tail_served(base: str, n: int, light: bool = True, user_id: Optional[str] = None) -> list[dict]:
     """Latest n served-impression rows, newest first.
 
     log_served writes one parquet PER request into served/date=YYYY-MM-DD/, so the
@@ -181,9 +182,12 @@ def _tail_served(base: str, n: int, light: bool = True) -> list[dict]:
     # until we have >= n, so a short tail touches only the newest partition(s).
     day_dirs = sorted(glob.glob(os.path.join(base, "served", "date=*")), reverse=True)
     candidates: list[str] = []
+    # a per-user tail can't know which files match without reading them, so pull a
+    # deeper (but bounded) candidate window when filtering
+    want_files = n if user_id is None else min(3000, max(200, n * 50))
     for d in day_dirs:
         candidates.extend(glob.glob(os.path.join(d, "*.parquet")))
-        if len(candidates) >= n:
+        if len(candidates) >= want_files:
             break
 
     def _mtime(f: str) -> float:
@@ -197,10 +201,13 @@ def _tail_served(base: str, n: int, light: bool = True) -> list[dict]:
     rows: list = []
     for f in candidates:
         try:
-            rows.extend(pq.read_table(f).to_pylist())
+            batch = pq.read_table(f).to_pylist()
         except Exception:
             continue
-        if len(rows) >= n:    # mtime-desc -> stop after the newest n files are read
+        if user_id is not None:
+            batch = [r for r in batch if str(r.get("user_id") or "") == user_id]
+        rows.extend(batch)
+        if len(rows) >= n:    # mtime-desc -> stop after enough matching rows
             break
     rows.sort(key=lambda r: r.get("ts") or "", reverse=True)  # exact order by logged ts
     out = []
@@ -451,6 +458,7 @@ def make_router(components: Components) -> APIRouter:
         if cache:
             cache.pop("users_rows", None)
             cache.pop("cohort_aggs", None)
+            cache.pop("fb_scores", None)
         return {"status": "ok", "ingested": len(events), "users": sorted(users),
                 "bandit_updates": bandit_updates}
 
@@ -485,7 +493,9 @@ def make_router(components: Components) -> APIRouter:
         from .tenancy import current_tenant, auth_tenant
         a = auth_tenant.get()
         scope = "global" if a == "*" else ("tenant" if a else "public")
-        return {"result": {"tenant": current_tenant.get() or "default", "scope": scope}}
+        collection = getattr(c.content_store, "collection_name", None)   # fakes -> None
+        return {"result": {"tenant": current_tenant.get() or "default", "scope": scope,
+                           "collection": collection}}
 
     @usermodel_routes.get("/usermodel")
     def usermodel(user_id: str = Query(..., examples=["u1"])) -> dict:
@@ -540,16 +550,45 @@ def make_router(components: Components) -> APIRouter:
                 if val is not None and val != "":
                     answers[k] = val
         grouped = split_survey_answers(answers)
+
+        # personalization answers arrive as internal codes: AR location tags, content
+        # ids, taxonomy slugs. Humanize for the profile card (ids -> content titles).
+        import re as _re2
+        def _pretty_pers(key: str, val):
+            vals = val if isinstance(val, list) else [val]
+            out = []
+            if key.endswith("interest") and all(str(x).isdigit() for x in vals):
+                got = c.content_store.get([str(x) for x in vals])
+                for x in vals:
+                    ct = got.get(str(x))
+                    out.append(getattr(ct, "title", None) or str(x))
+            else:
+                for x in vals:
+                    t = _re2.sub(r"^AiARLocation", "", str(x))
+                    t = _re2.sub(r"(?<=[a-z])(?=[A-Z0-9])", " ", t)   # Barrack56 -> Barrack 56
+                    out.append(t.replace("_", " ").strip().title() if "_" in t or t.islower() else t)
+            return out if isinstance(val, list) else out[0]
+        pers = {k: _pretty_pers(k, v) for k, v in (grouped["personalization"] or {}).items()}
+
         surveys = {
             "demographic": grouped["demographic"],
-            "personalization": grouped["personalization"],
+            "personalization": pers,
+            "background": grouped.get("background") or {},
+            "feedback": grouped.get("feedback") or {},
             "other": grouped["other"],
             "completed_demographic": bool(grouped["demographic"]),
             "completed_personalization": bool(grouped["personalization"]),
             "answer_count": len(answers),
         }
 
-        demographics = dict(sig.demographics or {}) or extract_demographics(answers)
+        # demographics: canonicalized (language variants folded, junk -> no_answer/
+        # dropped) so the card never shows raw Dutch strings or zero-width blanks
+        raw_demo = dict(sig.demographics or {}) or extract_demographics(answers)
+        demographics = {}
+        for k, v in raw_demo.items():
+            cv = canon_demo_value(k, v)
+            if cv:
+                demographics[k] = cv
 
         # Dynamic model: content the visitor liked, with that content's tags.
         positives = sig.positives or {}
@@ -620,14 +659,23 @@ def make_router(components: Components) -> APIRouter:
             det = props.get("details") or {}
             ctx = props.get("context") or {}
             out: dict = {}
+            # keep the raw close reason when it is NOT one of the standard enum
+            # values (apply_button, menu_button, ... are panel outcomes worth showing)
+            drop = {"request_id", "session_id"} | ({"reason"} if e.end_reason else set())
             for k, v in {**det, **{k2: v2 for k2, v2 in ctx.items() if k2 != "candidates"}}.items():
-                if v not in (None, "", []) and k not in ("reason", "request_id", "session_id"):
+                if v not in (None, "", []) and k not in drop:
                     out[k] = v
             if ctx.get("candidates"):
                 out["candidates"] = len(ctx["candidates"])
-            for k, v in props.items():   # scalar props outside the known containers
-                if k not in ("content", "details", "context", "answers") and isinstance(v, (str, int, float, bool)) and v != "":
+            for k, v in props.items():   # props outside the known containers
+                if k in ("content", "details", "context", "answers"):
+                    continue
+                if isinstance(v, (str, int, float, bool)) and v != "":
                     out[k] = v
+                elif isinstance(v, dict):   # e.g. properties.panel.{panel_id,panel_name,panel_type}
+                    for k2, v2 in v.items():
+                        if isinstance(v2, (str, int, float, bool)) and v2 != "":
+                            out[k2] = v2
             if e.survey_answers:
                 out["answers"] = e.survey_answers
             return out
@@ -645,6 +693,22 @@ def make_router(components: Components) -> APIRouter:
         by_session: dict[str, list] = {}
         for e in events:                                   # events sorted asc
             by_session.setdefault(e.session_id or "", []).append(e)
+        if list(by_session.keys()) == [""]:
+            # the app sends no session id — derive sessions from SESSION_STARTED
+            # markers and >30 min silence gaps instead of one giant bucket
+            segs: list[list] = []
+            cur: list = []
+            prev_ts = None
+            for e in events:
+                gap = prev_ts is not None and e.ts is not None and (e.ts - prev_ts).total_seconds() > 1800
+                if cur and (e.event == "SESSION_STARTED" or gap):
+                    segs.append(cur)
+                    cur = []
+                cur.append(e)
+                prev_ts = e.ts or prev_ts
+            if cur:
+                segs.append(cur)
+            by_session = {f"session {i + 1}": evs2 for i, evs2 in enumerate(segs)}
         session_rows = []
         for sid, evs in by_session.items():
             tss = [e.ts for e in evs if e.ts]
@@ -754,8 +818,23 @@ def make_router(components: Components) -> APIRouter:
                     n_views = sum((a.visits or 0) for a in aggregate_views(evs).values())
                 except Exception:
                     n_views = 0
+                fb_scores = {}
+                try:
+                    from .survey import split_survey_answers
+                    merged_ans: dict = {}
+                    for e in evs:
+                        for k2, v2 in (getattr(e, "survey_answers", None) or {}).items():
+                            if v2 not in (None, ""):
+                                merged_ans[k2] = v2
+                    if merged_ans:
+                        for k2, v2 in (split_survey_answers(merged_ans).get("feedback") or {}).items():
+                            if isinstance(v2, dict) and v2.get("score") is not None:
+                                fb_scores[k2] = v2["score"]
+                except Exception:
+                    pass
                 rows.append({
                     "user_id": uid,
+                    "feedback": fb_scores,
                     # anonymous = never answered any survey (no identify/survey event)
                     "anonymous": not any(getattr(e, "survey_answers", None) for e in evs),
                     "n_views": n_views,
@@ -782,6 +861,9 @@ def make_router(components: Components) -> APIRouter:
         gender: Optional[str] = Query(default=None),
         nationality: Optional[str] = Query(default=None),
         province: Optional[str] = Query(default=None),
+        personal_connection: Optional[str] = Query(default=None),
+        email_shared: Optional[str] = Query(default=None),
+        feedback: Optional[str] = Query(default=None, description="post-visit score ranges, e.g. boring:4-5,interest:1-2"),
     ) -> dict:
         """Cohort-wide aggregates for the Cohort tab: demographic distributions +
         behaviour statistics (volumes, depth, how views end), optionally FILTERED to a
@@ -792,13 +874,33 @@ def make_router(components: Components) -> APIRouter:
         PII-guarded (counts only)."""
         pairs = _cohort_view_aggs(c)          # the shared cohort demand scan (D2)
         sigs = [s for s, _ in pairs]
-        filters = {k: set(v.split(",")) for k, v in (("age", age), ("gender", gender),
-                                                     ("nationality", nationality), ("province", province)) if v}
+        filters = {k: set(v.split(",")) for k, v in (
+            ("age", age), ("gender", gender), ("nationality", nationality),
+            ("province", province), ("personal_connection", personal_connection),
+            ("email_shared", email_shared)) if v}
+        fb_ranges: dict[str, tuple] = {}
+        if feedback:
+            for part in feedback.split(","):
+                try:
+                    q, rng = part.split(":", 1)
+                    lo, hi = rng.split("-", 1)
+                    fb_ranges[q.strip()] = (int(lo), int(hi))
+                except Exception:
+                    continue
+        fb_map = _fb_scores_map() if fb_ranges else {}
 
         def matches(s, skip: Optional[str] = None) -> bool:
             demo = getattr(s, "demographics", None) or {}
-            return all((canon_demo_value(f, demo.get(f, "")) or "") in vals
-                       for f, vals in filters.items() if f != skip)
+            if not all((canon_demo_value(f, demo.get(f, "")) or "") in vals
+                       for f, vals in filters.items() if f != skip):
+                return False
+            if fb_ranges:
+                scores = fb_map.get(s.user_id) or {}
+                for q, (lo, hi) in fb_ranges.items():
+                    sc = scores.get(q)
+                    if sc is None or sc < lo or sc > hi:
+                        return False
+            return True
 
         demographics: dict[str, dict[str, int]] = {}
         for s in sigs:
@@ -844,6 +946,138 @@ def make_router(components: Components) -> APIRouter:
             "labels": {f: {v: demo_label(f, v) for v in dist} for f, dist in demographics.items()},
             "filters": {k: sorted(v) for k, v in filters.items()},
         }}
+
+    def _fb_scores_map() -> dict:
+        """{user_id: {question: score}} over the whole model store, cached 60s.
+        Powers post-visit feedback filtering of the cohort statistics."""
+        def build():
+            from .survey import split_survey_answers
+            out: dict[str, dict] = {}
+            sigs = list(c.model_store.iter_signals() if hasattr(c.model_store, "iter_signals") else [])
+            for s2 in sigs:
+                try:
+                    evs = c.event_buffer.fetch_events(s2.user_id)
+                except Exception:
+                    continue
+                answers: dict = {}
+                for e in evs:
+                    for k, v in (getattr(e, "survey_answers", None) or {}).items():
+                        if v not in (None, ""):
+                            answers[k] = v
+                if not answers:
+                    continue
+                fb = split_survey_answers(answers).get("feedback") or {}
+                scores = {k: v["score"] for k, v in fb.items()
+                          if isinstance(v, dict) and v.get("score") is not None}
+                if scores:
+                    out[s2.user_id] = scores
+            return out
+        return _dash_cached(c, "fb_scores", 60.0, build)
+
+    @ops.get("/cohort/feedback")
+    def cohort_feedback(
+        age: Optional[str] = Query(default=None),
+        gender: Optional[str] = Query(default=None),
+        nationality: Optional[str] = Query(default=None),
+        province: Optional[str] = Query(default=None),
+        personal_connection: Optional[str] = Query(default=None),
+        email_shared: Optional[str] = Query(default=None),
+        feedback: Optional[str] = Query(default=None),
+    ) -> dict:
+        """Post-visit rating aggregates (mean, count, score distribution) for the
+        FILTERED cohort. Faceted like the demographic panels: each question's numbers
+        respect every active filter EXCEPT its own score range, so its selection stays
+        adjustable while everything reflects the selected group."""
+        filters = {k: set(v.split(",")) for k, v in (
+            ("age", age), ("gender", gender), ("nationality", nationality),
+            ("province", province), ("personal_connection", personal_connection),
+            ("email_shared", email_shared)) if v}
+        fb_ranges: dict[str, tuple] = {}
+        if feedback:
+            for part in feedback.split(","):
+                try:
+                    q, rng = part.split(":", 1)
+                    lo, hi = rng.split("-", 1)
+                    fb_ranges[q.strip()] = (int(lo), int(hi))
+                except Exception:
+                    continue
+        fb_map = _fb_scores_map()
+
+        def build():
+            sigs = list(c.model_store.iter_signals() if hasattr(c.model_store, "iter_signals") else [])
+            def demo_ok(s2):
+                demo = getattr(s2, "demographics", None) or {}
+                return all((canon_demo_value(f, demo.get(f, "")) or "") in vals
+                           for f, vals in filters.items())
+            questions = sorted({q for scores in fb_map.values() for q in scores})
+            out = []
+            for q in questions:
+                agg = {"sum": 0, "n": 0, "dist": {}}
+                for s2 in sigs:
+                    scores = fb_map.get(s2.user_id)
+                    if not scores or q not in scores:
+                        continue
+                    if not demo_ok(s2):
+                        continue
+                    skip = False        # other questions' ranges apply; own range doesn't
+                    for oq, (lo, hi) in fb_ranges.items():
+                        if oq == q:
+                            continue
+                        sc2 = scores.get(oq)
+                        if sc2 is None or sc2 < lo or sc2 > hi:
+                            skip = True
+                            break
+                    if skip:
+                        continue
+                    sc = scores[q]
+                    agg["sum"] += sc
+                    agg["n"] += 1
+                    agg["dist"][str(sc)] = agg["dist"].get(str(sc), 0) + 1
+                if agg["n"]:
+                    out.append({"question": q, "avg": round(agg["sum"] / agg["n"], 2),
+                                "n": agg["n"], "scale": 5, "dist": agg["dist"]})
+            return out
+        if not filters and not fb_ranges:
+            return {"result": _dash_cached(c, "feedback_agg", 300.0, build)}
+        return {"result": build()}
+
+    @ops.get("/cohort/timeline")
+    def cohort_timeline() -> dict:
+        """Distinct visitors (and events) per day over the full durable log, for the
+        activity chart. One columnar pass per day partition, cached 5 min."""
+        def build():
+            import glob as _glob
+            try:
+                import pyarrow.parquet as pq
+            except ImportError:
+                raise HTTPException(status_code=503, detail="pyarrow not installed")
+            base = _log_base(c)
+            day_users: dict[str, set] = {}
+            day_events: dict[str, int] = {}
+            responded: set = set()          # visitors who EVER answered a survey
+            if base:
+                for d in sorted(_glob.glob(os.path.join(base, "date=*"))):
+                    day = os.path.basename(d).split("=", 1)[1]
+                    users = day_users.setdefault(day, set())
+                    for f in _glob.glob(os.path.join(d, "*.parquet")):
+                        try:
+                            t = pq.read_table(f, columns=["user_id", "survey_answers"])
+                        except Exception:
+                            continue
+                        day_events[day] = day_events.get(day, 0) + t.num_rows
+                        for u, sa in zip(t["user_id"].to_pylist(), t["survey_answers"].to_pylist()):
+                            if not u:
+                                continue
+                            users.add(u)
+                            if sa and sa not in ("{}", "null", ""):
+                                responded.add(u)
+            return [{"date": day,
+                     "visitors": len(users),
+                     "responded": len(users & responded),
+                     "anonymous": len(users - responded),
+                     "events": day_events.get(day, 0)}
+                    for day, users in sorted(day_users.items())]
+        return {"result": _dash_cached(c, "timeline", 300.0, build)}
 
     @ops.get("/content/stats")
     def content_stats(limit: int = Query(default=30, ge=1, le=200)) -> dict:
@@ -942,6 +1176,49 @@ def make_router(components: Components) -> APIRouter:
     def _snap_meta_path(p: str) -> str:
         return p[:-len(".csv.gz")] + ".json"
 
+    @ops.post("/export/compact")
+    def compact_log() -> dict:
+        """Merge each day's many one-event part files into a single parquet per day.
+        The append-only log grows one file per ingest; with weeks of traffic every
+        full scan (snapshot, timeline, replay) pays tens of thousands of file opens.
+        Idempotent; new events keep appending as parts until the next compaction."""
+        import glob as _glob
+        try:
+            import pyarrow as pa
+            import pyarrow.parquet as pq
+        except ImportError:
+            raise HTTPException(status_code=503, detail="pyarrow not installed")
+        base = _log_base(c)
+        if not base:
+            raise HTTPException(status_code=503, detail="EVENT_LOG_DIR not set")
+        days = files_before = files_after = 0
+        for d in sorted(_glob.glob(os.path.join(base, "date=*"))):
+            parts = sorted(_glob.glob(os.path.join(d, "*.parquet")))
+            if len(parts) <= 1:
+                continue
+            tables = []
+            for f in parts:
+                try:
+                    tables.append(pq.read_table(f))
+                except Exception:
+                    continue
+            if not tables:
+                continue
+            merged = pa.concat_tables(tables, promote_options="permissive")
+            out = os.path.join(d, f"part-compacted-{uuid4().hex}.parquet")
+            pq.write_table(merged, out)          # write new file FIRST, then drop parts
+            for f in parts:
+                try:
+                    os.remove(f)
+                except OSError:
+                    pass
+            days += 1
+            files_before += len(parts)
+            files_after += 1
+        getattr(c, "_dash_cache", {}).clear()
+        return {"result": {"days_compacted": days, "files_before": files_before,
+                           "files_after": files_after}}
+
     @ops.get("/export/snapshots")
     def list_snapshots() -> dict:
         import json as _json
@@ -988,12 +1265,16 @@ def make_router(components: Components) -> APIRouter:
         cols = ["ts", "user_id", "event", "content_id", "session_id", "request_id",
                 "dwell_seconds", "end_reason", "query_text", "clicked_id",
                 "impressions", "survey_answers", "raw"]
-        tables = []
-        for f in files:
+        # the log is many tiny one-event part files: opening them dominates, so
+        # read in parallel (I/O bound) instead of sequentially
+        from concurrent.futures import ThreadPoolExecutor
+        def _read(f):
             try:
-                tables.append(pq.read_table(f))
+                return pq.read_table(f)
             except Exception:
-                continue
+                return None
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            tables = [t for t in ex.map(_read, files) if t is not None]
         if tables:
             # permissive: a column that is all-null in one part file (null type)
             # promotes to the concrete type other parts have, instead of erroring
@@ -1188,7 +1469,8 @@ def make_router(components: Components) -> APIRouter:
         }}
 
     @ops.get("/served/recent")
-    def served_recent(n: int = Query(default=50, ge=1, le=500)) -> dict:
+    def served_recent(n: int = Query(default=50, ge=1, le=500),
+                      user_id: Optional[str] = Query(default=None, description="only this visitor's impressions")) -> dict:
         """Tail of the durable served-impression log (PII -> guarded). Per-tenant log dir."""
         base = _log_base(c)
         if not base:
@@ -1197,7 +1479,7 @@ def make_router(components: Components) -> APIRouter:
             import pyarrow.parquet  # noqa: F401  (presence check; helper imports it)
         except ImportError:
             return {"result": [], "detail": "pyarrow not installed"}
-        return {"result": _tail_served(base, n)}
+        return {"result": _tail_served(base, n, user_id=user_id)}
 
     @ops.get("/served/explain")
     def served_explain(request_id: str = Query(..., description="served impression request_id")) -> dict:
@@ -1444,7 +1726,12 @@ def make_router(components: Components) -> APIRouter:
     def eval_run(body: EvalRun) -> dict:
         """Score a synthetic persona across scenarios and report behaviour metrics."""
         from .evaluation import list_metrics
-        signals = build_preview_signals(body.spec, c.content_store)
+        if body.user_id:                     # probe with a REAL visitor's live model
+            signals = c.model_store.get_signals(body.user_id)
+            if signals is None:
+                raise HTTPException(status_code=404, detail=f"no model for visitor {body.user_id}")
+        else:
+            signals = build_preview_signals(body.spec, c.content_store)
         scenarios = body.scenarios or [{"name": "open"}]
         if body.cold:
             scenarios = scenarios + [{"name": "cold-start", "_cold": True}]

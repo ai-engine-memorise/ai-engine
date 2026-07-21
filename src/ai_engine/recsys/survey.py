@@ -35,7 +35,8 @@ _GENDER = {"female": "female", "male": "Male", "non_binary": "non-binary"}
 _AGE_QIDS = ("q:age", "age_group", "age")
 _GENDER_QIDS = ("q:gender", "gender")
 _NAT_QIDS = ("q:nationality", "nationality", "country")
-_PROVINCE_QIDS = ("q:province", "province", "region")   # NL province the visitor is from
+_PROVINCE_QIDS = ("q:province", "province", "region",
+                  "q:nationality_province", "nationality_province")   # NL province the visitor is from
 _CONN_QIDS = ("q:ww2_connection", "personal_connection")
 
 # personalization questions: answer value = canonical taxonomy label -> facet.
@@ -246,19 +247,117 @@ def extract_demographics(answers: dict) -> dict:
     return out
 
 
+# English labels for the canonical answer codes (the app sends both a Dutch
+# display string and a canonical code per question; the dashboard shows English)
+_LIKERT = {"1": "Strongly disagree", "2": "Disagree", "3": "Undecided",
+           "4": "Agree", "5": "Strongly agree"}
+_YN = {"yes": "Yes", "no": "No", "unknown": "Don't know"}
+_ANSWER_LABELS = {
+    "prior_visit": {"yes": "Yes", "no": "No", "once": "Yes, once",
+                    "multiple": "Yes, several times", "several": "Yes, several times",
+                    "unknown": "Don't know"},
+    "other_camp_connection": _YN, "ww2_connection": _YN, "religious": _YN,
+    "knowledge_level": _LIKERT, "learned_something": _LIKERT, "interest": _LIKERT,
+    "weak_impression": _LIKERT, "innovative": _LIKERT, "boring": _LIKERT,
+    "overwhelmed": _LIKERT, "made_me_think": _LIKERT, "share_learning": _LIKERT,
+    "learn_more": _LIKERT,
+    "political_identity": {"1": "Left", "2": "Left of center", "3": "Center",
+                           "4": "Right of center", "5": "Right"},
+    "activities_before": {"start_here": "Started the visit here",
+                          "exhibition": "Visited the exhibition",
+                          "museum": "Visited the museum",
+                          "camp_terrain": "Visited the camp terrain"},
+    "education": {"primary": "Primary school", "high_school": "High school",
+                  "vocational": "Vocational (MBO)", "bachelor": "Bachelor (HBO/WO)",
+                  "master": "Master or higher", "other": "Other"},
+    "visit_context": {"alone": "Alone", "partner": "With partner", "family": "With family",
+                      "teen_parent": "As a teen with parent(s)",
+                      "child_parent": "As a child with parent(s)",
+                      "friends": "With friends", "group": "With a group", "school": "School visit"},
+    "visit_purpose": {"learn_history": "Learn about the history", "commemoration": "Commemoration",
+                      "family_history": "Family history", "school": "School / study",
+                      "passing_by": "Passing by", "other": "Other"},
+    "relevance": {"past": "The past", "present": "The present", "future": "The future"},
+}
+
+
+def _answer_label(base: str, v):
+    """Canonical code -> English label; free text / unknown codes pass through.
+    Likert answers come back structured ({label, score, scale}) so the dashboard
+    can draw them as a rating bar instead of text."""
+    if isinstance(v, list):
+        return [_answer_label(base, x) for x in v]
+    m = _ANSWER_LABELS.get(base)
+    sv = str(v).strip()
+    if m is _LIKERT and sv.isdigit():
+        return {"label": m.get(sv, sv), "score": int(sv), "scale": 5}
+    if m:
+        return m.get(sv) or m.get(sv.lower()) or v
+    return v
+
+
+# post-visit evaluation questions (the exit survey), split out from the visit
+# background so the profile card reads in two sensible blocks
+_FEEDBACK_BASE = {"learned_something", "what_learned", "interest", "weak_impression",
+                  "innovative", "boring", "overwhelmed", "made_me_think", "memorable",
+                  "share_learning", "learn_more", "meaning_today", "relevance"}
+
+
 def split_survey_answers(answers: dict) -> dict:
-    """Group raw survey answers by origin survey for the holistic visitor profile:
-    demographic (presurvey) vs personalization vs anything else. Keys are the raw
-    question ids; values are the raw answers."""
+    """Group raw survey answers for the holistic visitor profile.
+
+    The app sends every question TWICE: a plain key with the human display text
+    ("knowledge_level": "Oneens") and a q:-prefixed key with the canonical code
+    ("q:knowledge_level": "2"). Both used to render as separate duplicate rows;
+    now each base question appears once, preferring the human display value.
+    Email answers are dropped entirely (PII — the email_shared flag covers them),
+    and zero-width characters are stripped from values."""
     demo_qids = set(_AGE_QIDS) | set(_GENDER_QIDS) | set(_NAT_QIDS) | set(_PROVINCE_QIDS) | set(_CONN_QIDS)
     pers_qids = set(_PERSONALIZATION)
+
+    def cleanv(v):
+        if isinstance(v, list):
+            return [cleanv(x) for x in v]
+        return str(v).replace("​", "").strip()
+
+    # dedup q:/plain pairs onto the base name. The q:-prefixed key carries the
+    # localized display text ("q:prior_visit": "Nee."), the plain key the
+    # canonical code ("prior_visit": "no"). The dashboard is English, so the
+    # CANONICAL value wins and is mapped to an English label; localized free
+    # text (open questions) has no code counterpart and passes through.
+    merged: dict = {}
+    for k, v in (answers or {}).items():
+        if v is None or v == "":
+            continue
+        is_q = str(k).startswith("q:")
+        base = k[2:] if is_q else str(k)
+        if "email" in base.lower():
+            continue
+        if not is_q or base not in merged:
+            cv = cleanv(v)
+            if isinstance(cv, list):
+                cv = [x for x in cv if x != ""]
+            if cv == "" or cv == []:      # answer was only whitespace / zero-width junk
+                continue
+            merged[base] = cv
+
     demographic: dict = {}
     personalization: dict = {}
-    other: dict = {}
-    for k, v in (answers or {}).items():
-        bucket = demographic if k in demo_qids else personalization if k in pers_qids else other
-        bucket[k] = v
-    return {"demographic": demographic, "personalization": personalization, "other": other}
+    background: dict = {}
+    feedback: dict = {}
+    for base, v in merged.items():
+        qids = {base, "q:" + base}
+        if qids & demo_qids:
+            demographic[base] = v
+        elif qids & pers_qids or base.startswith("personalization_"):
+            personalization[base] = v
+        elif base in _FEEDBACK_BASE:
+            feedback[base] = _answer_label(base, v)
+        else:
+            background[base] = _answer_label(base, v)
+    return {"demographic": demographic, "personalization": personalization,
+            "background": background, "feedback": feedback,
+            "other": {**background, **feedback}}   # legacy shape for old clients
 
 
 def survey_affinity(answers: dict) -> dict[str, float]:

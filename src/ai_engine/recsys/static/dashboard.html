@@ -54,7 +54,9 @@ body.nav-min .side-brand .name{display:none}
 .side-toggle{margin-left:auto;background:transparent;border:0;color:var(--sidebar-mut);cursor:pointer;padding:5px;border-radius:7px;line-height:0}
 .side-toggle:hover{background:#ffffff12;color:var(--sidebar-fg)}
 .side-toggle svg{transition:transform .18s ease}
-body.nav-min .side-brand{justify-content:center;padding:0 6px;gap:2px}
+body.nav-min .side-brand{justify-content:center;padding:14px 0;cursor:pointer}
+body.nav-min .side-toggle{display:none}
+body.nav-min .side-brand:hover .brand-logo{opacity:.8}
 body.nav-min .side-toggle{margin:0}
 body.nav-min .side-toggle svg{transform:rotate(180deg)}
 
@@ -145,9 +147,115 @@ main{flex:1 1 auto;min-width:0}
 .subtab{border:0;background:transparent;color:var(--mut);font-family:Montserrat,sans-serif;font-weight:500;font-size:14px;
   padding:9px 16px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:.13s}
 .subtab:hover{color:var(--fg)}
+/* session blocks widget */
+.sesslane{display:flex;gap:12px;overflow-x:auto;padding:2px 2px 12px}
+.sesslane::-webkit-scrollbar,.spanlane::-webkit-scrollbar{height:7px}
+.sesslane::-webkit-scrollbar-thumb,.spanlane::-webkit-scrollbar-thumb{background:var(--line);border-radius:9px}
+.sesslane::-webkit-scrollbar-track,.spanlane::-webkit-scrollbar-track{background:transparent}
+.sesslane,.spanlane{scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.sessblk{flex:0 0 auto;min-width:200px;text-align:left;background:var(--panel);border:1px solid var(--line);
+  border-radius:13px;padding:13px 16px;cursor:pointer;font-family:inherit;color:var(--fg);
+  transition:border-color .15s,box-shadow .15s,transform .15s}
+.sessblk:hover{border-color:var(--accent);box-shadow:0 5px 16px var(--shadow);transform:translateY(-1px)}
+.sessblk.on{border-color:var(--accent);box-shadow:0 5px 16px var(--shadow)}
+.sessblk.on .t{color:var(--accent)}
+.sessblk .t{font-family:Montserrat,sans-serif;font-weight:600;font-size:14px;margin-bottom:3px;color:var(--primary-dark)}
+[data-theme="dark"] .sessblk .t{color:var(--fg)}
+.sessdetail{margin-top:8px;border-top:1px dashed var(--line);padding-top:8px}
+.subpanel{margin:2px 0 8px;border-radius:12px;padding:10px 13px 4px;
+  background:color-mix(in srgb,var(--c-geo) 6%,var(--panel));
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--c-geo) 22%,transparent)}
+.subhead{font-family:Montserrat,sans-serif;font-size:10px;font-weight:700;letter-spacing:.07em;
+  text-transform:uppercase;color:var(--c-geo);margin-bottom:8px}
+summary.rawlink{list-style:none;cursor:pointer;display:inline-block;font-size:12.5px;color:var(--mut)}
+summary.rawlink::-webkit-details-marker{display:none}
+summary.rawlink:hover{text-decoration:underline;color:var(--fg)}
+.spanlane{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 12px}
+.spanblk{flex:0 0 auto;min-width:110px;max-width:190px;border:0;border-radius:10px;padding:8px 12px;
+  background:color-mix(in srgb,var(--sb,#888) 9%,var(--panel));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--sb,#888) 28%,transparent);
+  transition:box-shadow .13s,transform .13s}
+.spanblk:hover{box-shadow:inset 0 0 0 1.5px var(--sb,#888),0 4px 12px var(--shadow)}
+.spanblk.on{box-shadow:inset 0 0 0 1.5px var(--sb,#888)}
+.spanblk .k{font-size:8.5px;letter-spacing:.09em;text-transform:uppercase;font-weight:700;opacity:.85}
+.spanblk .l{font-family:Montserrat,sans-serif;font-size:12.5px;font-weight:600;margin:3px 0 2px;
+  overflow-wrap:anywhere}
+.spanblk .pick{font-size:11px;font-weight:600;color:var(--c-semantic);margin-top:2px;overflow-wrap:anywhere}
+/* demographics as 100%-stacked clickable bars */
+.stackbar{display:flex;height:26px;border-radius:7px;overflow:hidden;background:var(--track);width:100%}
+.sseg{border:0;padding:0;cursor:pointer;position:relative;display:flex;align-items:center;justify-content:center;
+  min-width:3px;transition:filter .12s,opacity .12s}
+.sseg:hover{filter:brightness(1.13)}
+.sseg.on{box-shadow:inset 0 0 0 2px var(--fg)}
+.slbl{font-family:Montserrat,sans-serif;font-size:10.5px;font-weight:600;color:#fff;
+  text-shadow:0 1px 2px rgba(0,0,0,.3);white-space:nowrap;overflow:hidden;padding:0 5px}
+/* post-visit feedback: dual-handle range over a 1..5 track, mean = dark tick */
+.fbanchor{font-size:9.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;padding:0 3px}
+.dr{position:relative;height:24px;min-width:0}
+.drnum{position:absolute;top:21px;transform:translateX(-50%);font-size:9.5px;color:var(--mut);
+  font-variant-numeric:tabular-nums;pointer-events:none}
+.dr .track{position:absolute;left:0;right:0;top:6px;height:12px;border-radius:7px;background:var(--track)}
+.dr .fill{position:absolute;top:6px;height:12px;border-radius:7px;background:var(--accent)}
+.dr .mean{position:absolute;top:2px;width:2px;height:20px;background:var(--fg);border-radius:1px;transform:translateX(-1px);opacity:.8}
+.dr input[type=range]{position:absolute;left:0;right:0;top:0;width:100%;height:24px;margin:0;background:none;
+  border:0;outline:none;-webkit-appearance:none;appearance:none;pointer-events:none}
+.dr input[type=range]::-webkit-slider-runnable-track{-webkit-appearance:none;appearance:none;background:transparent;height:24px}
+.dr input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;pointer-events:auto;width:15px;height:15px;
+  margin-top:4.5px;border-radius:50%;background:var(--panel);border:2.5px solid var(--accent);box-shadow:0 1px 3px var(--shadow);cursor:grab}
+.dr input[type=range]::-moz-range-track{background:transparent;height:24px}
+.dr input[type=range]::-moz-range-thumb{pointer-events:auto;width:11px;height:11px;border-radius:50%;
+  background:var(--panel);border:2.5px solid var(--accent);box-shadow:0 1px 3px var(--shadow);cursor:grab}
+.dr{cursor:pointer;touch-action:none;user-select:none}
+.dr .band{position:absolute;top:6px;height:12px;border-radius:7px;
+  background:color-mix(in srgb,var(--accent) 24%,var(--track));pointer-events:none}
+.dr .h{position:absolute;top:3.5px;width:15px;height:15px;border-radius:50%;background:var(--panel);
+  border:2.5px solid var(--accent);box-shadow:0 1px 3px var(--shadow);transform:translateX(-50%);pointer-events:none}
+/* idle = no active filter on this question: no fill, no handles */
+.dr.idle .fill,.dr.idle .h{display:none}
+/* visitors-per-day chart */
+.tlchart{display:flex;align-items:flex-end;gap:2px;height:130px}
+.tlcol{flex:1;min-width:0;height:100%;display:flex;align-items:flex-end;border-radius:3px}
+.tlcol:hover{background:var(--accent-t)}
+.tlstack{width:100%;display:flex;flex-direction:column;justify-content:flex-end;height:100%}
+.tlbar{width:100%;background:var(--accent)}
+.tlbar:first-child{border-radius:3px 3px 0 0}
+.tlbar.anon{background:var(--track);border:1px solid var(--line);border-bottom:0}
+/* rich chart tooltip (structured: date header + series rows) */
+.charttip{position:fixed;z-index:120;background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  box-shadow:0 10px 30px var(--shadow);padding:9px 13px;pointer-events:none;display:none;min-width:180px;
+  font-family:Montserrat,sans-serif}
+.charttip .ct-head{font-size:11.5px;font-weight:700;color:var(--mut);margin-bottom:6px}
+.charttip .ct-row{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:2.5px 0;color:var(--fg)}
+.charttip .ct-row b{margin-left:auto;font-variant-numeric:tabular-nums;padding-left:14px}
+.ct-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+.tlwrap{display:flex;gap:9px}
+.tlaxis{display:flex;flex-direction:column;justify-content:space-between;height:130px;min-width:26px;
+  text-align:right;font-size:10.5px;color:var(--mut);font-variant-numeric:tabular-nums;line-height:1}
+.tlplot{position:relative}
+.tlgrid{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;pointer-events:none}
+.tlgrid span{display:block;height:0;border-top:1px dashed var(--line);opacity:.6}
+.tlgrid span:last-child{border-top:1px solid var(--line);opacity:1}
+.tlticks{display:flex;gap:2px;margin-top:6px}
+.tltick{flex:1;min-width:0;text-align:center;font-size:10.5px;color:var(--mut);white-space:nowrap;font-variant-numeric:tabular-nums}
+/* snapshot table (Qdrant-style rows) */
+.snaptbl td{padding-top:18px;padding-bottom:18px}
+.snapico{width:36px;height:36px;border-radius:9px;background:var(--accent-t);color:var(--accent);
+  display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+.snapico svg{width:18px;height:18px}
+.btn-outline{display:inline-flex;align-items:center;gap:7px;border:1.5px solid var(--accent);color:var(--accent);
+  background:transparent;border-radius:9px;padding:8px 16px;font-family:Montserrat,sans-serif;
+  font-size:13px;font-weight:600;cursor:pointer;line-height:1}
+.btn-outline:hover{background:var(--accent-t)}
+.btn-outline:disabled{opacity:.5;cursor:default}
+.btn-outline.danger{border-color:var(--c-aversion);color:var(--c-aversion)}
+.btn-outline.danger:hover{background:#9C5B4F14}
+/* snapshot download state: mini progress bar -> check icon */
+.dlstate{display:inline-flex;align-items:center;flex:0 0 auto;line-height:0}
+.dlstate:empty{display:none}   /* zero footprint until a download starts */
+.dlbar{display:inline-block;width:44px;height:6px;border-radius:4px;background:var(--track);overflow:hidden}
+.dlfill{display:block;height:100%;width:0;background:var(--accent);transition:width .15s}
 /* small segmented control (All | Identified | Anonymous) */
-.segctl{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;flex:0 0 auto}
-.segctl button{border:0;background:var(--panel);padding:8px 15px;font-family:Montserrat,sans-serif;
+.segctl{display:inline-flex;align-items:stretch;border:1px solid var(--line);border-radius:10px;overflow:hidden;flex:0 0 auto;align-self:center;height:42px}
+.segctl button{border:0;background:var(--panel);padding:0 16px;font-family:Montserrat,sans-serif;
   font-size:12.5px;font-weight:500;color:var(--mut);cursor:pointer;white-space:nowrap}
 .segctl button+button{border-left:1px solid var(--line)}
 .segctl button:hover{color:var(--fg)}
@@ -333,9 +441,13 @@ button.primary:disabled{opacity:.45;cursor:default;filter:none}
 .distrow{display:grid;grid-template-columns:minmax(95px,155px) minmax(0,1fr) 70px;gap:12px;align-items:center;margin:9px 0}
 /* instant tooltip (native title is too slow to discover) */
 [data-tip]{position:relative;cursor:help}
-[data-tip]:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);
-  background:var(--fg);color:var(--bg);font-size:11px;font-weight:500;letter-spacing:normal;text-transform:none;
-  padding:4px 10px;border-radius:6px;white-space:nowrap;z-index:60;pointer-events:none;box-shadow:0 4px 14px var(--shadow)}
+[data-tip]:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);
+  background:var(--panel);color:var(--fg);font-family:Montserrat,sans-serif;font-size:11.5px;font-weight:500;
+  letter-spacing:normal;text-transform:none;padding:7px 13px;border-radius:9px;border:1px solid var(--line);
+  white-space:nowrap;z-index:60;pointer-events:none;box-shadow:0 8px 24px var(--shadow)}
+[data-tip]:hover::before{content:"";position:absolute;bottom:calc(100% + 3px);left:50%;transform:translateX(-50%) rotate(45deg);
+  width:9px;height:9px;background:var(--panel);border-right:1px solid var(--line);border-bottom:1px solid var(--line);
+  z-index:61;pointer-events:none}
 th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
 th.sortable:hover{color:var(--fg)}
 th.sortable .arrow{display:inline-block;width:11px;font-size:10px;color:var(--accent)}  /* fixed width: arrow can't shift columns */
@@ -680,11 +792,12 @@ let userCtx=null;            // {id, sub} when drilled into a single visitor (fr
 let recCtx=null;             // request_id when drilled into a single recommendation (from the Traffic table)
 let cfgTab=null;             // active Config category subtab
 let cohortTab="overview";    // Cohort subtab: overview | stats | snapshot
-let _anonFilter="all";      // visitors table slice: all | identified | anon
+let _anonFilter="identified"; // visitors table slice: all | identified | anon
+let _fbFilter={};             // {question: [min,max]} — post-visit feedback score ranges
 let _cohortDom=null;         // {node,ts}: rendered Cohort view, reattached on return
                              // from a visitor drill-down instead of refetching everything
 let cfgEdit=false;           // Config is read-only until Edit is clicked
-const USER_SUBS=[["profile","Profile",renderUser],["history","History",renderHistory],["recommend","Recommend",renderRequest]];
+const USER_SUBS=[["profile","Profile",renderUser],["history","History",renderHistory],["recommend","Recommendations",renderRequest]];
 
 function setTab(n){if(!ALL[n])return;userCtx=null;recCtx=null;cfgEdit=false;current=n;const s=slug(n);if(location.hash!=="#/"+s)location.hash="#/"+s;else paint();}
 function openUser(id,sub){id=String(id).trim();if(!id)return;sub=sub||"profile";cfgEdit=false;recCtx=null;
@@ -698,7 +811,7 @@ function paint(){
   if(userCtx){renderUserDetail(v);return;}
   v.append(el("div",{class:"pagehead"},
     el("div",{},el("h1",{},current)),
-    el("button",{class:"iconbtn",title:"refresh",onclick:()=>{_cohortDom=null;paint();}},"↻")));
+    (current==="Config"||current==="Access Tokens"||current==="Synthetic users")?"":el("button",{class:"iconbtn",title:"refresh",onclick:()=>{_cohortDom=null;paint();}},"↻")));
   // Cohort keeps its rendered DOM across visitor drill-downs: back = reattach,
   // no refetch, scroll/filters/subtab intact. Refresh button forces a rebuild.
   if(current==="Cohort"&&_cohortDom&&Date.now()-_cohortDom.ts<300000){
@@ -722,15 +835,18 @@ function renderUserDetail(v){
   fn(host).catch(e=>failCard(host,e));
 }
 
+let _recBack=null;   // where the rec drill-down was opened from
 function openRec(rid){
-  rid=String(rid||"").trim();if(!rid)return;userCtx=null;cfgEdit=false;
+  rid=String(rid||"").trim();if(!rid)return;
+  _recBack=location.hash&&!location.hash.startsWith("#/rec/")?location.hash:_recBack;
+  userCtx=null;cfgEdit=false;
   const h=`#/rec/${encodeURIComponent(rid)}`;
   if(location.hash!==h)location.hash=h;else paint();
 }
 async function renderRecDetail(v){
   v.append(el("div",{class:"pagehead"},
     el("div",{},el("h1",{},"Recommendation")),
-    el("button",{class:"iconbtn",title:"back to traffic",onclick:()=>{location.hash="#/traffic";}},"←")));
+    el("button",{class:"iconbtn",title:"back",onclick:()=>{location.hash=_recBack||"#/traffic";}},"←")));
   const host=el("div");v.append(host);
   let d;
   try{d=await api(`/api/served/explain?request_id=${encodeURIComponent(recCtx)}`);}catch(e){failCard(host,e);return;}
@@ -851,20 +967,40 @@ async function drawSnapshot(box){
   if(!(list||[]).length){
     box.append(el("div",{class:"empty"},"No snapshots yet."));
   }else{
-    const tbl=el("table");
-    tbl.append(el("tr",{},el("th",{},"snapshot"),el("th",{},"date"),el("th",{},"events"),el("th",{},"visitors"),
-      el("th",{},"size"),el("th",{style:"text-align:right"},"actions")));
+    const tbl=el("table",{class:"snaptbl"});
+    const cth=t=>el("th",{style:"text-align:center"},t);
+    tbl.append(el("tr",{},el("th",{},"snapshot"),cth("date"),cth("size"),cth("actions")));
+    const ICO_SNAP='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>';
     const ICO_DL='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
     const ICO_RM='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
     for(const s of list){
       const st=s.stats||{};
-      const dlBtn=el("button",{class:"userchip",title:"download",style:"display:inline-flex;align-items:center;gap:6px"},
+      const dlBtn=el("button",{class:"btn-outline",title:"download"},
         el("span",{style:"line-height:0",html:ICO_DL}),"Download");
-      dlBtn.onclick=async()=>{dlBtn.disabled=true;
-        try{await _fetchBlob("/api/export/snapshot/"+encodeURIComponent(s.name),s.name);}
-        catch(e){alert("download failed: "+e);}
-        dlBtn.disabled=false;};
-      const rmBtn=el("button",{class:"userchip",title:"delete",style:"display:inline-flex;align-items:center;gap:6px;color:var(--c-aversion)"},
+      // the archive chip itself is the download state: bar while streaming, check when done
+      const ico=el("span",{class:"snapico",html:ICO_SNAP});
+      let busy=false;
+      const doDownload=async()=>{
+        if(busy)return;busy=true;dlBtn.disabled=true;
+        const fill=el("span",{class:"dlfill"});
+        ico.innerHTML="";ico.append(el("span",{class:"dlbar",style:"width:22px"},fill));
+        try{
+          const r=await fetch(base()+"/api/export/snapshot/"+encodeURIComponent(s.name),{headers:headers()});
+          if(!r.ok)throw new Error(r.status+" "+r.statusText);
+          const total=+r.headers.get("content-length")||s.size_bytes||0;
+          const reader=r.body.getReader();const chunks=[];let got=0;
+          for(;;){const {done,value}=await reader.read();if(done)break;
+            chunks.push(value);got+=value.length;
+            if(total)fill.style.width=Math.min(100,Math.round(100*got/total))+"%";}
+          fill.style.width="100%";
+          const a=el("a",{href:URL.createObjectURL(new Blob(chunks)),download:s.name});
+          document.body.append(a);a.click();a.remove();
+          ico.innerHTML='<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--c-affinity)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+        }catch(e){ico.innerHTML=ICO_SNAP;alert("download failed: "+e);}
+        busy=false;dlBtn.disabled=false;
+      };
+      dlBtn.onclick=doDownload;
+      const rmBtn=el("button",{class:"btn-outline danger",title:"delete"},
         el("span",{style:"line-height:0",html:ICO_RM}),"Delete");
       rmBtn.onclick=async()=>{
         if(!await confirmModal({title:"Delete snapshot",body:"Delete "+s.name+"? The live event log is unaffected.",action:"Delete",danger:true}))return;
@@ -872,15 +1008,108 @@ async function drawSnapshot(box){
           if(!r.ok)throw new Error(r.status);}catch(e){alert("delete failed: "+e);}
         drawSnapshot(box);};
       tbl.append(el("tr",{},
-        el("td",{},el("b",{},s.name.replace(/\.csv\.gz$/,""))),
-        el("td",{class:"small mut num"},(s.created||"").replace("T"," ").slice(0,19)),
-        el("td",{class:"num"},st.total_events??""),
-        el("td",{class:"num"},st.total_visitors??""),
-        el("td",{class:"num mut"},_fmtSize(s.size_bytes||0)),
-        el("td",{style:"text-align:right"},el("div",{class:"row",style:"gap:6px;justify-content:flex-end;flex-wrap:nowrap"},dlBtn,rmBtn))));
+        el("td",{},el("span",{style:"display:inline-flex;align-items:center;gap:13px"},
+          ico,
+          el("b",{class:"vlink",title:"download",onclick:doDownload},s.name))),
+        el("td",{class:"mut num",style:"text-align:center"},(s.created||"").replace("T"," ").slice(0,19)),
+        el("td",{class:"num",style:"text-align:center"},_fmtSize(s.size_bytes||0)),
+        el("td",{},el("div",{class:"row",style:"gap:6px;justify-content:center;flex-wrap:nowrap"},dlBtn,rmBtn))));
     }
     box.append(el("div",{class:"card"},tbl));
   }
+}
+
+/* ===== VISITORS-PER-DAY timeline chart (range toggle: all/month/week) ===== */
+let _tlData=null,_tlRange="all";
+// singleton floating tooltip for charts
+function chartTip(){
+  let t=document.getElementById("charttip");
+  if(!t){t=el("div",{class:"charttip",id:"charttip"});document.body.append(t);}
+  return t;
+}
+function showChartTip(anchor,html){
+  const t=chartTip();t.innerHTML=html;t.style.display="block";
+  const r=anchor.getBoundingClientRect();
+  const tw=t.offsetWidth;
+  let x=r.left+r.width/2-tw/2;
+  x=Math.max(8,Math.min(x,window.innerWidth-tw-8));
+  t.style.left=x+"px";
+  t.style.top=(r.top-t.offsetHeight-9)+"px";
+}
+function hideChartTip(){const t=document.getElementById("charttip");if(t)t.style.display="none";}
+async function timelineCard(){
+  if(_tlData===null){try{_tlData=await api("/api/cohort/timeline");}catch(e){_tlData=[];}}
+  const card=el("div",{class:"card"});
+  const title=cardhead("Visitors per day");title.style.margin="0";
+  const seg=el("div",{class:"segctl"});
+  const host=el("div",{style:"margin-top:12px"});
+  const draw=()=>{
+    host.innerHTML="";
+    const rows=_tlData||[];
+    if(!rows.length){host.append(el("div",{class:"small mut"},"No activity recorded."));return;}
+    const byDate=Object.fromEntries(rows.map(r=>[r.date,r]));
+    const days=[];
+    for(let d=new Date(rows[0].date+"T00:00:00Z");;d.setUTCDate(d.getUTCDate()+1)){
+      const k=d.toISOString().slice(0,10);
+      days.push(byDate[k]||{date:k,visitors:0,events:0});
+      if(k>=rows[rows.length-1].date)break;
+    }
+    let view=days;
+    if(_tlRange==="30")view=days.slice(-30);
+    if(_tlRange==="7")view=days.slice(-7);
+    const m=Math.max(1,...view.map(r=>r.visitors));
+    // nice y ceiling (1/2/5 x 10^k) so axis labels are round numbers
+    const pow=Math.pow(10,Math.floor(Math.log10(m)));
+    const nm=[1,2,5,10].map(x=>x*pow).find(x=>x>=m)||m;
+    const w=el("div",{class:"tlchart"});
+    const WD=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+    const MONL=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    view.forEach(r=>{
+      const resp=r.responded||0,anon=(r.anonymous!=null?r.anonymous:r.visitors-resp);
+      const hR=r.visitors?Math.round(100*resp/nm):0, hA=r.visitors?Math.round(100*anon/nm):0;
+      const col=el("div",{class:"tlcol"},
+        el("div",{class:"tlstack"},
+          el("div",{class:"tlbar anon",style:`height:${anon?Math.max(2,hA):0}%`}),
+          el("div",{class:"tlbar",style:`height:${resp?Math.max(2,hR):0}%`})));
+      col.onmouseenter=()=>{
+        const d=new Date(r.date+"T00:00:00Z");
+        const head=`${WD[d.getUTCDay()]}, ${d.getUTCDate()} ${MONL[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+        showChartTip(col,
+          `<div class="ct-head">${head}</div>`+
+          `<div class="ct-row"><span class="ct-dot" style="background:var(--accent)"></span>Survey responded<b>${resp}</b></div>`+
+          `<div class="ct-row"><span class="ct-dot" style="background:var(--track);border:1px solid var(--line)"></span>Anonymous<b>${anon}</b></div>`);
+      };
+      col.onmouseleave=hideChartTip;
+      w.append(col);
+    });
+    // x ticks: one per bar slot, labelled every Nth bar so ~8 dates show, aligned
+    // under their columns
+    const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const fmtD=iso=>{const [,m,d]=iso.split("-");return parseInt(d,10)+" "+MON[parseInt(m,10)-1];};
+    const step=Math.max(1,Math.ceil(view.length/8));
+    const ticks=el("div",{class:"tlticks"});
+    view.forEach((r,i)=>{
+      const isLast=i===view.length-1;
+      const show=i%step===0||(isLast&&(view.length-1)%step>=step/2);
+      ticks.append(el("span",{class:"tltick"},show?fmtD(r.date):""));
+    });
+    host.append(el("div",{style:"display:flex;gap:12px;justify-content:flex-end;margin:-6px 0 4px;font-size:11px;color:var(--mut)"},
+      el("span",{style:"display:inline-flex;align-items:center"},el("span",{class:"sw",style:"background:var(--accent);width:8px;height:8px"}),"survey"),
+      el("span",{style:"display:inline-flex;align-items:center"},el("span",{class:"sw",style:"background:var(--track);border:1px solid var(--line);width:8px;height:8px"}),"anonymous")),
+      el("div",{class:"tlwrap"},
+        el("div",{class:"tlaxis"},el("span",{},String(nm)),el("span",{},String(Math.round(nm/2))),el("span",{},"0")),
+        el("div",{style:"flex:1;min-width:0"},
+          el("div",{class:"tlplot"},
+            el("div",{class:"tlgrid"},el("span"),el("span"),el("span")),
+            w),
+          ticks)));
+  };
+  [["all","All"],["30","Month"],["7","Week"]].forEach(([k,label])=>
+    seg.append(el("button",{class:k===_tlRange?"on":"","data-k":k,onclick:()=>{_tlRange=k;
+      seg.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.k===k));draw();}},label)));
+  card.append(el("div",{class:"row",style:"justify-content:space-between;align-items:center"},title,seg),host);
+  draw();
+  return card;
 }
 
 /* ===== COHORT STATISTICS: demographic slices double as filters ===== */
@@ -903,10 +1132,17 @@ function cohortStatRow(st){
     cell(`${st.positive} / ${st.negative}`,"positive / negative","engagement outcomes",split));
 }
 async function drawCohortStats(box){
-  const qs=Object.entries(_coFilter).map(([k,v])=>k+"="+encodeURIComponent(v.join(","))).join("&");
+  const qsParts=Object.entries(_coFilter).map(([k,v])=>k+"="+encodeURIComponent(v.join(",")));
+  const fbq=Object.entries(_fbFilter).map(([q,r])=>`${q}:${r[0]}-${r[1]}`).join(",");
+  if(fbq)qsParts.push("feedback="+encodeURIComponent(fbq));
+  const qs=qsParts.join("&");
   const st=await api("/api/cohort/stats"+(qs?"?"+qs:""));
   box.innerHTML="";
-  if(!st||!st.total_visitors)return;
+  if(!st||!st.total_visitors){
+    box.append(el("div",{class:"empty"},"No visitor models in memory. ",
+      el("button",{class:"userchip",style:"margin-left:8px",onclick:e=>replayEvents(e.target)},"rebuild from event log")));
+    return;
+  }
   const refresh=()=>{drawCohortStats(box).catch(e=>{box.innerHTML="";failCard(box,e);});filterUsers();};
   const setF=(f,val)=>{                        // toggle val within the field's selection
     const cur=_coFilter[f]||[];
@@ -923,18 +1159,24 @@ async function drawCohortStats(box){
   // filter never pushes the layout below it down
   const head=el("div",{class:"row",style:"gap:9px;flex-wrap:wrap;align-items:center;min-height:30px;margin:0 0 8px"});
   const fl=Object.entries(_coFilter);
-  if(fl.length){
+  const fbl=Object.entries(_fbFilter);
+  if(fl.length||fbl.length){
     fl.forEach(([f,vals])=>vals.forEach(val=>head.append(el("button",{class:"filterchip",title:"remove this filter",onclick:()=>setF(f,val)},
       `${DEMO_LABEL[f]||f}: ${lab(f,val)}`,el("span",{class:"x"},"✕")))));
-    head.append(el("button",{class:"morebtn",style:"margin:0",onclick:()=>{_coFilter={};refresh();}},"clear all"));
+    fbl.forEach(([q,rng])=>head.append(el("button",{class:"filterchip",title:"remove this filter",
+      onclick:()=>{delete _fbFilter[q];refresh();}},
+      `${cap1(q.replace(/_/g," "))}: ${rng[0]===rng[1]?rng[0]:rng[0]+"–"+rng[1]}/5`,el("span",{class:"x"},"✕"))));
+    head.append(el("button",{class:"morebtn",style:"margin:0",onclick:()=>{_coFilter={};_fbFilter={};refresh();}},"clear all"));
     head.append(el("span",{class:"small mut"},`${st.visitors} of ${st.total_visitors} visitors`));
   }
   box.append(head);
 
   // activity: one flat card with stat cells, not a row of boxed tiles
-  const statsCard=el("div",{class:"card",style:"margin:0 0 26px;padding-top:18px;padding-bottom:18px"});
+  const statsCard=el("div",{class:"card",style:"margin:0 0 20px;padding-top:18px;padding-bottom:18px"});
   statsCard.append(cohortStatRow(st));
   box.append(statsCard);
+  const tlSlot=el("div");box.append(tlSlot);
+  timelineCard().then(cd=>tlSlot.append(cd));   // unaffected by filters; data cached client-side
 
   // ordinal field (age) -> columns on tracks
   const colChart=(field,entries)=>{
@@ -1049,9 +1291,78 @@ async function drawCohortStats(box){
     statsCard.append(el("div",{style:"border-top:1px solid var(--line);margin:18px 0 14px"}),fg);
   }
 
+  // post-visit feedback: lives INSIDE the statistics card, below demographics.
+  // Two-ended range selection per question: first click anchors [s,s], a click
+  // outside the range extends it, a click inside clears it.
+  const setFbRange=(q,sc)=>{
+    const cur=_fbFilter[q];
+    if(!cur)_fbFilter[q]=[sc,sc];
+    else if(sc<cur[0])_fbFilter[q]=[sc,cur[1]];
+    else if(sc>cur[1])_fbFilter[q]=[cur[0],sc];
+    else delete _fbFilter[q];
+    refresh();
+  };
+  const fbInner=el("div");
+  api("/api/cohort/feedback"+(qs?"?"+qs:"")).then(rows=>{
+    if(!(rows||[]).length)return;
+    fbInner.append(el("div",{style:"border-top:1px solid var(--line);margin:18px 0 12px"}),
+      el("div",{class:"eyebrow",style:"display:block;margin:0 0 4px"},"Post-visit feedback"));
+    const fgrid=el("div",{style:"max-width:560px"});
+    fgrid.append(el("div",{class:"distrow",style:"grid-template-columns:minmax(95px,155px) 260px;margin:0 0 2px"},
+      el("span"),
+      el("div",{style:"display:flex;justify-content:space-between"},
+        el("span",{class:"fbanchor"},"disagree"),el("span",{class:"fbanchor"},"agree"))));
+    for(const r of rows){
+      const scale=r.scale||5;
+      const pct=v=>((v-1)/(scale-1))*100;
+      // variance band: middle half of answers (p25..p75) shaded behind the track
+      const tot=Object.values(r.dist||{}).reduce((a,b)=>a+b,0)||1;
+      const pctile=q=>{let cum=0;
+        for(let sc=1;sc<=scale;sc++){cum+=(r.dist||{})[String(sc)]||0;
+          if(cum>=q*tot)return sc;}
+        return scale;};
+      const p25=pctile(.25),p75=pctile(.75);
+      const fill=el("span",{class:"fill"});
+      const hA=el("span",{class:"h"}),hB=el("span",{class:"h"});
+      const dr=el("div",{class:"dr"+(_fbFilter[r.question]?"":" idle"),
+        "data-tip":`mean ${r.avg} · shaded band = middle half of answers · click a score or drag a range`},
+        el("span",{class:"track"}),
+        el("span",{class:"band",style:`left:${pct(p25)}%;width:${Math.max(2,pct(p75)-pct(p25))}%`}),
+        fill,
+        el("span",{class:"mean",style:`left:${pct(Math.min(scale,Math.max(1,r.avg)))}%`}),
+        hA,hB);
+      const paintSel=(a,b)=>{
+        fill.style.left=pct(a)+"%";fill.style.width=(pct(b)-pct(a))+"%";
+        hA.style.left=pct(a)+"%";hB.style.left=pct(b)+"%";
+      };
+      const cur0=_fbFilter[r.question];
+      if(cur0)paintSel(cur0[0],cur0[1]);
+      const scoreAt=ev=>{const rect=dr.getBoundingClientRect();
+        const t=Math.min(1,Math.max(0,(ev.clientX-rect.left)/rect.width));
+        return 1+Math.round(t*(scale-1));};
+      let anchor=null,curSc=null,dragging=false;
+      dr.onpointerdown=ev=>{dragging=true;dr.setPointerCapture(ev.pointerId);
+        dr.classList.remove("idle");anchor=scoreAt(ev);curSc=anchor;
+        paintSel(anchor,anchor);};
+      dr.onpointermove=ev=>{if(!dragging)return;curSc=scoreAt(ev);
+        paintSel(Math.min(anchor,curSc),Math.max(anchor,curSc));};
+      dr.onpointerup=()=>{if(!dragging)return;dragging=false;
+        const a=Math.min(anchor,curSc),b=Math.max(anchor,curSc);
+        const prev=_fbFilter[r.question];
+        if(prev&&prev[0]===a&&prev[1]===b)delete _fbFilter[r.question];  // same again = clear
+        else _fbFilter[r.question]=[a,b];
+        refresh();};
+      fgrid.append(el("div",{class:"distrow",style:"grid-template-columns:minmax(95px,155px) 260px;margin:7px 0"},
+        el("div",{class:"small",style:_fbFilter[r.question]?"font-weight:600":""},cap1(r.question.replace(/_/g," "))),
+        dr));
+    }
+    fbInner.append(fgrid);
+    statsCard.append(fbInner);
+  }).catch(()=>{});
+
   // filters active -> show WHO matches right here (the table lives in the other
   // subtab); scrollable so any cohort size fits
-  if(fl.length){
+  if(fl.length||Object.keys(_fbFilter).length){
     const rows=[...document.querySelectorAll("#utbl .urow")].filter(tr=>tr.style.display!=="none");
     const mc=el("div",{class:"card"},cardhead(`Matching visitors (${rows.length})`));
     if(rows.length){
@@ -1068,7 +1379,7 @@ async function drawCohortStats(box){
 async function renderCohort(v){
   // both slow endpoints start immediately and run in parallel; each section fills in on its own
   const clustersP=api("/api/clusters").catch(()=>null);
-  const statsP=api("/api/users").catch(()=>[]);      // parquet scan + event sweep server-side
+  const statsP=api("/api/users?limit=5000").catch(()=>[]);      // parquet scan + event sweep server-side
 
   const statsSlot=el("div"),usersSlot=el("div"),segSlot=el("div"),snapSlot=el("div");
   // subtabs: Visitors = table, Statistics = cohort statistics, Snapshot = full-log
@@ -1124,14 +1435,17 @@ async function renderCohort(v){
       el("div",{class:"searchwrap",style:"flex:1;min-width:280px;margin:0"},icon,search),
       segBar));
     const tbl=el("table",{id:"utbl"});
+    const vlabel=el("span",{},"visitor (",el("span",{id:"ucount"},String(rowIds.length)),")");
     const hrow=makeSortable(tbl,
-      [[`visitor (${rowIds.length})`,"visitor"],["segment","segment"],["views","views","num"],["events","events","num"],["positive","positive","num"],["last seen","last"]],
+      [[vlabel,"visitor",null,"sort by visitor"],["segment","segment"],["views","views","num"],["events","events","num"],["positive","positive","num"],["last seen","last"]],
       {rowClass:"urow",numeric:["views","events","positive"]});
     tbl.append(hrow);
     for(const u of rowIds){const p=u2c[u], s=ustat[u]||{};
       const dmo=s.demographics||{};
       const attrs={class:"urow","data-id":String(u).toLowerCase(),"data-uid":String(u),"data-anon":s.anonymous?"1":"0"};
-      ["age","gender","nationality","province"].forEach(f=>attrs["data-f-"+f]=dmo[f]!=null?String(dmo[f]):"");
+      Object.entries(s.feedback||{}).forEach(([q,sc])=>attrs["data-fb-"+q]=String(sc));
+      ["age","gender","nationality","province","personal_connection","email_shared"]
+        .forEach(f=>attrs["data-f-"+f]=dmo[f]!=null?String(dmo[f]):"");
       attrs["data-s-visitor"]=String(u).toLowerCase();
       attrs["data-s-segment"]=p?"cluster "+p.cluster:"";
       attrs["data-s-views"]=s.n_views!=null?s.n_views:0;
@@ -1229,8 +1543,12 @@ function filterUsers(){const s=$("#usearch");const q=(s&&s.value||"").toLowerCas
     if(hit&&_anonFilter==="anon"&&tr.getAttribute("data-anon")!=="1")hit=false;
     if(hit)for(const [f,vals] of Object.entries(_coFilter)){
       if(!vals.includes(tr.getAttribute("data-f-"+f)||"")){hit=false;break;}}
+    if(hit)for(const [q,rng] of Object.entries(_fbFilter)){
+      const sc=parseInt(tr.getAttribute("data-fb-"+q)||"",10);
+      if(isNaN(sc)||sc<rng[0]||sc>rng[1]){hit=false;break;}}
     tr.style.display=hit?"":"none";if(hit)shown++;
   }
+  const uc=$("#ucount");if(uc)uc.textContent=String(shown);   // live count in the column header
   const none=$("#unone");if(none)none.style.display=shown?"none":"";}
 // Live policy state (mode, training health, prior-vs-learned weights).
 // Shown inside Config -> Ranking policy, right where the scorer params are edited.
@@ -1485,13 +1803,25 @@ async function renderContent(v){
 
 /* ===== WITHIN USER ===== */
 async function renderRequest(v){
-  v.append(el("div",{class:"card"},el("div",{class:"row"},
-    el("span",{class:"small mut"},"explaining ranking for"),el("b",{},$("#uid").value||"-"),
-    el("span",{class:"vsep",style:"width:1px;height:22px;background:var(--line)"}),
-    el("input",{id:"f_filter",class:"f",size:"15",placeholder:"filter tag (optional)"}),
-    el("input",{id:"f_lat",class:"f",size:"6",placeholder:"lat"}),el("input",{id:"f_lon",class:"f",size:"6",placeholder:"lon"}),
-    el("button",{class:"primary",onclick:runRecommend},"Recommend"))));
-  v.append(el("div",{id:"recout"},el("div",{class:"empty"},"Click Recommend to explain a ranking for this user.")));
+  // what this visitor was ACTUALLY served (from the durable log)
+  const servedSlot=el("div");v.append(servedSlot);
+  lazyFill(servedSlot,"loading served recommendations…",async box=>{
+    let rows;try{rows=await api(`/api/served/recent?n=50&user_id=${encodeURIComponent($("#uid").value)}`);}
+    catch(e){return;}
+    if(!(rows||[]).length){box.append(el("div",{class:"small mut",style:"margin-top:4px"},"No recommendations served to this visitor yet."));return;}
+    const tbl=el("table");
+    tbl.append(el("tr",{},el("th",{},"served"),el("th",{},"strategy"),el("th",{},"ranking"),el("th",{},"items"),el("th",{},"distractor")));
+    for(const r of rows){
+      tbl.append(el("tr",{style:"cursor:pointer",title:"explain this recommendation",onclick:()=>openRec(r.request_id)},
+        el("td",{class:"small mut num"},(r.ts||"").replace("T"," ").slice(0,19)),
+        el("td",{},el("span",{class:"pill "+(r.strategy||"warm")},r.strategy||"")),
+        el("td",{class:"small mut"},r.ranking||""),
+        el("td",{class:"num"},(r.items||[]).length),
+        el("td",{class:"small mut"},r.distractor_id||"")));
+    }
+    box.append(el("div",{class:"card"},cardhead(`Served recommendations (${rows.length})`),tbl,
+      el("div",{class:"small mut",style:"margin-top:8px"},"click a row to see why those items were chosen")));
+  });
 }
 async function runRecommend(){
   const out=$("#recout");out.innerHTML="";
@@ -1554,9 +1884,17 @@ async function renderUser(v){
   //            survey completion shown as pills in the header. =====
   const KEYLABEL={personal_connection:"WW2 connection"};
   const kvList=(obj,capVal,stripQ)=>{const dl=el("dl",{class:"kv"});
+    const n=Object.keys(obj||{}).length;
+    if(n>3)dl.style.gridTemplateColumns="max-content 1fr max-content 1fr";  // full-width card: 2 pairs per row
+    const rating=a=>el("span",{style:"display:inline-flex;align-items:center;gap:9px"},
+      el("span",{class:"barwrap",style:"width:74px;min-width:74px;height:8px"},
+        el("span",{class:"seg",style:`width:${Math.round(100*a.score/(a.scale||5))}%;background:var(--accent)`})),
+      el("span",{class:"small num"},`${a.score}/${a.scale||5}`),
+      el("span",{class:"small mut"},a.label||""));
     Object.entries(obj||{}).forEach(([k,a])=>dl.append(
       el("dt",{title:k},cap1((stripQ?k.replace(/^(q:)?(personalization_)?/,""):KEYLABEL[k]||k).replace(/_/g," "))),
-      el("dd",{},Array.isArray(a)?a.join(", "):(capVal?humanVal(k,a):String(a)))));
+      el("dd",{},(a&&typeof a==="object"&&!Array.isArray(a)&&a.score!=null)?rating(a)
+        :Array.isArray(a)?a.join(", "):(capVal?humanVal(k,a):String(a)))));
     return dl;};
   const spill=(label,done)=>el("span",{class:"statusbadge "+(done?"done":"pending"),title:done?"survey completed":"survey not completed"},
     el("span",{class:"dot"}),label+(done?" ✓":""));
@@ -1570,15 +1908,25 @@ async function renderUser(v){
   const demoPairs=Object.entries(demo).filter(([,x])=>x!=null&&x!=="");
   pc.append(el("div",{class:"eyebrow",style:"display:block;margin-bottom:6px"},"Demographics"));
   pc.append(demoPairs.length?kvList(Object.fromEntries(demoPairs),true,false):el("div",{class:"small mut"},"no answers recorded"));
-  // personalization (below demographics, same card)
-  pc.append(el("div",{class:"eyebrow",style:"display:block;margin:15px 0 6px"},"Personalization"));
-  pc.append((surv.personalization&&Object.keys(surv.personalization).length)?kvList(surv.personalization,true,true):el("div",{class:"small mut"},"no answers recorded"));
-  // other free-text answers (visitor_type, motivation, …) — left verbatim
-  if(surv.other&&Object.keys(surv.other).length){
-    pc.append(el("div",{class:"eyebrow",style:"display:block;margin:15px 0 6px"},"Other answers"));
-    pc.append(kvList(surv.other,false,true));
+  // personalization (below demographics, same card) — hidden entirely when empty
+  if(surv.personalization&&Object.keys(surv.personalization).length){
+    pc.append(el("div",{class:"eyebrow",style:"display:block;margin:15px 0 6px"},"Personalization"));
+    pc.append(kvList(surv.personalization,true,true));
   }
-  left.append(pc);
+  // background + post-visit feedback: collapsible so the card stays short
+  const foldSection=(label,obj)=>{
+    if(!obj||!Object.keys(obj).length)return;
+    const n=Object.keys(obj).length;
+    const det=el("details",{class:"members",style:"margin-top:13px"});
+    det.append(el("summary",{},`${label} (${n})`));
+    const inner=el("div",{style:"margin-top:8px"});inner.append(kvList(obj,false,true));
+    det.append(inner);pc.append(det);
+  };
+  foldSection("Visit background",surv.background||null);
+  foldSection("Post-visit feedback",surv.feedback||null);
+  if(!surv.background&&!surv.feedback&&surv.other&&Object.keys(surv.other).length)
+    foldSection("Other answers",surv.other);   // old server fallback
+  v.append(pc);   // profile spans the full width; model/behaviour grid follows below
 
   // ----- RIGHT: dynamic user model -----
   const dm=el("div",{class:"card"},cardhead("Dynamic user model"));
@@ -1596,25 +1944,9 @@ async function renderUser(v){
   // ----- RIGHT: trajectory -----
   if(exp.trajectory&&exp.trajectory.length)right.append(el("div",{class:"card"},cardhead("Trajectory"),
     el("div",{class:"small"},exp.trajectory.join("   →   "))));
-  // ----- RIGHT: evidence interests / aversions -----
-  if(exp.interests&&exp.interests.length)right.append(el("div",{class:"card"},cardhead("Interests (with evidence)"),
-    valueBars(exp.interests.map(i=>[i.label+(i.evidence&&i.evidence.length?`  ·  ${i.evidence.length} item(s)`:""),i.weight]))));
-  if(exp.aversions&&exp.aversions.length)right.append(el("div",{class:"card"},cardhead("Aversions"),
-    valueBars(exp.aversions.map(i=>[i.label,i.weight]),{signed:true})));
-  // ----- RIGHT: content engaged positively, with its tags -----
-  if(model.liked_content&&model.liked_content.length){
-    const lc=el("div",{class:"card"},cardhead("Engaged positively with"),
-      el("div",{class:"small mut",style:"margin-bottom:8px"},"content the visitor engaged with and the tags it carries: the basis for the inferred interests"));
-    for(const it of model.liked_content){
-      lc.append(el("div",{style:"padding:8px 0;border-top:1px solid var(--line)"},
-        el("div",{class:"row",style:"gap:8px;justify-content:space-between"},el("b",{class:"small"},it.title||it.id),el("span",{class:"small num mut"},"weight "+fmt(it.weight))),
-        el("div",{class:"row",style:"gap:5px;flex-wrap:wrap;margin-top:6px"},
-          ...((it.tags||[]).length?it.tags.map(t=>el("span",{class:"pill neutral",style:"font-size:11px"},t)):[el("span",{class:"small mut"},"no tags")]))));
-    }
-    right.append(lc);
-  }
 
-  v.append(el("div",{class:"pgrid"},left,right));
+  // profile card already spans full width above; model/evidence cards follow full-width
+  v.append(right);
 }
 
 async function renderHistory(v){
@@ -1623,25 +1955,117 @@ async function renderHistory(v){
   const dwell=d=>d!=null?Math.round(d)+"s":"";
   const dur=s=>{if(s==null)return "";s=Math.round(s);return s>=3600?`${Math.floor(s/3600)}h ${Math.floor(s%3600/60)}m`:s>=60?`${Math.floor(s/60)}m ${s%60}s`:s+"s"};
 
-  // ----- sessions: duration, content viewed, survey timings -----
-  if((h.sessions||[]).length){
-    const st=el("table");
-    st.append(el("tr",{},el("th",{},"session"),el("th",{},"start"),el("th",{},"duration"),
-      el("th",{},"views"),el("th",{},"events"),el("th",{},"surveys")));
-    for(const s of h.sessions){
-      const sv=(s.surveys||[]).map(x=>el("span",{class:"pill "+(x.ended==="SURVEY_SUBMITTED"?"warm":"neutral"),
-        style:"margin:1px","data-tip":`${x.ended==="SURVEY_SUBMITTED"?"submitted":"dismissed"} after ${dur(x.duration_seconds)}`},
-        (x.survey?x.survey+" · ":"")+dur(x.duration_seconds)));
-      st.append(el("tr",{},
-        el("td",{class:"small num"},s.session_id||el("span",{class:"mut"},"(no session)")),
-        el("td",{class:"small mut num"},(s.start||"").replace("T"," ").slice(0,19)),
-        el("td",{class:"num"},dur(s.duration_seconds)),
-        el("td",{class:"num"},s.n_views||el("span",{class:"mut"},"0")),
-        el("td",{class:"num mut"},s.n_events),
-        el("td",{},sv.length?sv:el("span",{class:"small mut"},"0"))));
+
+
+  // ----- session blocks widget: sessions as blocks, click to expand a scrollable
+  //       lane of what happened inside (panels / collections / content / surveys) -----
+  (()=>{
+    const evsAsc=[...h.events].reverse();          // server sends newest-first
+    const T={PANEL:"var(--c-recency)",COLLECTION:"var(--c-geo)",CONTENT:"var(--c-affinity)",SURVEY:"var(--c-tag)",POI:"var(--c-semantic)"};
+    const spans=[];const open={};
+    for(const e of evsAsc){
+      const ev=e.event||"";
+      const kind=ev.startsWith("PANEL_VIEW")?"PANEL":ev.startsWith("COLLECTION_VIEW")?"COLLECTION"
+                :ev.startsWith("CONTENT_VIEW")?"CONTENT":ev.startsWith("SURVEY")?"SURVEY":null;
+      if(!kind)continue;
+      const prettyLoc=t=>String(t).replace(/^(poi:)?AiARLocation/,"").replace(/(?<=[a-z])(?=[A-Z0-9])/g," ");
+      const label=kind==="CONTENT"?(e.title||e.content_id||"content")
+                 :kind==="PANEL"?((e.meta&&(e.meta.panel_name||e.meta.panel_id))||"panel")
+                 :kind==="COLLECTION"?prettyLoc((e.meta&&(e.meta.collection_name||e.meta.collection_id))||"collection")
+                 :((e.meta&&(e.meta.survey_id||e.meta.survey))||"survey");
+      const key=kind+"|"+label;
+      if(ev.endsWith("_STARTED")||ev==="SURVEY_PRESENTED"){open[key]={kind,label,start:e.ts,e};}
+      else if(ev.endsWith("_ENDED")||ev==="SURVEY_SUBMITTED"||ev==="SURVEY_DISMISSED"){
+        const o=open[key]||{kind,label,start:null,e};delete open[key];
+        const dur=(o.start&&e.ts)?(new Date(e.ts)-new Date(o.start))/1000:null;
+        const outcome=(e.meta&&e.meta.reason)||e.end_reason
+          ||(ev==="SURVEY_SUBMITTED"?"submitted":ev==="SURVEY_DISMISSED"?"dismissed":null);
+        spans.push({...o,end:e.ts,dur,ended:ev,outcome,content_id:e.content_id||o.e.content_id});
+      }
     }
-    v.append(el("div",{class:"card"},cardhead("Sessions"),st));
-  }
+    // map picks (which POI was selected) attach to the panel/span they happened
+    // in; only orphan picks become their own blocks
+    const picks=evsAsc.filter(e=>e.meta&&e.meta.clicked_label)
+      .map(e=>({ts:e.ts,label:e.meta.clicked_label}));
+    const claimed=new Set();
+    for(const sp of spans){
+      if(!sp.start)continue;
+      const endPlus=sp.end?new Date(new Date(sp.end).getTime()+5000).toISOString():null;
+      const hitIx=picks.findIndex((pk,ix)=>!claimed.has(ix)&&pk.ts>=sp.start&&(!endPlus||pk.ts<=endPlus));
+      if(hitIx>=0){sp.pick=picks[hitIx].label;claimed.add(hitIx);}
+    }
+    picks.forEach((pk,ix)=>{if(!claimed.has(ix))
+      spans.push({kind:"POI",label:pk.label,start:pk.ts,end:pk.ts,dur:null});});
+    spans.sort((a,b)=>String(a.start||"").localeCompare(String(b.start||"")));
+    Object.values(open).forEach(o=>spans.push({...o,end:null,dur:null,ended:null,content_id:o.e.content_id}));
+    const dur2=s2=>{if(s2==null)return "";s2=Math.round(s2);
+      if(s2>=3600)return `${Math.floor(s2/3600)}h ${Math.floor(s2%3600/60)}m`;
+      return s2>=60?`${Math.floor(s2/60)}m ${s2%60}s`:s2+"s"};
+    const wrap=el("div");
+    const lane=el("div",{class:"sesslane"});
+    (h.sessions||[]).slice().reverse().forEach((sess,ix)=>{
+      const inSess=sp=>sp.start&&sess.start&&sess.end&&sp.start>=sess.start&&sp.start<=sess.end;
+      const mine=spans.filter(inSess);
+      const svPills=(sess.surveys||[]).map(x=>el("span",{class:"pill "+(x.ended==="SURVEY_SUBMITTED"?"warm":"neutral"),
+        style:"font-size:10.5px"},(x.survey?x.survey+" ":"survey ")+dur2(x.duration_seconds)));
+      const blk=el("button",{class:"sessblk"},
+        el("div",{class:"t"},cap1(sess.session_id||("session "+(ix+1)))),
+        el("div",{class:"small mut num"},(sess.start||"").replace("T"," ").slice(5,16)),
+        el("div",{class:"small mut"},`${dur2(sess.duration_seconds)} · ${sess.n_views} views · ${sess.n_events} events`),
+        svPills.length?el("div",{class:"row",style:"gap:4px;flex-wrap:wrap;margin-top:5px"},svPills):"");
+      const detail=el("div",{class:"sessdetail",style:"display:none"});
+      const inner=el("div",{class:"spanlane"});
+      const subWrap=el("div");                       // third level: a collection's content
+      const colls=mine.filter(sp=>sp.kind==="COLLECTION");
+      const inColl=(sp,cl)=>sp.start&&cl.start&&sp.start>=cl.start&&(!cl.end||sp.start<=cl.end);
+      const mkBlk=sp=>{
+        const tip=`${sp.kind.toLowerCase()} · ${(sp.start||"").replace("T"," ").slice(11,19)}`
+          +(sp.dur!=null?" · "+dur2(sp.dur):"")
+          +(sp.outcome?" · "+String(sp.outcome).replace(/_/g," "):"");
+        const b=el("div",{class:"spanblk",style:`--sb:${T[sp.kind]}`,"data-tip":tip},
+          el("div",{class:"k",style:`color:${T[sp.kind]}`},sp.kind==="POI"?"poi selected":sp.kind.toLowerCase()),
+          el("div",{class:"l"},sp.label),
+          el("div",{class:"small mut num"},sp.dur!=null?dur2(sp.dur):""),
+          sp.pick?el("div",{class:"pick"},sp.pick):"");
+        if(sp.kind==="CONTENT"&&sp.content_id){b.style.cursor="pointer";
+          b.onclick=()=>openContentDetail(sp.content_id);b.title="open content card";}
+        return b;
+      };
+      if(!mine.length)inner.append(el("span",{class:"small mut",style:"padding:8px"},"no panel / content activity recorded"));
+      mine.forEach(sp=>{
+        // content nests under the collection it was opened from — only orphans stay here
+        if(sp.kind==="CONTENT"&&colls.some(cl=>inColl(sp,cl)))return;
+        const b=mkBlk(sp);
+        if(sp.kind==="COLLECTION"){
+          const kids=mine.filter(sp2=>sp2.kind==="CONTENT"&&inColl(sp2,sp));
+          if(kids.length){
+            b.append(el("span",{class:"pill neutral",style:"font-size:10.5px;margin-top:4px;display:inline-block"},`${kids.length} stor${kids.length===1?"y":"ies"}`));
+            b.style.cursor="pointer";
+            const innerLane=el("div",{class:"spanlane",style:"padding-bottom:4px"});
+            kids.forEach(k2=>innerLane.append(mkBlk(k2)));
+            const sub=el("div",{class:"subpanel",style:"display:none"},
+              el("div",{class:"subhead"},"inside ",sp.label),innerLane);
+            subWrap.append(sub);
+            b.onclick=()=>{const openNow=sub.style.display==="none";
+              subWrap.querySelectorAll(":scope > .subpanel").forEach(d3=>d3.style.display="none");
+              inner.querySelectorAll(".spanblk").forEach(x=>x.classList.remove("on"));
+              sub.style.display=openNow?"":"none";b.classList.toggle("on",openNow);};
+          }
+        }
+        inner.append(b);
+      });
+      detail.append(inner,subWrap);
+      blk.onclick=()=>{const openNow=detail.style.display==="none";
+        wrap.querySelectorAll(".sessdetail").forEach(d2=>d2.style.display="none");
+        wrap.querySelectorAll(".sessblk").forEach(b2=>b2.classList.remove("on"));
+        detail.style.display=openNow?"":"none";blk.classList.toggle("on",openNow);};
+      const cell=el("div",{style:"display:flex;flex-direction:column"},blk);
+      lane.append(cell);
+      wrap.append(detail);
+    });
+    const card=el("div",{class:"card"},cardhead("Sessions"),lane,wrap);
+    v.append(card);
+  })();
 
   const at=el("table");
   at.append(el("tr",{},el("th",{},"content"),el("th",{},"visits"),el("th",{},"dwell"),el("th",{},"end reason"),el("th",{},"outcome")));
@@ -1685,7 +2109,10 @@ async function renderHistory(v){
         detail.style.display=open?"":"none";caret.style.transform=open?"rotate(90deg)":"";};
     }
   }
-  v.append(el("div",{class:"card"},cardhead(`Event timeline (${h.event_count})`),et));
+  const rawDet=el("details",{style:"margin:2px 0 20px"},
+    el("summary",{class:"rawlink"},`Raw event timeline (${h.event_count})`));
+  const rawBox=el("div",{class:"card",style:"margin-top:10px"});rawBox.append(et);rawDet.append(rawBox);
+  v.append(rawDet);
 }
 
 const PERSONAS={
@@ -1766,7 +2193,7 @@ async function renderPersonas(v){
 }
 
 /* ===== EVALUATION: synthetic visitors -> recommendation behaviour ===== */
-let _evalSpec=null, _evalPersona=null;
+let _evalSpec=null, _evalPersona=null, _evalUser=null;
 async function postJSON(path,body){
   const r=await fetch(base()+path,{method:"POST",headers:{...headers(),"Content-Type":"application/json"},body:JSON.stringify(body)});
   if(!r.ok)throw new Error(r.status+" "+r.statusText+", "+path);
@@ -1776,15 +2203,18 @@ const _COMPLETION={full:"both surveys",personalization:"personalization only",de
 function modelCard(persona){
   const spec=persona.spec||persona, aff=Object.entries(spec.tag_affinity||{}).sort((a,b)=>b[1]-a[1]);
   const demo=Object.entries(spec.demographics||{});
-  const head=el("div",{class:"row",style:"margin-bottom:8px;align-items:center"},
-    el("b",{},persona.name||"Synthetic user"),
-    persona.type?el("span",{class:"pill neutral"},persona.type):"",
+  const pdemo=([k,val])=>{
+    const key=k.replace(/^q:/,"").replace(/^personalization_/,"");
+    const v=Array.isArray(val)?val.join(", "):humanVal(key.replace("age_group","age"),val);
+    return el("span",{class:"pill neutral",style:"font-size:11px"},cap1(key.replace(/_/g," "))+": "+v);
+  };
+  const head=el("div",{class:"row",style:"margin-bottom:9px;align-items:center;flex-wrap:wrap"},
+    el("b",{style:"font-family:Montserrat,sans-serif;font-size:13.5px"},persona.name||"Synthetic user"),
     persona.completion?el("span",{class:"pill "+(persona.completion==="none"?"cold":"bandit")},_COMPLETION[persona.completion]||persona.completion):"");
-  return el("div",{class:"card",id:"ev_modelcard"},head,
-    persona.description?el("div",{class:"small mut",style:"margin:-2px 0 8px"},persona.description):"",
-    demo.length?el("div",{class:"row",style:"margin-bottom:8px;flex-wrap:wrap;gap:5px"},demo.map(([k,val])=>el("span",{class:"pill neutral"},k.replace(/^q:/,"")+": "+(Array.isArray(val)?val.join(", "):val)))):"",
-    aff.length?valueBars(aff.map(([k,w])=>[k.split(":").slice(1).join(":")||k,w]),{max:1})
-              :el("div",{class:"small mut"},"No interest tags: persona relies on the cold/diverse fallback."));
+  return el("div",{id:"ev_modelcard",style:"border-top:1px solid var(--line);margin-top:14px;padding-top:13px"},head,
+    demo.length?el("div",{class:"row",style:"margin-bottom:10px;flex-wrap:wrap;gap:4px"},demo.map(pdemo)):"",
+    aff.length?tagList(aff,{top:8})
+              :el("div",{class:"small mut"},"no interest tags: cold-start fallback"));
 }
 // one quiet line of metrics instead of a wall of metric cards
 function metricsLine(m){
@@ -1906,9 +2336,10 @@ async function openContentDetail(cid){
 function closeItemDetail(){const o=$("#itemOverlay");if(o)o.remove();}
 async function runEval(){
   const out=$("#ev_results");if(!out)return;
-  if(!_evalSpec){out.innerHTML="";out.append(el("div",{class:"empty"},"Pick or build a synthetic visitor above."));return;}
+  if(!_evalSpec&&!_evalUser){out.innerHTML="";out.append(el("div",{class:"empty"},"Pick or build a synthetic visitor above."));return;}
   out.innerHTML="";out.append(el("div",{class:"small mut"},"running…"));
-  const body={spec:_evalSpec,cold:$("#ev_cold").checked,scenarios:[{name:"open"}]};
+  const body={cold:!!($("#ev_cold")&&$("#ev_cold").checked),scenarios:[{name:"open"}]};
+  if(_evalUser)body.user_id=_evalUser;else body.spec=_evalSpec;
   const ft=$("#ev_filter").value.trim();
   if(ft)body.scenarios.push({name:"filter: "+ft,filter:ft});
   try{
@@ -1918,7 +2349,7 @@ async function runEval(){
   }catch(e){out.innerHTML="";out.append(el("div",{class:"card err"},String(e)));}
 }
 function setPersona(persona){
-  _evalPersona=persona;_evalSpec=persona.spec;
+  _evalPersona=persona;_evalSpec=persona.spec;_evalUser=null;
   const host=$("#ev_model");if(host){host.innerHTML="";host.append(modelCard(persona));}
 }
 async function buildFromPrompt(){
@@ -1937,28 +2368,39 @@ async function renderEval(v){
   const left=el("div"),right=el("div");
 
   const sel=el("select",{id:"ev_personasel",class:"f",style:"width:100%",onchange:e=>{
-    if(e.target.value==="__prompt__")return;
-    setPersona(personas[+e.target.value]);
+    const val=e.target.value;
+    userRow.style.display=val==="__user__"?"":"none";
+    if(val==="__prompt__"||val==="__user__")return;
+    _evalUser=null;setPersona(personas[+val]);
   }});
+  const userIn=el("input",{class:"f",style:"flex:1;min-width:0",placeholder:"visitor id (e.g. 4S91)",
+    onkeydown:e=>{if(e.key==="Enter")useVisitor();}});
+  const useVisitor=()=>{
+    const id=userIn.value.trim();if(!id)return;
+    _evalUser=id;_evalSpec=null;_evalPersona=null;
+    const host=$("#ev_model");
+    if(host){host.innerHTML="";host.append(el("div",{style:"border-top:1px solid var(--line);margin-top:14px;padding-top:13px"},
+      el("div",{class:"row",style:"align-items:center"},
+        el("b",{style:"font-family:Montserrat,sans-serif;font-size:13.5px"},"Existing visitor"),
+        el("button",{class:"userchip",onclick:()=>openUser(id,"profile")},id)),
+      el("div",{class:"small mut",style:"margin-top:6px"},"runs against this visitor's live model")));}
+  };
+  const userRow=el("div",{class:"row",style:"display:none;gap:8px;margin-top:10px"},
+    userIn,el("button",{class:"userchip",onclick:useVisitor},"Use"));
   personas.forEach((p,i)=>sel.append(el("option",{value:String(i)},p.name+" · "+p.type)));
-  sel.append(el("option",{value:"__prompt__"},"(from prompt)"));
+  sel.append(el("option",{value:"__user__"},"(existing visitor)"));
 
   left.append(el("div",{class:"card"},cardhead("Synthetic visitor"),
-    sel,
-    el("div",{class:"small mut",style:"margin:12px 0 6px"},"…or describe one:"),
-    el("input",{id:"ev_prompt",class:"f",style:"width:100%",placeholder:"e.g. a young student drawn to resistance and Barrack 3",
-      onkeydown:e=>{if(e.key==="Enter")buildFromPrompt();}}),
-    el("button",{class:"userchip",style:"margin-top:8px",onclick:buildFromPrompt},"Build from prompt")));
-  left.append(el("div",{id:"ev_model"}));
-  left.append(el("div",{class:"card"},cardhead("Run recommendations"),
-    el("input",{id:"ev_filter",class:"f",style:"width:100%",placeholder:"filter tag (optional)",
-      onkeydown:e=>{if(e.key==="Enter")runEval();}}),
-    el("label",{class:"small mut",style:"display:flex;gap:7px;align-items:center;margin:10px 0"},
-      el("input",{id:"ev_cold",type:"checkbox"}),"compare against a cold-start baseline"),
-    el("button",{class:"primary",style:"width:100%",onclick:runEval},"Run"),
-    el("div",{class:"small mut",style:"margin-top:9px"},"Same engine path as live serving, no events involved.")));
+    sel,userRow,
+    el("div",{id:"ev_model"})));
 
-  right.append(el("div",{id:"ev_results"},el("div",{class:"empty"},"Pick or describe a visitor on the left, then Run. Results land here — click any item for its full card.")));
+  right.append(el("div",{id:"ev_results"},el("div",{class:"empty"},"Pick a visitor, then Run.")));
+  // run controls: one bar, top right
+  v.append(el("div",{class:"row",style:"justify-content:flex-end;gap:9px;margin:0 0 14px"},
+    el("input",{id:"ev_filter",class:"f",style:"width:230px;height:40px;border-radius:9px",placeholder:"Filter tag (optional)",
+      onkeydown:e=>{if(e.key==="Enter")runEval();}}),
+    el("button",{class:"primary",style:"height:40px;padding:0 20px;display:inline-flex;align-items:center;gap:8px",onclick:runEval},
+      el("span",{style:"line-height:0",html:'<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg>'}),"Run")));
   v.append(el("div",{class:"pgrid"},left,right));
   if(personas.length)setPersona(personas[0]);
 }
@@ -2009,14 +2451,10 @@ async function renderTenants(v){
   let rows;
   try{ rows=await api("/api/tenants"); }
   catch(e){failCard(v,e);return;}
-  v.append(el("div",{class:"card"},cardhead("Add / update tenant"),
-    el("div",{class:"row"},
-      el("input",{id:"t_id",class:"f",size:"16",placeholder:"tenant_id"}),
-      el("input",{id:"t_col",class:"f",size:"16",placeholder:"Qdrant collection"}),
-      el("input",{id:"t_keys",class:"f",size:"22",placeholder:"api keys (space/comma sep, optional)"}),
-      el("label",{class:"small mut",style:"display:flex;gap:5px;align-items:center"},el("input",{id:"t_gen",type:"checkbox"}),"mint a key"),
-      el("button",{class:"primary",onclick:saveTenant},"Save")),
-    ));
+  const ICO_PLUS='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
+  v.append(el("div",{class:"row",style:"justify-content:flex-end;margin:0 0 14px"},
+    el("button",{class:"primary",style:"display:inline-flex;align-items:center;gap:8px",onclick:()=>tenantModal()},
+      el("span",{style:"line-height:0",html:ICO_PLUS}),"Create Tenant")));
   const tbl=el("table");
   tbl.append(el("tr",{},el("th",{},"tenant"),el("th",{},"collection"),el("th",{},"content"),el("th",{},"api keys"),el("th",{},"source"),el("th",{style:"text-align:right"},"actions")));
   for(const t of (rows||[])){
@@ -2031,7 +2469,7 @@ async function renderTenants(v){
                      :"deploy baseline from TENANTS_PATH — read-only"},t.source||"runtime")),
       el("td",{style:"text-align:right"},kebabMenu([
         ["use this tenant",()=>{$("#tenant").value=t.tenant_id;localStorage.setItem("ins_tenant",t.tenant_id);_cohortDom=null;loadWhoami();setTab("Cohort");}],
-        ["edit",()=>{$("#t_id").value=t.tenant_id;$("#t_col").value=t.collection||"";$("#t_keys").value="";$("#t_id").scrollIntoView({block:"center"});}],
+        ["edit",()=>tenantModal(t)],
         ["mint key",()=>mintKey(t.tenant_id,t.collection)],
         n?["clear keys",()=>clearKeys(t.tenant_id,t.collection),true]:null,
         rt?["delete tenant",()=>delTenant(t.tenant_id),true]:null]))));
@@ -2039,15 +2477,37 @@ async function renderTenants(v){
   v.append(el("div",{class:"card"},tbl,
     ));
 }
-async function saveTenant(){
-  const id=$("#t_id").value.trim();
-  if(!id){alert("tenant_id required");return;}
-  const body={tenant_id:id,collection:$("#t_col").value.trim()||null};
-  const keys=splitKeys($("#t_keys").value); if(keys.length)body.api_keys=keys;
-  if($("#t_gen").checked)body.generate_api_key=true;
-  const j=await postTenant(body); if(!j)return;
-  $("#t_id").value="";$("#t_col").value="";$("#t_keys").value="";$("#t_gen").checked=false;
-  paint(); if(j.api_key)mintedToast(id,j.api_key);
+// create/edit tenant modal (t = existing tenant row for edit mode)
+function tenantModal(t){
+  const edit=!!t;
+  const idIn=el("input",{class:"f",style:"width:100%",placeholder:"tenant_id",value:t?t.tenant_id:"",
+    autocomplete:"off",spellcheck:"false"});
+  if(edit)idIn.disabled=true;
+  const colIn=el("input",{class:"f",style:"width:100%",placeholder:"Qdrant collection",value:(t&&t.collection)||"",
+    autocomplete:"off",spellcheck:"false"});
+  const status=el("span",{class:"mstatus",style:"margin-right:auto"});
+  const ov=el("div",{class:"overlay show",onclick:e=>{if(e.target===ov)ov.remove();}});
+  const field=(label,input,hint)=>el("div",{class:"field"},
+    el("label",{},label),input,hint?el("div",{class:"hint"},hint):"");
+  const save=async()=>{
+    const id=idIn.value.trim();
+    if(!id){status.textContent="tenant_id required";status.className="mstatus err";return;}
+    const body={tenant_id:id,collection:colIn.value.trim()||null};
+    if(!edit)body.generate_api_key=true;   // a new tenant always gets a minted key
+    const j=await postTenant(body); if(!j)return;
+    ov.remove();paint();
+    if(j.api_key)mintedToast(id,j.api_key);
+  };
+  ov.append(el("div",{class:"modal"},
+    el("div",{class:"mhead"},el("h2",{},edit?"Edit tenant · "+t.tenant_id:"Create tenant")),
+    el("div",{class:"mbody"},
+      edit?"":field("Tenant id",idIn),
+      field("Qdrant collection",colIn,"empty = default collection")),
+    el("div",{class:"mfoot"},status,
+      el("button",{class:"ghost",onclick:()=>ov.remove()},"Cancel"),
+      el("button",{class:"primary",onclick:save},edit?"Save":"Create"))));
+  document.body.append(ov);
+  setTimeout(()=>(edit?colIn:idIn).focus(),60);
 }
 async function mintKey(id,col){
   const j=await postTenant({tenant_id:id,collection:col||null,generate_api_key:true});
@@ -2080,7 +2540,16 @@ function mintedToast(id,key){
       el("h2",{},"New API key · "+id)),
     el("div",{class:"mbody"},
       el("p",{},"Shown once: only its hash is stored. Copy it before closing."),
-      el("code",{style:"display:block;word-break:break-all;padding:11px 13px;background:var(--code);border:1px solid var(--line);border-radius:9px;font-size:13px;cursor:pointer",title:"click to copy",onclick:copy},key)),
+      (()=>{
+        const inp=el("input",{class:"f",type:"password",readonly:"",value:key,
+          style:"width:100%;padding-right:40px;font-family:'Roboto Mono',monospace;font-size:12.5px",
+          title:"click to copy",onclick:copy});
+        const eye=el("button",{type:"button",class:"eye off",title:"show key","aria-label":"show key",
+          html:'<svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/><line class="slash" x1="3" y1="3" x2="21" y2="21"/></svg>'});
+        eye.onclick=()=>{const show=inp.type==="password";inp.type=show?"text":"password";
+          eye.classList.toggle("off",!show);eye.title=show?"hide key":"show key";};
+        return el("div",{class:"keywrap"},inp,eye);
+      })()),
     el("div",{class:"mfoot"},status,
       el("button",{class:"ghost",onclick:copy},"Copy"),
       el("button",{class:"primary",onclick:()=>ov.remove()},"Done"))));
@@ -2198,11 +2667,6 @@ async function replayEvents(btn){
   }catch(e){alert("replay failed: "+e);btn.textContent=old;btn.disabled=false;}
 }
 async function renderConfig(v){
-  const xbtn=el("button",{class:"userchip",onclick:e=>exportEvents(e.target)},"download event log (.tar.gz)");
-  const rbtn=el("button",{class:"userchip",onclick:e=>replayEvents(e.target)},"rebuild models from event log");
-  v.append(el("div",{class:"card"},cardhead("Data export & recovery"),
-    el("div",{class:"small mut",style:"margin:-2px 0 9px"},"export: the tenant's complete raw record (every ingested event and served impression, parquet), for off-site backup. Rebuild: replay that log back into the live visitor models, e.g. after a redis wipe."),
-    el("div",{class:"row",style:"gap:8px"},xbtn,rbtn)));
   let cfg; try{cfg=await api("/api/config");}catch(e){failCard(v,e);return;}
   const t=$("#tenant").value.trim();
   const flat={};
@@ -2210,15 +2674,16 @@ async function renderConfig(v){
     if(val&&typeof val==="object"&&!Array.isArray(val))for(const [k2,v2] of Object.entries(val))flat[k+"."+k2]=v2;
     else flat[k]=val;
   }
-  // sticky toolbar: read-only by default; Edit unlocks Cancel / Save
+  // read-only by default; Edit unlocks Cancel / Save. No card, no title — just the action.
+  const ICO_EDIT='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>';
   const actions=cfgEdit
     ? [el("button",{class:"userchip",onclick:resetConfig},"Reset to baseline"),
        el("button",{class:"ghost",onclick:()=>{cfgEdit=false;paint();}},"Cancel"),
        el("button",{class:"primary",onclick:saveConfig},"Save & apply")]
-    : [el("button",{class:"primary",onclick:()=>{cfgEdit=true;paint();}},"Edit")];
-  v.append(el("div",{class:"card cfgbar"},el("div",{class:"row",style:"justify-content:space-between;width:100%"},
-    el("div",{},cardhead("Runtime config")),
-    el("div",{class:"row"},el("span",{id:"cfgstatus",class:"small mut"},""),...actions))));
+    : [el("button",{class:"btn-outline",onclick:()=>{cfgEdit=true;paint();}},
+        el("span",{style:"line-height:0",html:ICO_EDIT}),"Edit")];
+  v.append(el("div",{class:"row",style:"justify-content:flex-end;gap:9px;margin:0 0 10px"},
+    el("span",{id:"cfgstatus",class:"small mut"},""),...actions));
   // build category panels (ALL kept in the DOM so edits survive tab switches and Save collects every field)
   const cats=[];const used=new Set();
   for(const cat of CFG_CATS){
@@ -2352,7 +2817,9 @@ if(localStorage.getItem("ins_navmin")==="1")document.body.classList.add("nav-min
 
 for(const b of ["uid","tenant"])$("#"+b).addEventListener("change",()=>{localStorage.setItem("ins_"+b,$("#"+b).value);if(b==="tenant"){_cohortDom=null;paint();}});
 $("#theme").onclick=()=>{const t=document.documentElement.dataset.theme==="dark"?"light":"dark";document.documentElement.dataset.theme=t;localStorage.setItem("ins_theme",t);};
-$("#navtoggle").onclick=()=>{document.body.classList.toggle("nav-min");localStorage.setItem("ins_navmin",document.body.classList.contains("nav-min")?"1":"0");};
+const _navToggle=()=>{document.body.classList.toggle("nav-min");localStorage.setItem("ins_navmin",document.body.classList.contains("nav-min")?"1":"0");};
+$("#navtoggle").onclick=e=>{e.stopPropagation();_navToggle();};
+document.querySelector(".side-brand").onclick=()=>{if(document.body.classList.contains("nav-min"))_navToggle();};
 $("#openkey").onclick=openModal;
 $("#connect").onclick=connect;
 $("#cancelkey").onclick=closeModal;
