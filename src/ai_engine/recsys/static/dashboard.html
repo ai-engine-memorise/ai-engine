@@ -145,6 +145,13 @@ main{flex:1 1 auto;min-width:0}
 .subtab{border:0;background:transparent;color:var(--mut);font-family:Montserrat,sans-serif;font-weight:500;font-size:14px;
   padding:9px 16px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:.13s}
 .subtab:hover{color:var(--fg)}
+/* small segmented control (All | Identified | Anonymous) */
+.segctl{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;flex:0 0 auto}
+.segctl button{border:0;background:var(--panel);padding:8px 15px;font-family:Montserrat,sans-serif;
+  font-size:12.5px;font-weight:500;color:var(--mut);cursor:pointer;white-space:nowrap}
+.segctl button+button{border-left:1px solid var(--line)}
+.segctl button:hover{color:var(--fg)}
+.segctl button.on{background:var(--accent-t);color:var(--accent);font-weight:600}
 .subtab.on{color:var(--accent);border-bottom-color:var(--accent)}
 .backlink{background:transparent;border:0;color:var(--mut);font:inherit;font-size:12px;font-weight:600;
   cursor:pointer;padding:0;margin-bottom:7px;display:block}
@@ -673,6 +680,7 @@ let userCtx=null;            // {id, sub} when drilled into a single visitor (fr
 let recCtx=null;             // request_id when drilled into a single recommendation (from the Traffic table)
 let cfgTab=null;             // active Config category subtab
 let cohortTab="overview";    // Cohort subtab: overview | stats | snapshot
+let _anonFilter="all";      // visitors table slice: all | identified | anon
 let _cohortDom=null;         // {node,ts}: rendered Cohort view, reattached on return
                              // from a visitor drill-down instead of refetching everything
 let cfgEdit=false;           // Config is read-only until Edit is clicked
@@ -820,9 +828,7 @@ async function drawSnapshot(box){
     try{await postJSON("/api/export/snapshot",{});}catch(e){alert("snapshot failed: "+e);}
     drawSnapshot(box);
   };
-  box.append(el("div",{class:"row",style:"justify-content:space-between;align-items:center;margin:0 0 14px"},
-    el("div",{class:"small mut"},"A snapshot freezes the complete event log into one flat CSV (gzip) you can open in Excel or pandas: one row per event, complex fields as JSON strings."),
-    camBtn));
+  box.append(el("div",{class:"row",style:"justify-content:flex-end;margin:0 0 14px"},camBtn));
 
   // headline stats of the most recent snapshot
   const latest=(list||[])[0];
@@ -843,41 +849,38 @@ async function drawSnapshot(box){
   }
 
   if(!(list||[]).length){
-    box.append(el("div",{class:"empty"},"No snapshots yet. Take one to freeze the current data."));
+    box.append(el("div",{class:"empty"},"No snapshots yet."));
   }else{
     const tbl=el("table");
-    tbl.append(el("tr",{},el("th",{},"snapshot"),el("th",{},"events"),el("th",{},"visitors"),
+    tbl.append(el("tr",{},el("th",{},"snapshot"),el("th",{},"date"),el("th",{},"events"),el("th",{},"visitors"),
       el("th",{},"size"),el("th",{style:"text-align:right"},"actions")));
+    const ICO_DL='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+    const ICO_RM='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
     for(const s of list){
       const st=s.stats||{};
-      const dlBtn=el("button",{class:"userchip",title:"download"},"download");
+      const dlBtn=el("button",{class:"userchip",title:"download",style:"display:inline-flex;align-items:center;gap:6px"},
+        el("span",{style:"line-height:0",html:ICO_DL}),"Download");
       dlBtn.onclick=async()=>{dlBtn.disabled=true;
         try{await _fetchBlob("/api/export/snapshot/"+encodeURIComponent(s.name),s.name);}
         catch(e){alert("download failed: "+e);}
         dlBtn.disabled=false;};
-      const rmBtn=el("button",{class:"userchip",title:"delete",style:"color:var(--c-aversion)"},"delete");
+      const rmBtn=el("button",{class:"userchip",title:"delete",style:"display:inline-flex;align-items:center;gap:6px;color:var(--c-aversion)"},
+        el("span",{style:"line-height:0",html:ICO_RM}),"Delete");
       rmBtn.onclick=async()=>{
         if(!await confirmModal({title:"Delete snapshot",body:"Delete "+s.name+"? The live event log is unaffected.",action:"Delete",danger:true}))return;
         try{const r=await fetch(base()+"/api/export/snapshot/"+encodeURIComponent(s.name),{method:"DELETE",headers:headers()});
           if(!r.ok)throw new Error(r.status);}catch(e){alert("delete failed: "+e);}
         drawSnapshot(box);};
       tbl.append(el("tr",{},
-        el("td",{},el("div",{},(s.created||"").replace("T"," ").slice(0,19)),el("div",{class:"small mut num"},s.name)),
+        el("td",{},el("b",{},s.name.replace(/\.csv\.gz$/,""))),
+        el("td",{class:"small mut num"},(s.created||"").replace("T"," ").slice(0,19)),
         el("td",{class:"num"},st.total_events??""),
         el("td",{class:"num"},st.total_visitors??""),
         el("td",{class:"num mut"},_fmtSize(s.size_bytes||0)),
-        el("td",{style:"text-align:right"},el("div",{class:"row",style:"gap:6px;justify-content:flex-end"},dlBtn,rmBtn))));
+        el("td",{style:"text-align:right"},el("div",{class:"row",style:"gap:6px;justify-content:flex-end;flex-wrap:nowrap"},dlBtn,rmBtn))));
     }
     box.append(el("div",{class:"card"},tbl));
   }
-
-  const day=new Date().toISOString().slice(0,10);
-  const pqBtn=el("button",{class:"ghost"},"Download raw parquet (.tar.gz)");
-  pqBtn.onclick=async()=>{pqBtn.disabled=true;
-    try{await _fetchBlob("/api/export/events",`event-log-${day}.tar.gz`);}catch(e){alert("download failed: "+e);}
-    pqBtn.disabled=false;};
-  box.append(el("div",{class:"row",style:"margin-top:4px"},pqBtn,
-    el("span",{class:"small mut"},"raw immutable log partitions, for programmatic use / off-site backup")));
 }
 
 /* ===== COHORT STATISTICS: demographic slices double as filters ===== */
@@ -1092,11 +1095,16 @@ async function renderCohort(v){
       box.append(el("div",{class:"empty"},"No known visitors yet: ingest events to see them here."));
       return;
     }
+    const segBar=el("div",{class:"segctl","data-tip":"anonymous = never answered a survey (no Crockford id)"});
+    [["all","All"],["identified","Identified"],["anon","Anonymous"]].forEach(([k,label])=>
+      segBar.append(el("button",{class:k===_anonFilter?"on":"","data-k":k,onclick:()=>{
+        _anonFilter=k;
+        segBar.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.k===k));
+        filterUsers();
+      }},label)));
     box.append(el("div",{class:"row",style:"gap:14px;align-items:center;margin-bottom:20px;flex-wrap:wrap"},
       el("div",{class:"searchwrap",style:"flex:1;min-width:280px;margin:0"},icon,search),
-      el("label",{class:"small mut",style:"display:flex;gap:7px;align-items:center;cursor:pointer;white-space:nowrap",
-        "data-tip":"anonymous = never answered a survey (no Crockford id)"},
-        el("input",{id:"hideanon",type:"checkbox",onchange:filterUsers}),"hide anonymous")));
+      segBar));
     const tbl=el("table",{id:"utbl"});
     const hrow=makeSortable(tbl,
       [[`visitor (${rowIds.length})`,"visitor"],["segment","segment"],["views","views","num"],["events","events","num"],["positive","positive","num"],["last seen","last"]],
@@ -1196,11 +1204,11 @@ function makeSortable(tbl,cols,{rowClass,numeric=[]}={}){
   return hrow;
 }
 // applies BOTH the search text and the active demographic filters to the table
-function filterUsers(){const s=$("#usearch");const q=(s&&s.value||"").toLowerCase();
-  const hideAnon=!!($("#hideanon")&&$("#hideanon").checked);let shown=0;
+function filterUsers(){const s=$("#usearch");const q=(s&&s.value||"").toLowerCase();let shown=0;
   for(const tr of document.querySelectorAll("#utbl .urow")){
     let hit=tr.getAttribute("data-id").includes(q);
-    if(hit&&hideAnon&&tr.getAttribute("data-anon")==="1")hit=false;
+    if(hit&&_anonFilter==="identified"&&tr.getAttribute("data-anon")==="1")hit=false;
+    if(hit&&_anonFilter==="anon"&&tr.getAttribute("data-anon")!=="1")hit=false;
     if(hit)for(const [f,vals] of Object.entries(_coFilter)){
       if(!vals.includes(tr.getAttribute("data-f-"+f)||"")){hit=false;break;}}
     tr.style.display=hit?"":"none";if(hit)shown++;

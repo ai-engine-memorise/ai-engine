@@ -929,7 +929,7 @@ def make_router(components: Components) -> APIRouter:
     # happens ONLY when one is taken — listing is a directory read, so the tab
     # loads instantly (the previous scan-on-view 502'd behind the proxy timeout).
     import re as _re_snap
-    _SNAP_NAME = _re_snap.compile(r"^snapshot-\d{8}-\d{6}\.csv\.gz$")
+    _SNAP_NAME = _re_snap.compile(r"^[A-Za-z0-9_-]+-\d{8}-\d{6}\.csv\.gz$")
 
     def _snap_dir() -> str:
         base = _log_base(c)
@@ -965,49 +965,64 @@ def make_router(components: Components) -> APIRouter:
 
     @ops.post("/export/snapshot")
     def take_snapshot() -> dict:
-        """One pass over the full parquet log: stream every event into a gzipped CSV
-        and compute the headline stats along the way."""
-        import csv as _csv
+        """Freeze the full parquet log into one gzipped CSV. Vectorized: a single
+        pyarrow dataset read over all part files, arrow-native CSV encode into a
+        gzip stream, and columnar stats — the earlier per-file python row loop
+        took tens of seconds on production's thousands of small parts."""
         import glob as _glob
-        import gzip
         import json as _json
         try:
+            import pyarrow as pa
+            import pyarrow.compute as pc
+            import pyarrow.csv as pacsv
             import pyarrow.parquet as pq
         except ImportError:
             raise HTTPException(status_code=503, detail="pyarrow not installed")
+        from .tenancy import current_tenant
         base = _log_base(c)
+        files = sorted(_glob.glob(os.path.join(base, "date=*", "*.parquet")))
         now = datetime.now(timezone.utc)
-        name = f"snapshot-{now.strftime('%Y%m%d-%H%M%S')}.csv.gz"
+        tenant = current_tenant.get() or "default"
+        name = f"{tenant}-{now.strftime('%Y%m%d-%H%M%S')}.csv.gz"
         path = os.path.join(_snap_dir(), name)
         cols = ["ts", "user_id", "event", "content_id", "session_id", "request_id",
                 "dwell_seconds", "end_reason", "query_text", "clicked_id",
                 "impressions", "survey_answers", "raw"]
-        users: set = set()
+        tables = []
+        for f in files:
+            try:
+                tables.append(pq.read_table(f))
+            except Exception:
+                continue
+        if tables:
+            # permissive: a column that is all-null in one part file (null type)
+            # promotes to the concrete type other parts have, instead of erroring
+            table = pa.concat_tables(tables, promote_options="permissive")
+            table = table.select([col for col in cols if col in table.column_names])
+            for i, fld in enumerate(table.schema):   # all-null everywhere -> string
+                if pa.types.is_null(fld.type):
+                    table = table.set_column(i, fld.name, pc.cast(table.column(i), pa.string()))
+            try:
+                table = table.sort_by("ts")
+            except Exception:
+                pass
+        else:
+            table = pa.table({col: pa.array([], type=pa.string()) for col in cols})
+        with pa.CompressedOutputStream(path, "gzip") as out:
+            pacsv.write_csv(table, out)
+
+        ev = table["event"] if "event" in table.column_names else pa.array([], type=pa.string())
+        uid = table["user_id"] if "user_id" in table.column_names else pa.array([], type=pa.string())
+        sa = table["survey_answers"] if "survey_answers" in table.column_names else None
+        view_events = int(pc.sum(pc.starts_with(pc.cast(ev, pa.string()), "CONTENT_VIEW")).as_py() or 0) if len(ev) else 0
+        content_views = int(pc.sum(pc.equal(ev, "CONTENT_VIEW_STARTED")).as_py() or 0) if len(ev) else 0
+        users = set(u for u in uid.to_pylist() if u) if len(uid) else set()
         responded: set = set()
-        n = content_views = view_events = 0
-        with gzip.open(path, "wt", newline="", encoding="utf-8") as fh:
-            w = _csv.DictWriter(fh, fieldnames=cols, extrasaction="ignore")
-            w.writeheader()
-            for f in sorted(_glob.glob(os.path.join(base, "date=*", "*.parquet"))):
-                try:
-                    rows = pq.read_table(f).to_pylist()
-                except Exception:
-                    continue
-                for r in rows:
-                    w.writerow(r)
-                    n += 1
-                    u = r.get("user_id")
-                    if u:
-                        users.add(u)
-                    ev = str(r.get("event") or "")
-                    if ev.startswith("CONTENT_VIEW"):
-                        view_events += 1
-                        if ev == "CONTENT_VIEW_STARTED":
-                            content_views += 1
-                    sa = r.get("survey_answers")
-                    if u and sa and sa not in ("{}", "null", ""):
-                        responded.add(u)
-        stats = {"total_events": n, "total_visitors": len(users),
+        if sa is not None and len(sa):
+            for u, v in zip(uid.to_pylist(), sa.to_pylist()):
+                if u and v and v not in ("{}", "null", ""):
+                    responded.add(u)
+        stats = {"total_events": table.num_rows, "total_visitors": len(users),
                  "survey_responded_visitors": len(responded),
                  "anonymous_visitors": len(users) - len(responded),
                  "content_views": content_views, "content_view_events": view_events}
