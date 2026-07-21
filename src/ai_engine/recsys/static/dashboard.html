@@ -1025,7 +1025,11 @@ async function drawCohortStats(box){
       const nz=entries.filter(([,c])=>c>0).length;   // chart type follows the filtered slice
       if(field==="age")cellEl.append(colChart(field,entries));
       else if(nz<=3)cellEl.append(pieChart(field,entries.filter(([,c])=>c>0)));
-      else cellEl.append(distList(entries.slice(0,8).map(([val,cnt])=>({label:lab(field,val),count:cnt,value:val})),field));
+      else{
+        const listEl=distList(entries.map(([val,cnt])=>({label:lab(field,val),count:cnt,value:val})),field);
+        if(entries.length>8){listEl.style.maxHeight="220px";listEl.style.overflowY="auto";listEl.style.paddingRight="6px";}
+        cellEl.append(listEl);
+      }
       fg.append(cellEl);
     }
     statsCard.append(el("div",{style:"border-top:1px solid var(--line);margin:18px 0 14px"}),fg);
@@ -1163,7 +1167,7 @@ function renderSegments(v,r){
     }
     v.append(g);
   }else{
-    v.append(el("div",{class:"small mut",style:"margin-top:12px"},"No cluster model yet: train one (",el("code",{},"python explain/cluster_train.py --method fcm"),") and set ",el("code",{},"CLUSTER_MODEL_PATH")," to see segments."));
+    return;
   }
 }
 // lazy-load Leaflet only when a map is actually shown (other tabs stay offline-safe)
