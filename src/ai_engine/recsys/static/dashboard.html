@@ -672,7 +672,9 @@ let current="Cohort";
 let userCtx=null;            // {id, sub} when drilled into a single visitor (from the Cohort table)
 let recCtx=null;             // request_id when drilled into a single recommendation (from the Traffic table)
 let cfgTab=null;             // active Config category subtab
-let cohortTab="overview";    // Cohort subtab: overview | stats
+let cohortTab="overview";    // Cohort subtab: overview | stats | snapshot
+let _cohortDom=null;         // {node,ts}: rendered Cohort view, reattached on return
+                             // from a visitor drill-down instead of refetching everything
 let cfgEdit=false;           // Config is read-only until Edit is clicked
 const USER_SUBS=[["profile","Profile",renderUser],["history","History",renderHistory],["recommend","Recommend",renderRequest]];
 
@@ -688,8 +690,14 @@ function paint(){
   if(userCtx){renderUserDetail(v);return;}
   v.append(el("div",{class:"pagehead"},
     el("div",{},el("h1",{},current)),
-    el("button",{class:"iconbtn",title:"refresh",onclick:paint},"↻")));
+    el("button",{class:"iconbtn",title:"refresh",onclick:()=>{_cohortDom=null;paint();}},"↻")));
+  // Cohort keeps its rendered DOM across visitor drill-downs: back = reattach,
+  // no refetch, scroll/filters/subtab intact. Refresh button forces a rebuild.
+  if(current==="Cohort"&&_cohortDom&&Date.now()-_cohortDom.ts<300000){
+    v.append(_cohortDom.node);return;
+  }
   const host=el("div");v.append(host);
+  if(current==="Cohort")_cohortDom={node:host,ts:Date.now()};
   ALL[current](host).catch(e=>failCard(host,e));
 }
 function renderUserDetail(v){
@@ -790,40 +798,86 @@ async function renderRecDetail(v){
 }
 
 
-/* ===== COHORT SNAPSHOT: full-log totals + flat export ===== */
+/* ===== COHORT SNAPSHOT: stored point-in-time exports with lifecycle ===== */
+async function _fetchBlob(path,filename){
+  const r=await fetch(base()+path,{headers:headers()});
+  if(!r.ok)throw new Error(r.status+" "+r.statusText);
+  const blob=await r.blob();
+  const a=el("a",{href:URL.createObjectURL(blob),download:filename});
+  document.body.append(a);a.click();a.remove();
+}
+const _fmtSize=b=>b>=1048576?(b/1048576).toFixed(1)+" MB":b>=1024?(b/1024).toFixed(1)+" KB":b+" B";
 async function drawSnapshot(box){
-  const st=await api("/api/export/snapshot");
-  const cell=(val,label,sub)=>el("div",{class:"statcell"},
-    el("div",{class:"statval num"},String(val??0)),
-    el("div",{class:"small mut"},label),
-    sub?el("div",{class:"small mut",style:"opacity:.75;margin-top:2px"},sub):"");
-  box.append(el("div",{class:"card",style:"padding-top:18px;padding-bottom:18px"},
-    el("div",{class:"statrow",style:"grid-template-columns:repeat(5,minmax(0,1fr))"},
-      cell(st.total_visitors,"visitors","distinct ids in the full log"),
-      cell(st.anonymous_visitors,"anonymous","never answered a survey"),
-      cell(st.total_events,"events","all recorded interactions"),
-      cell(st.content_views,"content views",`${st.content_view_events} view events`),
-      cell(st.survey_responded_visitors,"survey responded","visitors with answers"))));
-  const dl=async(btn,path,filename)=>{
-    const old=btn.textContent;btn.textContent="preparing…";btn.disabled=true;
-    try{
-      const r=await fetch(base()+path,{headers:headers()});
-      if(!r.ok)throw new Error(r.status+" "+r.statusText);
-      const blob=await r.blob();
-      const a=el("a",{href:URL.createObjectURL(blob),download:filename});
-      document.body.append(a);a.click();a.remove();
-    }catch(e){alert("download failed: "+e);}
-    btn.textContent=old;btn.disabled=false;
+  let list;try{list=await api("/api/export/snapshots");}catch(e){box.innerHTML="";failCard(box,e);return;}
+  box.innerHTML="";
+
+  const label=el("span",{},"Take Snapshot");
+  const camBtn=el("button",{class:"primary",style:"display:inline-flex;align-items:center;gap:9px"},
+    el("span",{style:"line-height:0",html:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>'}),
+    label);
+  camBtn.onclick=async()=>{
+    camBtn.disabled=true;label.textContent="taking snapshot…";
+    try{await postJSON("/api/export/snapshot",{});}catch(e){alert("snapshot failed: "+e);}
+    drawSnapshot(box);
   };
+  box.append(el("div",{class:"row",style:"justify-content:space-between;align-items:center;margin:0 0 14px"},
+    el("div",{class:"small mut"},"A snapshot freezes the complete event log into one flat CSV (gzip) you can open in Excel or pandas: one row per event, complex fields as JSON strings."),
+    camBtn));
+
+  // headline stats of the most recent snapshot
+  const latest=(list||[])[0];
+  if(latest&&latest.stats&&Object.keys(latest.stats).length){
+    const st=latest.stats;
+    const cell=(val,lab,sub)=>el("div",{class:"statcell"},
+      el("div",{class:"statval num"},String(val??0)),
+      el("div",{class:"small mut"},lab),
+      sub?el("div",{class:"small mut",style:"opacity:.75;margin-top:2px"},sub):"");
+    box.append(el("div",{class:"card",style:"padding-top:18px;padding-bottom:18px"},
+      el("div",{class:"small mut",style:"margin-bottom:12px"},"Latest snapshot · "+(latest.created||"").replace("T"," ").slice(0,19)),
+      el("div",{class:"statrow",style:"grid-template-columns:repeat(5,minmax(0,1fr))"},
+        cell(st.total_visitors,"visitors","distinct ids in the log"),
+        cell(st.anonymous_visitors,"anonymous","never answered a survey"),
+        cell(st.total_events,"events","all recorded interactions"),
+        cell(st.content_views,"content views",`${st.content_view_events||0} view events`),
+        cell(st.survey_responded_visitors,"survey responded","visitors with answers"))));
+  }
+
+  if(!(list||[]).length){
+    box.append(el("div",{class:"empty"},"No snapshots yet. Take one to freeze the current data."));
+  }else{
+    const tbl=el("table");
+    tbl.append(el("tr",{},el("th",{},"snapshot"),el("th",{},"events"),el("th",{},"visitors"),
+      el("th",{},"size"),el("th",{style:"text-align:right"},"actions")));
+    for(const s of list){
+      const st=s.stats||{};
+      const dlBtn=el("button",{class:"userchip",title:"download"},"download");
+      dlBtn.onclick=async()=>{dlBtn.disabled=true;
+        try{await _fetchBlob("/api/export/snapshot/"+encodeURIComponent(s.name),s.name);}
+        catch(e){alert("download failed: "+e);}
+        dlBtn.disabled=false;};
+      const rmBtn=el("button",{class:"userchip",title:"delete",style:"color:var(--c-aversion)"},"delete");
+      rmBtn.onclick=async()=>{
+        if(!await confirmModal({title:"Delete snapshot",body:"Delete "+s.name+"? The live event log is unaffected.",action:"Delete",danger:true}))return;
+        try{const r=await fetch(base()+"/api/export/snapshot/"+encodeURIComponent(s.name),{method:"DELETE",headers:headers()});
+          if(!r.ok)throw new Error(r.status);}catch(e){alert("delete failed: "+e);}
+        drawSnapshot(box);};
+      tbl.append(el("tr",{},
+        el("td",{},el("div",{},(s.created||"").replace("T"," ").slice(0,19)),el("div",{class:"small mut num"},s.name)),
+        el("td",{class:"num"},st.total_events??""),
+        el("td",{class:"num"},st.total_visitors??""),
+        el("td",{class:"num mut"},_fmtSize(s.size_bytes||0)),
+        el("td",{style:"text-align:right"},el("div",{class:"row",style:"gap:6px;justify-content:flex-end"},dlBtn,rmBtn))));
+    }
+    box.append(el("div",{class:"card"},tbl));
+  }
+
   const day=new Date().toISOString().slice(0,10);
-  const csvBtn=el("button",{class:"primary"},"Download CSV snapshot");
-  csvBtn.onclick=()=>dl(csvBtn,"/api/export/snapshot?format=csv",`events-snapshot-${day}.csv`);
   const pqBtn=el("button",{class:"ghost"},"Download raw parquet (.tar.gz)");
-  pqBtn.onclick=()=>dl(pqBtn,"/api/export/events",`event-log-${day}.tar.gz`);
-  box.append(el("div",{class:"card"},cardhead("Export"),
-    el("div",{class:"small mut",style:"margin:-6px 0 12px"},
-      "CSV: one row per event over the complete durable log, complex fields as JSON strings — opens directly in Excel / pandas. Parquet: the raw immutable log partitions, for programmatic use and off-site backup."),
-    el("div",{class:"row",style:"gap:10px"},csvBtn,pqBtn)));
+  pqBtn.onclick=async()=>{pqBtn.disabled=true;
+    try{await _fetchBlob("/api/export/events",`event-log-${day}.tar.gz`);}catch(e){alert("download failed: "+e);}
+    pqBtn.disabled=false;};
+  box.append(el("div",{class:"row",style:"margin-top:4px"},pqBtn,
+    el("span",{class:"small mut"},"raw immutable log partitions, for programmatic use / off-site backup")));
 }
 
 /* ===== COHORT STATISTICS: demographic slices double as filters ===== */
@@ -973,6 +1027,20 @@ async function drawCohortStats(box){
     }
     statsCard.append(el("div",{style:"border-top:1px solid var(--line);margin:18px 0 14px"}),fg);
   }
+
+  // filters active -> show WHO matches right here (the table lives in the other
+  // subtab); scrollable so any cohort size fits
+  if(fl.length){
+    const rows=[...document.querySelectorAll("#utbl .urow")].filter(tr=>tr.style.display!=="none");
+    const mc=el("div",{class:"card"},cardhead(`Matching visitors (${rows.length})`));
+    if(rows.length){
+      const wrap=el("div",{class:"row",style:"gap:6px;flex-wrap:wrap;max-height:180px;overflow-y:auto;padding-right:4px"});
+      rows.forEach(tr=>{const id=tr.getAttribute("data-uid")||tr.getAttribute("data-id");
+        wrap.append(el("button",{class:"userchip",onclick:()=>openUser(id,"profile")},id));});
+      mc.append(wrap);
+    }else mc.append(el("div",{class:"small mut"},"No visitor in the table matches this slice."));
+    box.append(mc);
+  }
 }
 
 /* ===== COHORT: visitor search + table, segments below ===== */
@@ -1024,7 +1092,11 @@ async function renderCohort(v){
       box.append(el("div",{class:"empty"},"No known visitors yet: ingest events to see them here."));
       return;
     }
-    box.append(el("div",{class:"searchwrap"},icon,search));
+    box.append(el("div",{class:"row",style:"gap:14px;align-items:center;margin-bottom:20px;flex-wrap:wrap"},
+      el("div",{class:"searchwrap",style:"flex:1;min-width:280px;margin:0"},icon,search),
+      el("label",{class:"small mut",style:"display:flex;gap:7px;align-items:center;cursor:pointer;white-space:nowrap",
+        "data-tip":"anonymous = never answered a survey (no Crockford id)"},
+        el("input",{id:"hideanon",type:"checkbox",onchange:filterUsers}),"hide anonymous")));
     const tbl=el("table",{id:"utbl"});
     const hrow=makeSortable(tbl,
       [[`visitor (${rowIds.length})`,"visitor"],["segment","segment"],["views","views","num"],["events","events","num"],["positive","positive","num"],["last seen","last"]],
@@ -1032,7 +1104,7 @@ async function renderCohort(v){
     tbl.append(hrow);
     for(const u of rowIds){const p=u2c[u], s=ustat[u]||{};
       const dmo=s.demographics||{};
-      const attrs={class:"urow","data-id":String(u).toLowerCase()};
+      const attrs={class:"urow","data-id":String(u).toLowerCase(),"data-uid":String(u),"data-anon":s.anonymous?"1":"0"};
       ["age","gender","nationality","province"].forEach(f=>attrs["data-f-"+f]=dmo[f]!=null?String(dmo[f]):"");
       attrs["data-s-visitor"]=String(u).toLowerCase();
       attrs["data-s-segment"]=p?"cluster "+p.cluster:"";
@@ -1124,9 +1196,11 @@ function makeSortable(tbl,cols,{rowClass,numeric=[]}={}){
   return hrow;
 }
 // applies BOTH the search text and the active demographic filters to the table
-function filterUsers(){const s=$("#usearch");const q=(s&&s.value||"").toLowerCase();let shown=0;
+function filterUsers(){const s=$("#usearch");const q=(s&&s.value||"").toLowerCase();
+  const hideAnon=!!($("#hideanon")&&$("#hideanon").checked);let shown=0;
   for(const tr of document.querySelectorAll("#utbl .urow")){
     let hit=tr.getAttribute("data-id").includes(q);
+    if(hit&&hideAnon&&tr.getAttribute("data-anon")==="1")hit=false;
     if(hit)for(const [f,vals] of Object.entries(_coFilter)){
       if(!vals.includes(tr.getAttribute("data-f-"+f)||"")){hit=false;break;}}
     tr.style.display=hit?"":"none";if(hit)shown++;
@@ -1930,7 +2004,7 @@ async function renderTenants(v){
         "data-tip":rt?"created here at runtime, persisted to the PVC store — editable and deletable"
                      :"deploy baseline from TENANTS_PATH — read-only"},t.source||"runtime")),
       el("td",{style:"text-align:right"},kebabMenu([
-        ["use this tenant",()=>{$("#tenant").value=t.tenant_id;localStorage.setItem("ins_tenant",t.tenant_id);loadWhoami();setTab("Cohort");}],
+        ["use this tenant",()=>{$("#tenant").value=t.tenant_id;localStorage.setItem("ins_tenant",t.tenant_id);_cohortDom=null;loadWhoami();setTab("Cohort");}],
         ["edit",()=>{$("#t_id").value=t.tenant_id;$("#t_col").value=t.collection||"";$("#t_keys").value="";$("#t_id").scrollIntoView({block:"center"});}],
         ["mint key",()=>mintKey(t.tenant_id,t.collection)],
         n?["clear keys",()=>clearKeys(t.tenant_id,t.collection),true]:null,
@@ -2250,7 +2324,7 @@ $("#key").value=localStorage.getItem("ins_key")||"";
 document.documentElement.dataset.theme=localStorage.getItem("ins_theme")||"light";
 if(localStorage.getItem("ins_navmin")==="1")document.body.classList.add("nav-min");
 
-for(const b of ["uid","tenant"])$("#"+b).addEventListener("change",()=>{localStorage.setItem("ins_"+b,$("#"+b).value);if(b==="tenant")paint();});
+for(const b of ["uid","tenant"])$("#"+b).addEventListener("change",()=>{localStorage.setItem("ins_"+b,$("#"+b).value);if(b==="tenant"){_cohortDom=null;paint();}});
 $("#theme").onclick=()=>{const t=document.documentElement.dataset.theme==="dark"?"light":"dark";document.documentElement.dataset.theme=t;localStorage.setItem("ins_theme",t);};
 $("#navtoggle").onclick=()=>{document.body.classList.toggle("nav-min");localStorage.setItem("ins_navmin",document.body.classList.contains("nav-min")?"1":"0");};
 $("#openkey").onclick=openModal;

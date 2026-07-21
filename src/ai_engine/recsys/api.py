@@ -756,6 +756,8 @@ def make_router(components: Components) -> APIRouter:
                     n_views = 0
                 rows.append({
                     "user_id": uid,
+                    # anonymous = never answered any survey (no identify/survey event)
+                    "anonymous": not any(getattr(e, "survey_answers", None) for e in evs),
                     "n_views": n_views,
                     "n_interactions": len(evs),
                     "n_served": n_served.get(uid, 0),
@@ -920,67 +922,123 @@ def make_router(components: Components) -> APIRouter:
         return {"result": {"users": len(sigs), "content": content[:limit],
                            "themes": themes, "clusters": clusters}}
 
-    @ops.get("/export/snapshot")
-    def export_snapshot(format: Optional[str] = Query(default=None, description="csv -> flat CSV download; default: headline stats JSON")) -> Any:
-        """Cohort snapshot over the FULL durable event log (not the 30-day buffer):
-        headline stats, or with format=csv the flat event table itself — one row per
-        event, complex fields as JSON strings — for inspection outside the platform."""
-        def load_rows():
-            base = _log_base(c)
-            rows: list[dict] = []
-            if base:
-                try:
-                    import pyarrow.parquet as pq
-                except ImportError:
-                    raise HTTPException(status_code=503, detail="pyarrow not installed")
-                import glob as _glob
-                for f in sorted(_glob.glob(os.path.join(base, "date=*", "*.parquet"))):
-                    try:
-                        rows.extend(pq.read_table(f).to_pylist())
-                    except Exception:
-                        continue
-            rows.sort(key=lambda r: str(r.get("ts") or ""))
-            return rows
+    # ----- SNAPSHOTS: stored, listable, downloadable point-in-time exports -----
+    # A snapshot is a gzipped flat CSV of the full durable event log (one row per
+    # event, complex fields as JSON strings) plus a .json sidecar with headline
+    # stats, written to <EVENT_LOG_DIR>/<tenant>/snapshots/. The heavy log scan
+    # happens ONLY when one is taken — listing is a directory read, so the tab
+    # loads instantly (the previous scan-on-view 502'd behind the proxy timeout).
+    import re as _re_snap
+    _SNAP_NAME = _re_snap.compile(r"^snapshot-\d{8}-\d{6}\.csv\.gz$")
 
-        if format == "csv":
-            import csv as _csv
-            import io
-            rows = load_rows()
-            cols = ["ts", "user_id", "event", "content_id", "session_id", "request_id",
-                    "dwell_seconds", "end_reason", "query_text", "clicked_id",
-                    "impressions", "survey_answers", "raw"]
-            buf = io.StringIO()
-            w = _csv.DictWriter(buf, fieldnames=cols, extrasaction="ignore")
+    def _snap_dir() -> str:
+        base = _log_base(c)
+        if not base:
+            raise HTTPException(status_code=503, detail="EVENT_LOG_DIR not set")
+        d = os.path.join(base, "snapshots")
+        os.makedirs(d, exist_ok=True)
+        return d
+
+    def _snap_meta_path(p: str) -> str:
+        return p[:-len(".csv.gz")] + ".json"
+
+    @ops.get("/export/snapshots")
+    def list_snapshots() -> dict:
+        import json as _json
+        d = _snap_dir()
+        out = []
+        for fn in sorted(os.listdir(d), reverse=True):
+            if not _SNAP_NAME.match(fn):
+                continue
+            p = os.path.join(d, fn)
+            meta = {}
+            try:
+                with open(_snap_meta_path(p), encoding="utf-8") as fh:
+                    meta = _json.load(fh)
+            except Exception:
+                pass
+            out.append({"name": fn, "size_bytes": os.path.getsize(p),
+                        "created": meta.get("created")
+                                   or datetime.fromtimestamp(os.path.getmtime(p), timezone.utc).isoformat(),
+                        "stats": meta.get("stats") or {}})
+        return {"result": out}
+
+    @ops.post("/export/snapshot")
+    def take_snapshot() -> dict:
+        """One pass over the full parquet log: stream every event into a gzipped CSV
+        and compute the headline stats along the way."""
+        import csv as _csv
+        import glob as _glob
+        import gzip
+        import json as _json
+        try:
+            import pyarrow.parquet as pq
+        except ImportError:
+            raise HTTPException(status_code=503, detail="pyarrow not installed")
+        base = _log_base(c)
+        now = datetime.now(timezone.utc)
+        name = f"snapshot-{now.strftime('%Y%m%d-%H%M%S')}.csv.gz"
+        path = os.path.join(_snap_dir(), name)
+        cols = ["ts", "user_id", "event", "content_id", "session_id", "request_id",
+                "dwell_seconds", "end_reason", "query_text", "clicked_id",
+                "impressions", "survey_answers", "raw"]
+        users: set = set()
+        responded: set = set()
+        n = content_views = view_events = 0
+        with gzip.open(path, "wt", newline="", encoding="utf-8") as fh:
+            w = _csv.DictWriter(fh, fieldnames=cols, extrasaction="ignore")
             w.writeheader()
-            for r in rows:
-                w.writerow(r)
-            from fastapi.responses import Response
-            day = datetime.now(timezone.utc).date().isoformat()
-            return Response(buf.getvalue(), media_type="text/csv",
-                            headers={"Content-Disposition": f'attachment; filename="events-snapshot-{day}.csv"'})
+            for f in sorted(_glob.glob(os.path.join(base, "date=*", "*.parquet"))):
+                try:
+                    rows = pq.read_table(f).to_pylist()
+                except Exception:
+                    continue
+                for r in rows:
+                    w.writerow(r)
+                    n += 1
+                    u = r.get("user_id")
+                    if u:
+                        users.add(u)
+                    ev = str(r.get("event") or "")
+                    if ev.startswith("CONTENT_VIEW"):
+                        view_events += 1
+                        if ev == "CONTENT_VIEW_STARTED":
+                            content_views += 1
+                    sa = r.get("survey_answers")
+                    if u and sa and sa not in ("{}", "null", ""):
+                        responded.add(u)
+        stats = {"total_events": n, "total_visitors": len(users),
+                 "survey_responded_visitors": len(responded),
+                 "anonymous_visitors": len(users) - len(responded),
+                 "content_views": content_views, "content_view_events": view_events}
+        meta = {"created": now.isoformat(), "stats": stats}
+        with open(_snap_meta_path(path), "w", encoding="utf-8") as fh:
+            _json.dump(meta, fh)
+        return {"result": {"name": name, "size_bytes": os.path.getsize(path), **meta}}
 
-        def build_stats():
-            rows = load_rows()
-            users: set = set()
-            responded: set = set()
-            content_views = view_events = 0
-            for r in rows:
-                u = r.get("user_id")
-                if u:
-                    users.add(u)
-                ev = str(r.get("event") or "")
-                if ev.startswith("CONTENT_VIEW"):
-                    view_events += 1
-                    if ev == "CONTENT_VIEW_STARTED":
-                        content_views += 1
-                sa = r.get("survey_answers")
-                if u and sa and sa not in ("{}", "null", ""):
-                    responded.add(u)
-            return {"total_events": len(rows), "total_visitors": len(users),
-                    "survey_responded_visitors": len(responded),
-                    "anonymous_visitors": len(users) - len(responded),
-                    "content_views": content_views, "content_view_events": view_events}
-        return {"result": _dash_cached(c, "snapshot_stats", 300.0, build_stats)}
+    @ops.get("/export/snapshot/{name}")
+    def download_snapshot(name: str):
+        if not _SNAP_NAME.match(name):
+            raise HTTPException(status_code=400, detail="bad snapshot name")
+        p = os.path.join(_snap_dir(), name)
+        if not os.path.exists(p):
+            raise HTTPException(status_code=404, detail="snapshot not found")
+        from fastapi.responses import FileResponse
+        return FileResponse(p, media_type="application/gzip", filename=name)
+
+    @ops.delete("/export/snapshot/{name}")
+    def delete_snapshot(name: str) -> dict:
+        if not _SNAP_NAME.match(name):
+            raise HTTPException(status_code=400, detail="bad snapshot name")
+        p = os.path.join(_snap_dir(), name)
+        if not os.path.exists(p):
+            raise HTTPException(status_code=404, detail="snapshot not found")
+        os.remove(p)
+        try:
+            os.remove(_snap_meta_path(p))
+        except OSError:
+            pass
+        return {"result": {"deleted": name}}
 
     @ops.get("/export/events")
     def export_events():
