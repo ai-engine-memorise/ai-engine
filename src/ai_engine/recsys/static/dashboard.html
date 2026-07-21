@@ -915,7 +915,7 @@ async function drawCohortStats(box){
     refresh();
   };
   const CAT=["var(--c-semantic)","var(--c-tag)","var(--c-geo)","var(--c-recency)"];
-  const DEMO_LABEL={age:"Age",gender:"Gender",nationality:"Nationality",province:"Province",personal_connection:"WW2 connection"};
+  const DEMO_LABEL={age:"Age",gender:"Gender",nationality:"Nationality",province:"Province",personal_connection:"WW2 connection",email_shared:"Email shared"};
   const SLBL=st.labels||{};                       // server-owned value labels (D3)
   const lab=(f,v)=>(SLBL[f]&&SLBL[f][v])||humanVal(f,v);
 
@@ -1020,14 +1020,28 @@ async function drawCohortStats(box){
         const rank=v=>{const t=String(v);if(/^under/i.test(t))return (parseInt(t.replace(/\D+/g,""),10)||18)-0.5;
           const n=parseInt(t,10);return isNaN(n)?999:n;};
         entries.sort((a,b)=>rank(a[0])-rank(b[0]));
-      }else entries.sort((a,b)=>String(a[0]).localeCompare(String(b[0])));  // alphabetical = stable
+      }else{
+        // biggest slice first; ORDER COMES FROM THE BASELINE COUNTS, so applying
+        // a filter never reshuffles rows (only the bars/percentages change)
+        const bd=baseDemo[field]||{};
+        entries.sort((a,b)=>(bd[b[0]]||0)-(bd[a[0]]||0)||String(a[0]).localeCompare(String(b[0])));
+      }
       const cellEl=el("div",{},el("div",{class:"eyebrow",style:"display:block;margin:6px 0 3px"},DEMO_LABEL[field]||cap1(field.replace(/_/g," "))));
       const nz=entries.filter(([,c])=>c>0).length;   // chart type follows the filtered slice
       if(field==="age")cellEl.append(colChart(field,entries));
       else if(nz<=3)cellEl.append(pieChart(field,entries.filter(([,c])=>c>0)));
       else{
         const listEl=distList(entries.map(([val,cnt])=>({label:lab(field,val),count:cnt,value:val})),field);
-        if(entries.length>8){listEl.style.maxHeight="220px";listEl.style.overflowY="auto";listEl.style.paddingRight="6px";}
+        const rws=[...listEl.querySelectorAll(".distrow")];
+        if(rws.length>8){                  // top 8 visible, the rest behind an explicit toggle
+          rws.slice(8).forEach(r=>r.style.display="none");
+          const more=`show all ${rws.length} ▾`;
+          const btn=el("button",{class:"morebtn",onclick:()=>{
+            const open=rws[8].style.display==="none";
+            rws.slice(8).forEach(r=>r.style.display=open?"":"none");
+            btn.textContent=open?"show less ▴":more;}},more);
+          listEl.append(btn);
+        }
         cellEl.append(listEl);
       }
       fg.append(cellEl);
