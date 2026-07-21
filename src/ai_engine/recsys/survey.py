@@ -98,6 +98,13 @@ _DEMO_CANON = {
 _DEMO_JUNK = {"select", "select___", "none", "null", "_", "n_a"}
 
 
+# gender is a closed set: any free-typed value outside it ("Magnetron", jokes,
+# typos) folds into 'other' instead of minting a first-class category in the
+# cohort statistics. Every other field stays open (nationality etc. are
+# legitimately unbounded).
+_GENDER_CANONICAL = {"female", "male", "non_binary", "no_answer", "other"}
+
+
 def canon_demo_value(field: str, value) -> Optional[str]:
     """One canonical token per answer meaning, or None for placeholder junk.
     Empty/junk gender collapses to 'no_answer' (a real survey outcome); junk in
@@ -109,7 +116,10 @@ def canon_demo_value(field: str, value) -> Optional[str]:
     # as blank labels: treat them exactly like an empty answer
     if not v or v in _DEMO_JUNK or not _re.search(r"[a-z0-9]", v):
         return "no_answer" if field == "gender" else None
-    return _DEMO_CANON.get(field, {}).get(v, v)
+    out = _DEMO_CANON.get(field, {}).get(v, v)
+    if field == "gender" and out not in _GENDER_CANONICAL:
+        return "other"
+    return out
 
 
 def demo_label(field: str, value) -> str:
