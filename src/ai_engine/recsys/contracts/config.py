@@ -11,11 +11,14 @@ class EngagementWeights(BaseModel):
 
 class FusionWeights(BaseModel):
     """How much each scorer contributes to the final fused score. Each scorer -> [0,1]."""
-    semantic: float = 0.30    # similarity to whole-history taste CENTROID (blurred over likes)
-    affinity: float = 0.25    # item-kNN: max similarity to ANY one liked item (sharp)
-    tag: float = 0.25
-    recency: float = 0.10     # sequence awareness: similarity to the MOST-RECENT view
-    aversion: float = -0.25   # PENALTY: overlap with disliked themes (negative weight)
+    # TAG-FIRST policy: tag matching leads so recommendations track the visitor's
+    # stated (survey) and browsed interests legibly; embeddings add coverage, they
+    # don't dominate.
+    tag: float = 0.45
+    semantic: float = 0.20    # similarity to whole-history taste CENTROID (blurred over likes)
+    affinity: float = 0.10    # item-kNN: max similarity to ANY one liked item (sharp)
+    recency: float = 0.05     # sequence awareness: similarity to the MOST-RECENT view
+    aversion: float = -0.30   # PENALTY: overlap with disliked themes (negative weight)
     geo: float = 0.20         # proximity to the request's location (only scored when one is given)
 
 
