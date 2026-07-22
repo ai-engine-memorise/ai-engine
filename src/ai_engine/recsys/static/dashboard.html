@@ -1324,8 +1324,7 @@ async function drawCohortStats(box){
       const p25=pctile(.25),p75=pctile(.75);
       const fill=el("span",{class:"fill"});
       const hA=el("span",{class:"h"}),hB=el("span",{class:"h"});
-      const dr=el("div",{class:"dr"+(_fbFilter[r.question]?"":" idle"),
-        "data-tip":`mean ${r.avg} · shaded band = middle half of answers · click a score or drag a range`},
+      const dr=el("div",{class:"dr"+(_fbFilter[r.question]?"":" idle")},
         el("span",{class:"track"}),
         el("span",{class:"band",style:`left:${pct(p25)}%;width:${Math.max(2,pct(p75)-pct(p25))}%`}),
         fill,
@@ -1341,7 +1340,14 @@ async function drawCohortStats(box){
         const t=Math.min(1,Math.max(0,(ev.clientX-rect.left)/rect.width));
         return 1+Math.round(t*(scale-1));};
       let anchor=null,curSc=null,dragging=false;
-      dr.onpointerdown=ev=>{dragging=true;dr.setPointerCapture(ev.pointerId);
+      const ICO_DRAG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 9l-3 3 3 3M16 9l3 3-3 3M5 12h14"/></svg>';
+      dr.onmouseenter=()=>showChartTip(dr,
+        `<div class="ct-head">${cap1(r.question.replace(/_/g," "))}</div>`+
+        `<div class="ct-row"><span class="ct-dot" style="background:var(--accent)"></span>Mean<b>${r.avg}</b></div>`+
+        `<div class="ct-row"><span class="ct-dot" style="background:color-mix(in srgb,var(--accent) 30%,var(--track))"></span>Middle half of answers<b>${r.n}</b></div>`+
+        `<div class="ct-row" style="color:var(--mut)"><span style="line-height:0">${ICO_DRAG}</span>drag to select a range</div>`);
+      dr.onmouseleave=hideChartTip;
+      dr.onpointerdown=ev=>{hideChartTip();dragging=true;dr.setPointerCapture(ev.pointerId);
         dr.classList.remove("idle");anchor=scoreAt(ev);curSc=anchor;
         paintSel(anchor,anchor);};
       dr.onpointermove=ev=>{if(!dragging)return;curSc=scoreAt(ev);
