@@ -689,53 +689,83 @@ def make_router(components: Components) -> APIRouter:
             "meta": ev_meta(e),
         } for e in sorted(events, key=lambda e: e.ts, reverse=True)[:limit]]
 
-        # ----- per-session summary: duration, content viewed, survey timings -----
-        by_session: dict[str, list] = {}
-        for e in events:                                   # events sorted asc
-            by_session.setdefault(e.session_id or "", []).append(e)
-        if list(by_session.keys()) == [""]:
-            # the app sends no session id — derive sessions from SESSION_STARTED
-            # markers and >30 min silence gaps instead of one giant bucket
-            segs: list[list] = []
-            cur: list = []
-            prev_ts = None
+        # ----- journey blocks: SESSIONS (marker-delimited AR visits) vs SURVEYS
+        #       (pre/post questionnaires) as distinct top-level kinds -----
+        surv_spans = []
+        presented = None
+        for e in events:
+            if e.event == "SURVEY_PRESENTED":
+                presented = e
+            elif presented is not None and e.event in ("SURVEY_SUBMITTED", "SURVEY_DISMISSED"):
+                sid_meta = (ev_meta(presented).get("survey_id") or ev_meta(presented).get("survey")
+                            or ev_meta(presented).get("survey_name") or "survey")
+                surv_spans.append({"start": presented.ts, "end": e.ts,
+                                   "survey": str(sid_meta), "ended": e.event})
+                presented = None
+        sess_spans = []
+        open_s = None
+        for e in events:
+            if e.event == "SESSION_STARTED":
+                if open_s is not None:
+                    open_s["end"] = e.ts
+                    sess_spans.append(open_s)
+                open_s = {"start": e.ts, "end": None}
+            elif e.event in ("SESSION_ENDED", "GLOBAL_ENDED") and open_s is not None:
+                open_s["end"] = e.ts
+                sess_spans.append(open_s)
+                open_s = None
+        if open_s is not None:
+            open_s["end"] = events[-1].ts if events else None
+            sess_spans.append(open_s)
+        if not sess_spans and events:      # legacy streams without markers: gap split
+            cur, prev_ts = [], None
             for e in events:
                 gap = prev_ts is not None and e.ts is not None and (e.ts - prev_ts).total_seconds() > 1800
-                if cur and (e.event == "SESSION_STARTED" or gap):
-                    segs.append(cur)
+                if cur and gap:
+                    sess_spans.append({"start": cur[0].ts, "end": cur[-1].ts})
                     cur = []
                 cur.append(e)
                 prev_ts = e.ts or prev_ts
             if cur:
-                segs.append(cur)
-            by_session = {f"session {i + 1}": evs2 for i, evs2 in enumerate(segs)}
+                sess_spans.append({"start": cur[0].ts, "end": cur[-1].ts})
+
+        def _in(ts, span):
+            return ts and span["start"] and ts >= span["start"] and (span["end"] is None or ts <= span["end"])
+
         session_rows = []
-        for sid, evs in by_session.items():
-            tss = [e.ts for e in evs if e.ts]
-            surveys = []
-            presented = None
-            for e in evs:
-                if e.event == "SURVEY_PRESENTED":
-                    presented = e
-                elif presented is not None and e.event in ("SURVEY_SUBMITTED", "SURVEY_DISMISSED"):
-                    surveys.append({
-                        "presented_ts": presented.ts.isoformat() if presented.ts else None,
-                        "duration_seconds": round((e.ts - presented.ts).total_seconds(), 1)
-                                            if (e.ts and presented.ts) else None,
-                        "ended": e.event,
-                        "survey": (ev_meta(presented).get("survey_id")
-                                   or ev_meta(presented).get("survey")
-                                   or ev_meta(presented).get("survey_name")),
-                    })
-                    presented = None
+        for i, sp in enumerate(sess_spans):
+            evs = [e for e in events if _in(e.ts, sp)]
+            in_surv = [sv for sv in surv_spans if _in(sv["start"], sp)]
+            dur = (sp["end"] - sp["start"]).total_seconds() if sp["start"] and sp["end"] else 0
             session_rows.append({
-                "session_id": sid or None,
-                "start": min(tss).isoformat() if tss else None,
-                "end": max(tss).isoformat() if tss else None,
-                "duration_seconds": round((max(tss) - min(tss)).total_seconds(), 1) if len(tss) > 1 else 0,
+                "kind": "session",
+                "session_id": f"session {i + 1}",
+                "start": sp["start"].isoformat() if sp["start"] else None,
+                "end": sp["end"].isoformat() if sp["end"] else None,
+                "duration_seconds": round(max(dur, 0), 1),
                 "n_events": len(evs),
                 "n_views": sum(1 for e in evs if e.event == "CONTENT_VIEW_STARTED"),
-                "surveys": surveys,
+                "surveys": [{
+                    "presented_ts": sv["start"].isoformat() if sv["start"] else None,
+                    "duration_seconds": round((sv["end"] - sv["start"]).total_seconds(), 1)
+                                        if (sv["start"] and sv["end"]) else None,
+                    "ended": sv["ended"], "survey": sv["survey"],
+                } for sv in in_surv],
+            })
+        # surveys outside any session (the pre/post questionnaires) = own blocks
+        for sv in surv_spans:
+            if any(_in(sv["start"], sp) for sp in sess_spans):
+                continue
+            tailname = (sv["survey"] or "survey").split(":")[-1]
+            session_rows.append({
+                "kind": "survey",
+                "session_id": "presurvey" if tailname == "survey" else tailname,
+                "survey": sv["survey"], "ended": sv["ended"],
+                "start": sv["start"].isoformat() if sv["start"] else None,
+                "end": sv["end"].isoformat() if sv["end"] else None,
+                "duration_seconds": round((sv["end"] - sv["start"]).total_seconds(), 1)
+                                    if (sv["start"] and sv["end"]) else 0,
+                "n_events": 0, "n_views": 0, "surveys": [],
             })
         session_rows.sort(key=lambda r: r["start"] or "", reverse=True)
 
@@ -752,16 +782,10 @@ def make_router(components: Components) -> APIRouter:
             return {"result": None, "detail": "CLUSTER_MODEL_PATH not set / file missing"}
         return {"result": {"method": model.get("method", "kmeans"), "profiles": model.get("profiles", [])}}
 
-    @ops.get("/users")
-    def users_list(limit: int = Query(default=500, ge=1, le=5000)) -> dict:
-        """Per-visitor summary for the cohort table: interaction count, last interaction,
-        liked / seen totals, cold flag, and segment. Visitors are enumerated from the
-        MODEL STORE (every ingested visitor has signals; replay the event log to restore
-        them after a store wipe) — not by scanning the whole parquet event log per
-        request, which is what made this endpoint take seconds in production. The served
-        log contributes serve counts and visitors who were served but never ingested;
-        that scan is cached for 5 min, the assembled rows for 60s (dropped on ingest)."""
-        def build_served():
+    def _served_scan():
+        """(n_served, served_last) per visitor over the whole served log; cached 5 min.
+        Shared by the visitors table and the cohort statistics so their totals agree."""
+        def build():
             import glob
             n_served: dict[str, int] = {}
             served_last: dict[str, str] = {}
@@ -772,7 +796,6 @@ def make_router(components: Components) -> APIRouter:
                 except ImportError:
                     pq = None
                 if pq is not None:
-                    # per-file failures skip that file only, never the rest of the scan
                     for f in glob.glob(os.path.join(base, "served", "**", "*.parquet"), recursive=True):
                         try:
                             srows = pq.read_table(f, columns=["user_id", "ts"]).to_pylist()
@@ -791,7 +814,17 @@ def make_router(components: Components) -> APIRouter:
                             if ts and ts > served_last.get(u, ""):
                                 served_last[u] = ts
             return n_served, served_last
+        return _dash_cached(c, "served_scan", 300.0, build)
 
+    @ops.get("/users")
+    def users_list(limit: int = Query(default=500, ge=1, le=5000)) -> dict:
+        """Per-visitor summary for the cohort table: interaction count, last interaction,
+        liked / seen totals, cold flag, and segment. Visitors are enumerated from the
+        MODEL STORE (every ingested visitor has signals; replay the event log to restore
+        them after a store wipe) — not by scanning the whole parquet event log per
+        request, which is what made this endpoint take seconds in production. The served
+        log contributes serve counts and visitors who were served but never ingested;
+        that scan is cached for 5 min, the assembled rows for 60s (dropped on ingest)."""
         def build_rows():
             from .signals.signal_builder import aggregate_views
             seg: dict[str, str] = {}
@@ -801,7 +834,7 @@ def make_router(components: Components) -> APIRouter:
                     label = f"Cluster {p.get('cluster')}" + (f" · {p['falk_hint']}" if p.get("falk_hint") else "")
                     for u in (p.get("members") or []):
                         seg[u] = label
-            n_served, served_last = _dash_cached(c, "served_scan", 300.0, build_served)
+            n_served, served_last = _served_scan()
             sigs = {s.user_id: s for s in
                     (c.model_store.iter_signals() if hasattr(c.model_store, "iter_signals") else [])}
             ids = set(sigs) | set(seg) | set(n_served)
@@ -916,11 +949,38 @@ def make_router(components: Components) -> APIRouter:
         dwell_sum = 0.0
         dwell_views = 0
         end_reasons: dict[str, int] = {}
+        identified = 0
+        identified_warm = 0
+        session_durs: list[float] = []
         for s, aggs in cohort:
             try:
-                total_events += len(c.event_buffer.fetch_events(s.user_id))
+                evs = c.event_buffer.fetch_events(s.user_id)
             except Exception:
-                pass
+                evs = []
+            total_events += len(evs)
+            # identified = ANY survey answer (same rule as the visitors table)
+            if any(getattr(e, "survey_answers", None) for e in evs):
+                identified += 1
+                if not getattr(s, "is_cold", True):
+                    identified_warm += 1
+            # sessions: same derivation as the visitor History (markers + 30min gaps)
+            seg: list = []
+            prev_ts = None
+            def _close(seg2):
+                tss = [e.ts for e in seg2 if e.ts]
+                if len(tss) > 1:
+                    d = (max(tss) - min(tss)).total_seconds()
+                    if d > 0:
+                        session_durs.append(d)
+            for e in evs:
+                gap = prev_ts is not None and e.ts is not None and (e.ts - prev_ts).total_seconds() > 1800
+                if seg and (e.event == "SESSION_STARTED" or gap):
+                    _close(seg)
+                    seg = []
+                seg.append(e)
+                prev_ts = e.ts or prev_ts
+            if seg:
+                _close(seg)
             for a in aggs.values():
                 total_views += a.visits or 0
                 if a.dwell_seconds:
@@ -935,8 +995,20 @@ def make_router(components: Components) -> APIRouter:
                 warm += 1
 
         n = len(cohort)
+        # visitors that exist ONLY in the served log (recommendations requested, no
+        # events ever) count into the totals so the table and statistics agree; they
+        # carry no demographics, so any active filter naturally excludes them
+        session_durs.sort()
+        median_session = round(session_durs[len(session_durs) // 2], 1) if session_durs else 0
+        served_only = set(_served_scan()[0]) - {s.user_id for s in sigs}
+        extra = len(served_only) if not filters and not fb_ranges else 0
+        n += extra
         return {"result": {
-            "visitors": n, "total_visitors": len(sigs), "warm": warm, "cold": n - warm,
+            "visitors": n, "total_visitors": len(sigs) + len(served_only),
+            "warm": warm, "cold": n - warm,
+            "identified": identified, "anonymous": n - identified,
+            "identified_warm": identified_warm,
+            "median_session_seconds": median_session, "sessions": len(session_durs),
             "events": total_events, "views": total_views,
             "views_per_visitor": round(total_views / n, 1) if n else 0,
             "avg_dwell_seconds": round(dwell_sum / dwell_views, 1) if dwell_views else 0,
