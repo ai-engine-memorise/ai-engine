@@ -148,18 +148,23 @@ main{flex:1 1 auto;min-width:0}
   padding:9px 16px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:.13s}
 .subtab:hover{color:var(--fg)}
 /* session blocks widget */
-.sesslane{display:flex;gap:12px;overflow-x:auto;padding:2px 2px 12px}
+.sesslane{display:flex;align-items:flex-start;gap:12px;overflow-x:auto;padding:2px 2px 12px}
 .sesslane::-webkit-scrollbar,.spanlane::-webkit-scrollbar{height:7px}
 .sesslane::-webkit-scrollbar-thumb,.spanlane::-webkit-scrollbar-thumb{background:var(--line);border-radius:9px}
 .sesslane::-webkit-scrollbar-track,.spanlane::-webkit-scrollbar-track{background:transparent}
 .sesslane,.spanlane{scrollbar-width:thin;scrollbar-color:var(--line) transparent}
-.sessblk{flex:0 0 auto;min-width:200px;text-align:left;background:var(--panel);border:1px solid var(--line);
+.sessblk{flex:0 0 auto;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;min-width:200px;min-height:96px;text-align:left;background:var(--panel);border:1px solid var(--line);
   border-radius:13px;padding:13px 16px;cursor:pointer;font-family:inherit;color:var(--fg);
   transition:border-color .15s,box-shadow .15s,transform .15s}
 .sessblk:hover{border-color:var(--accent);box-shadow:0 5px 16px var(--shadow);transform:translateY(-1px)}
 .sessblk.on{border-color:var(--accent);box-shadow:0 5px 16px var(--shadow)}
 .sessblk.on .t{color:var(--accent)}
 .sessblk .t{font-family:Montserrat,sans-serif;font-weight:600;font-size:14px;margin-bottom:3px;color:var(--primary-dark)}
+.sessblk.surveyblk{cursor:pointer;font-family:inherit;color:var(--fg);background:color-mix(in srgb,var(--c-tag) 7%,var(--panel));
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--c-tag) 30%,transparent);border-color:transparent}
+.sessblk.surveyblk:hover{transform:none;box-shadow:inset 0 0 0 1.5px var(--c-tag)}
+.sessblk.surveyblk.on{box-shadow:inset 0 0 0 1.5px var(--c-tag)}
+.sessblk.surveyblk .t{color:var(--c-tag)}
 [data-theme="dark"] .sessblk .t{color:var(--fg)}
 .sessdetail{margin-top:8px;border-top:1px dashed var(--line);padding-top:8px}
 .subpanel{margin:2px 0 8px;border-radius:12px;padding:10px 13px 4px;
@@ -211,6 +216,7 @@ summary.rawlink:hover{text-decoration:underline;color:var(--fg)}
   border:2.5px solid var(--accent);box-shadow:0 1px 3px var(--shadow);transform:translateX(-50%);pointer-events:none}
 /* idle = no active filter on this question: no fill, no handles */
 .dr.idle .fill,.dr.idle .h{display:none}
+.dragsel{outline:2px solid var(--accent);outline-offset:-2px;border-radius:7px}
 /* visitors-per-day chart */
 .tlchart{display:flex;align-items:flex-end;gap:2px;height:130px}
 .tlcol{flex:1;min-width:0;height:100%;display:flex;align-items:flex-end;border-radius:3px}
@@ -811,7 +817,7 @@ function paint(){
   if(userCtx){renderUserDetail(v);return;}
   v.append(el("div",{class:"pagehead"},
     el("div",{},el("h1",{},current)),
-    (current==="Config"||current==="Access Tokens"||current==="Synthetic users")?"":el("button",{class:"iconbtn",title:"refresh",onclick:()=>{_cohortDom=null;paint();}},"↻")));
+    (current==="Config"||current==="Access Tokens"||current==="Synthetic users"||current==="Cohort")?"":el("button",{class:"iconbtn",title:"refresh",onclick:()=>{_cohortDom=null;paint();}},"↻")));
   // Cohort keeps its rendered DOM across visitor drill-downs: back = reattach,
   // no refetch, scroll/filters/subtab intact. Refresh button forces a rebuild.
   if(current==="Cohort"&&_cohortDom&&Date.now()-_cohortDom.ts<300000){
@@ -1125,9 +1131,11 @@ function cohortStatRow(st){
   const split=outcomes?el("div",{class:"barwrap",style:"margin-top:7px;height:8px;min-width:0;gap:2px;max-width:150px"},
     el("div",{class:"seg",style:`width:${100*st.positive/outcomes}%;background:var(--c-affinity)`,title:st.positive+" positive"}),
     el("div",{class:"seg",style:`width:${100*st.negative/outcomes}%;background:var(--c-aversion)`,title:st.negative+" negative"})):"";
+  const durH=x=>{x=Math.round(x||0);return x>=3600?`${Math.floor(x/3600)}h ${Math.floor(x%3600/60)}m`:x>=60?`${Math.floor(x/60)}m ${x%60}s`:x+"s"};
   return el("div",{class:"statrow"},
-    cell(st.visitors,"visitors",`${st.warm} warm · ${st.cold} cold`),
-    cell(st.events,"interactions",`${st.views_per_visitor} views per visitor`),
+    cell(st.identified!=null?st.identified:st.visitors,"identified visitors",
+      `${st.visitors} total · ${st.anonymous!=null?st.anonymous:0} anonymous`),
+    cell(durH(st.median_session_seconds),"median session",`${st.sessions||0} sessions`),
     cell((st.avg_dwell_seconds||0)+"s","avg dwell per view",`${st.views} content views`),
     cell(`${st.positive} / ${st.negative}`,"positive / negative","engagement outcomes",split));
 }
@@ -1149,6 +1157,31 @@ async function drawCohortStats(box){
     _coFilter[f]=cur.includes(val)?cur.filter(x=>x!==val):cur.concat(val);
     if(!_coFilter[f].length)delete _coFilter[f];
     refresh();
+  };
+  // click = toggle one value; click-and-DRAG across items = select exactly the sweep
+  const attachDragSelect=(container,field,itemSel)=>{
+    let dragging=false,moved=false,vals=null;
+    container.style.touchAction="none";
+    container.onpointerdown=ev=>{
+      const it=ev.target.closest(itemSel);if(!it||!container.contains(it)||!it.dataset.val)return;
+      dragging=true;moved=false;vals=new Set([it.dataset.val]);
+      it.classList.add("dragsel");
+      container.setPointerCapture(ev.pointerId);
+    };
+    container.onpointermove=ev=>{
+      if(!dragging)return;
+      const el2=document.elementFromPoint(ev.clientX,ev.clientY);
+      const it=el2&&el2.closest(itemSel);
+      if(it&&container.contains(it)&&it.dataset.val&&!vals.has(it.dataset.val)){
+        vals.add(it.dataset.val);moved=true;it.classList.add("dragsel");
+      }
+    };
+    container.onpointerup=()=>{
+      if(!dragging)return;dragging=false;
+      const picked=[...vals];vals=null;
+      if(moved){_coFilter[field]=picked;refresh();}
+      else setF(field,picked[0]);
+    };
   };
   const CAT=["var(--c-semantic)","var(--c-tag)","var(--c-geo)","var(--c-recency)"];
   const DEMO_LABEL={age:"Age",gender:"Gender",nationality:"Nationality",province:"Province",personal_connection:"WW2 connection",email_shared:"Email shared"};
@@ -1184,12 +1217,13 @@ async function drawCohortStats(box){
     const w=el("div",{class:"colchart"});
     for(const [val,cnt] of entries){
       const on=sel.includes(val),dim=sel.length&&!on;
-      w.append(el("button",{class:"col",title:`${lab(field,val)}: ${cnt} visitor${cnt===1?"":"s"}`,
-        onclick:cnt?()=>setF(field,val):null,style:cnt?"":"cursor:default"},
+      w.append(el("button",{class:"col","data-val":cnt?String(val):"",
+        title:`${lab(field,val)}: ${cnt} visitor${cnt===1?"":"s"}`,style:cnt?"":"cursor:default"},
         el("span",{class:"cnt num"},cnt||""),
         el("div",{class:"track"},el("div",{class:"bar"+(on?" on":""),style:`height:${cnt?Math.max(10,Math.round(100*cnt/m)):0}%;${dim?"opacity:.35":""}`})),
         el("span",{class:"lbl"+(on?" on":"")},lab(field,val))));
     }
+    attachDragSelect(w,field,".col");
     return w;
   };
   // few categories (gender) -> donut + clickable legend; colors follow the entity's
@@ -1231,12 +1265,13 @@ async function drawCohortStats(box){
     for(const r of rows){
       const on=sel.includes(r.value),dim=sel.length&&!on;
       d.append(el("div",{class:"distrow"+(field?" click":""),title:`${r.label}: ${r.count} of ${tot}`,
-        onclick:field?()=>setF(field,r.value):null},
+        "data-val":field?String(r.value):""},
         el("div",{class:"small"+(on?" b":""),style:"overflow:hidden;text-overflow:ellipsis;white-space:nowrap"+(on?";font-weight:600":"")},r.label),
         el("div",{class:"barwrap",style:"min-width:0;height:12px"},
           el("div",{class:"seg",style:`width:${100*r.count/m}%;background:${r.color||'var(--accent)'};border-radius:0 4px 4px 0;${dim?"opacity:.35":""}`})),
         el("div",{class:"small num mut",style:"text-align:right;white-space:nowrap"},`${Math.round(100*r.count/tot)}%`)));
     }
+    if(field)attachDragSelect(d,field,".distrow");
     return d;
   };
 
@@ -2004,6 +2039,42 @@ async function renderHistory(v){
     const wrap=el("div");
     const lane=el("div",{class:"sesslane"});
     (h.sessions||[]).slice().reverse().forEach((sess,ix)=>{
+      if(sess.kind==="survey"){
+        // pre/post questionnaire: its own distinct block, not a "session"
+        const ok=sess.ended==="SURVEY_SUBMITTED";
+        const ICO_OK='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--c-affinity)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="8.5 12.5 11 15 15.5 9.5"/></svg>';
+        const ICO_NO='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--mut)" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg>';
+        const svBlk=el("button",{class:"sessblk surveyblk"},
+          el("div",{class:"row",style:"justify-content:space-between;align-items:center;gap:8px"},
+            el("div",{class:"t",style:"margin:0"},cap1(sess.session_id||"survey")),
+            el("span",{style:"line-height:0","data-tip":ok?"submitted":"dismissed",html:ok?ICO_OK:ICO_NO})),
+          el("div",{class:"small mut num"},(sess.start||"").replace("T"," ").slice(5,16)),
+          el("div",{class:"small mut"},dur2(sess.duration_seconds)));
+        // expand: the survey's own events (presented / answered per page / outcome)
+        const svDetail=el("div",{class:"sessdetail",style:"display:none"});
+        const svLane=el("div",{class:"spanlane"});
+        const inBlk=e=>e.ts&&sess.start&&sess.end&&e.ts>=sess.start&&e.ts<=sess.end;
+        evsAsc.filter(e=>inBlk(e)&&(e.event||"").startsWith("SURVEY")).forEach(e=>{
+          const m=e.meta||{};
+          const kindLbl=e.event==="SURVEY_PRESENTED"?"presented"
+                      :e.event==="SURVEY_ANSWERED"?("answered"+(m.current_page!=null?` · page ${m.current_page}`:""))
+                      :e.event==="SURVEY_SUBMITTED"?"submitted":"dismissed";
+          const nAns=m.answers?Object.keys(m.answers).length:0;
+          svLane.append(el("div",{class:"spanblk",style:"--sb:var(--c-tag)",
+            "data-tip":`${(e.ts||"").replace("T"," ").slice(11,19)}${nAns?` · ${nAns} answer${nAns===1?"":"s"}`:""}`},
+            el("div",{class:"k",style:"color:var(--c-tag)"},"survey"),
+            el("div",{class:"l"},kindLbl),
+            el("div",{class:"small mut num"},(e.ts||"").slice(11,19))));
+        });
+        svDetail.append(svLane);
+        svBlk.onclick=()=>{const openNow=svDetail.style.display==="none";
+          wrap.querySelectorAll(".sessdetail").forEach(d2=>d2.style.display="none");
+          wrap.querySelectorAll(".sessblk").forEach(b2=>b2.classList.remove("on"));
+          svDetail.style.display=openNow?"":"none";svBlk.classList.toggle("on",openNow);};
+        lane.append(svBlk);
+        wrap.append(svDetail);
+        return;
+      }
       const inSess=sp=>sp.start&&sess.start&&sess.end&&sp.start>=sess.start&&sp.start<=sess.end;
       const mine=spans.filter(inSess);
       const svPills=(sess.surveys||[]).map(x=>el("span",{class:"pill "+(x.ended==="SURVEY_SUBMITTED"?"warm":"neutral"),
