@@ -48,6 +48,41 @@ def _end_reason(value) -> Optional[EndReason]:
         return None
 
 
+EVALUATION_EVENT = "EVALUATION_SUBMITTED"
+EVALUATION_RATINGS = ("positive", "neutral", "negative")
+
+
+def extract_evaluation(raw: dict) -> Optional[dict]:
+    """The thumbs-style recommendation rating carried by an `EVALUATION_SUBMITTED` track.
+
+    Observed wire shape (Westerbork AR app, RudderStack track):
+
+        {"event": "EVALUATION_SUBMITTED", "userId": "P48G",
+         "properties": {"evaluation": {"rating": "positive" | "neutral" | "negative"},
+                        "app": {"app_id": "AR Maquette (KWB) - AI", "build": "0.10.2", "platform": "IOS"}}}
+
+    No content_id / request_id travels with it, so the rating is a per-visitor verdict on
+    the recommendations as a whole, not a reward on one served item. `normalize_event`
+    keeps the payload in `InteractionEvent.raw`; this reads it back out. Returns None
+    when the payload is not an evaluation."""
+    if not isinstance(raw, dict) or raw.get("event") != EVALUATION_EVENT:
+        return None
+    props = raw.get("properties") or {}
+    ev = props.get("evaluation")
+    if not isinstance(ev, dict):
+        ev = {}
+    app = props.get("app") if isinstance(props.get("app"), dict) else {}
+    rating = ev.get("rating")
+    rating = str(rating).strip().lower() if rating not in (None, "") else None
+    return {
+        "rating": rating,
+        "app_id": app.get("app_id"),
+        "build": app.get("build"),
+        "platform": app.get("platform"),
+        "extra": {k: v for k, v in ev.items() if k != "rating"},   # any field the app adds later
+    }
+
+
 def normalize_event(raw: dict) -> Optional[InteractionEvent]:
     """Map one RudderStack track/identify payload to an InteractionEvent (or None)."""
     if not isinstance(raw, dict):

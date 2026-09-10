@@ -60,6 +60,9 @@ class InteractionEvent(BaseModel):
       `request_id`, and `impressions`.
     - **A survey / identify** (`SURVEY_SUBMITTED`, `IDENTIFY`) fills `survey_answers`.
     - **A search / lookup** (`CONTENT_LOOKUP`) fills `query_text` and maybe `clicked_id`.
+    - **A thumbs rating** (`EVALUATION_SUBMITTED`) fills nothing structured: the verdict lives at
+      `raw.properties.evaluation.rating` (positive / neutral / negative), read back by
+      `adapters.rudderstack.extract_evaluation` for the dashboard.
 
     `build_user_signals` folds a visitor's list of these into their user model.
     """
