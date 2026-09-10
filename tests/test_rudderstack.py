@@ -71,3 +71,18 @@ def test_normalize_events_sorts_by_ts():
     ]
     evs = normalize_events(raws)
     assert [e.ts for e in evs] == sorted(e.ts for e in evs)
+
+
+def test_extract_evaluation_reads_thumbs_rating():
+    from ai_engine.recsys.adapters.rudderstack import extract_evaluation, normalize_event
+    raw = {"event": "EVALUATION_SUBMITTED", "userId": "P48G", "timestamp": "2026-06-19T08:55:11.588Z",
+           "properties": {"app": {"app_id": "AR Maquette (KWB)", "build": "0.10.2", "platform": "IOS"},
+                          "evaluation": {"rating": "Positive"}}}
+    ev = normalize_event(raw)
+    assert ev is not None and ev.event == "EVALUATION_SUBMITTED"
+    assert ev.content_id is None and ev.request_id is None and ev.survey_answers == {}
+    got = extract_evaluation(ev.raw)
+    assert got == {"rating": "positive", "app_id": "AR Maquette (KWB)", "build": "0.10.2",
+                   "platform": "IOS", "extra": {}}
+    assert extract_evaluation({"event": "CONTENT_VIEW_ENDED"}) is None
+    assert extract_evaluation({"event": "EVALUATION_SUBMITTED", "properties": {}})["rating"] is None

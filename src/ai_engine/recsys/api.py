@@ -10,6 +10,7 @@ Mount `router` into the main service, or run `app` standalone. With no REDIS_URL
 QDRANT_API_URL set it runs fully in-memory on dev fixtures.
 """
 from __future__ import annotations
+import json as _json_mod
 import logging
 import os
 import threading
@@ -459,6 +460,7 @@ def make_router(components: Components) -> APIRouter:
             cache.pop("users_rows", None)
             cache.pop("cohort_aggs", None)
             cache.pop("fb_scores", None)
+            cache.pop("evaluation_rows", None)
         return {"status": "ok", "ingested": len(events), "users": sorted(users),
                 "bandit_updates": bandit_updates}
 
@@ -538,17 +540,25 @@ def make_router(components: Components) -> APIRouter:
         content the visitor engaged with positively together with that content's
         tags, i.e. *why* we think the visitor likes certain things)."""
         from .survey import extract_demographics, split_survey_answers
+        from .adapters.rudderstack import EVALUATION_EVENT, extract_evaluation
 
         sig = c.model_store.get_signals(user_id)
         if sig is None:
             return {"result": None}
 
-        # Raw survey answers, merged across all of this visitor's events (latest wins).
+        # Raw survey answers, merged across all of this visitor's events (latest wins);
+        # the recommendation thumbs (EVALUATION_SUBMITTED) collected alongside.
         answers: dict = {}
+        thumbs: list[dict] = []
         for ev in (c.event_buffer.fetch_events(user_id) or []):
             for k, val in (getattr(ev, "survey_answers", None) or {}).items():
                 if val is not None and val != "":
                     answers[k] = val
+            if ev.event == EVALUATION_EVENT:
+                got = extract_evaluation(ev.raw or {})
+                if got and got.get("rating"):
+                    thumbs.append({"rating": got["rating"], "ts": ev.ts.isoformat() if ev.ts else None})
+        thumbs.sort(key=lambda t: t["ts"] or "")
         grouped = split_survey_answers(answers)
 
         # personalization answers arrive as internal codes: AR location tags, content
@@ -579,6 +589,9 @@ def make_router(components: Components) -> APIRouter:
             "completed_demographic": bool(grouped["demographic"]),
             "completed_personalization": bool(grouped["personalization"]),
             "answer_count": len(answers),
+            # latest thumbs on the recommendations (+ how many times they rated)
+            "evaluation": ({**thumbs[-1], "count": len(thumbs),
+                            "history": [t["rating"] for t in thumbs]} if thumbs else None),
         }
 
         # demographics: canonicalized (language variants folded, junk -> no_answer/
@@ -1112,6 +1125,169 @@ def make_router(components: Components) -> APIRouter:
         if not filters and not fb_ranges:
             return {"result": _dash_cached(c, "feedback_agg", 300.0, build)}
         return {"result": build()}
+
+    def _evaluation_rows() -> list[dict]:
+        """Every `EVALUATION_SUBMITTED` (thumbs on the recommendations) as a flat row,
+        oldest first, cached 5 min (ingest drops the key). Read from the durable
+        Parquet log when there is one (full history, one predicate-pushed column
+        scan per partition); otherwise from the hot per-user buffer."""
+        from .adapters.rudderstack import EVALUATION_EVENT, extract_evaluation
+
+        def _row(user_id, ts, content_id, request_id, raw) -> Optional[dict]:
+            ev = extract_evaluation(raw or {})
+            if ev is None:
+                return None
+            return {"user_id": user_id, "ts": ts, "content_id": content_id,
+                    "request_id": request_id, **ev}
+
+        def build():
+            rows: list[dict] = []
+            base = _log_base(c)
+            if base and os.path.isdir(base):
+                import glob as _glob
+                import json as _json
+                try:
+                    import pyarrow.parquet as pq
+                    import pyarrow.compute as pc
+                except ImportError:
+                    raise HTTPException(status_code=503, detail="pyarrow not installed")
+                cols = ["user_id", "event", "ts", "content_id", "request_id", "raw"]
+                for d in sorted(_glob.glob(os.path.join(base, "date=*"))):
+                    for f in _glob.glob(os.path.join(d, "*.parquet")):
+                        try:
+                            t = pq.read_table(f, columns=cols)
+                        except Exception:
+                            continue
+                        t = t.filter(pc.equal(t["event"], EVALUATION_EVENT))
+                        for r in t.to_pylist():
+                            try:
+                                raw = _json.loads(r.get("raw") or "{}")
+                            except Exception:
+                                raw = {}
+                            row = _row(r.get("user_id"), r.get("ts"), r.get("content_id"),
+                                       r.get("request_id"), raw)
+                            if row:
+                                rows.append(row)
+            else:
+                sigs = list(c.model_store.iter_signals() if hasattr(c.model_store, "iter_signals") else [])
+                for s2 in sigs:
+                    try:
+                        evs = c.event_buffer.fetch_events(s2.user_id)
+                    except Exception:
+                        continue
+                    for e in evs:
+                        if e.event != EVALUATION_EVENT:
+                            continue
+                        row = _row(e.user_id, e.ts.isoformat() if e.ts else None,
+                                   e.content_id, e.request_id, e.raw)
+                        if row:
+                            rows.append(row)
+            rows.sort(key=lambda r: r.get("ts") or "")
+            return rows
+        return _dash_cached(c, "evaluation_rows", 300.0, build)
+
+    @ops.get("/cohort/evaluation")
+    def cohort_evaluation(
+        age: Optional[str] = Query(default=None),
+        gender: Optional[str] = Query(default=None),
+        nationality: Optional[str] = Query(default=None),
+        province: Optional[str] = Query(default=None),
+        personal_connection: Optional[str] = Query(default=None),
+        email_shared: Optional[str] = Query(default=None),
+        feedback: Optional[str] = Query(default=None),
+        recent: int = Query(default=20, ge=0, le=200),
+    ) -> dict:
+        """Thumbs feedback on the recommendations (`EVALUATION_SUBMITTED`,
+        `properties.evaluation.rating` in positive / neutral / negative) for the
+        FILTERED cohort: rating distribution, share positive, split per app build,
+        per day, the latest submissions, and the observed payload structure (every
+        field seen with its value counts) so the dashboard shows exactly what the
+        app sends. Same filter grammar as `/cohort/stats`. PII-guarded (visitor ids
+        only, as elsewhere in the dashboard)."""
+        from .adapters.rudderstack import EVALUATION_RATINGS
+        filters = {k: set(v.split(",")) for k, v in (
+            ("age", age), ("gender", gender), ("nationality", nationality),
+            ("province", province), ("personal_connection", personal_connection),
+            ("email_shared", email_shared)) if v}
+        fb_ranges: dict[str, tuple] = {}
+        if feedback:
+            for part in feedback.split(","):
+                try:
+                    q, rng = part.split(":", 1)
+                    lo, hi = rng.split("-", 1)
+                    fb_ranges[q.strip()] = (int(lo), int(hi))
+                except Exception:
+                    continue
+        rows = _evaluation_rows()
+        if filters or fb_ranges:
+            fb_map = _fb_scores_map() if fb_ranges else {}
+            demo_by_user: dict[str, dict] = {}
+            for s2 in (c.model_store.iter_signals() if hasattr(c.model_store, "iter_signals") else []):
+                demo_by_user[s2.user_id] = getattr(s2, "demographics", None) or {}
+
+            def ok(uid: str) -> bool:
+                demo = demo_by_user.get(uid)
+                if demo is None:
+                    return False
+                if not all((canon_demo_value(f, demo.get(f, "")) or "") in vals
+                           for f, vals in filters.items()):
+                    return False
+                scores = fb_map.get(uid) or {}
+                for q, (lo, hi) in fb_ranges.items():
+                    sc = scores.get(q)
+                    if sc is None or sc < lo or sc > hi:
+                        return False
+                return True
+            rows = [r for r in rows if ok(r["user_id"])]
+
+        dist = {k: 0 for k in EVALUATION_RATINGS}
+        by_app: dict[str, dict] = {}
+        by_day: dict[str, dict] = {}
+        fields: dict[str, dict[str, int]] = {}
+        users: set = set()
+        with_content = with_request = 0
+        for r in rows:
+            rating = r.get("rating") or "unknown"
+            dist[rating] = dist.get(rating, 0) + 1
+            users.add(r["user_id"])
+            if r.get("content_id"):
+                with_content += 1
+            if r.get("request_id"):
+                with_request += 1
+            app = r.get("app_id") or "unknown app"
+            a = by_app.setdefault(app, {k: 0 for k in EVALUATION_RATINGS})
+            a[rating] = a.get(rating, 0) + 1
+            day = (r.get("ts") or "")[:10] or "unknown"
+            dd = by_day.setdefault(day, {k: 0 for k in EVALUATION_RATINGS})
+            dd[rating] = dd.get(rating, 0) + 1
+            observed = {"evaluation.rating": r.get("rating"), "app.app_id": r.get("app_id"),
+                        "app.build": r.get("build"), "app.platform": r.get("platform"),
+                        **{f"evaluation.{k}": v for k, v in (r.get("extra") or {}).items()}}
+            for k, v in observed.items():
+                if v in (None, ""):
+                    continue
+                fv = fields.setdefault(k, {})
+                sv = str(v) if isinstance(v, (str, int, float, bool)) else _json_mod.dumps(v, sort_keys=True)
+                fv[sv] = fv.get(sv, 0) + 1
+        n = len(rows)
+        rated = sum(dist.get(k, 0) for k in EVALUATION_RATINGS)
+        recent_rows = [{k: r.get(k) for k in ("ts", "user_id", "rating", "app_id", "build",
+                                              "platform", "content_id", "request_id")}
+                       for r in rows[::-1][:recent]]
+        return {"result": {
+            "n": n, "users": len(users), "dist": dist,
+            "share_positive": round(dist.get("positive", 0) / rated, 3) if rated else None,
+            "with_content_id": with_content, "with_request_id": with_request,
+            "by_app": [{"app_id": k, **v, "n": sum(v.values())} for k, v in
+                       sorted(by_app.items(), key=lambda kv: -sum(kv[1].values()))],
+            "by_day": [{"date": d, **v} for d, v in sorted(by_day.items())],
+            "recent": recent_rows,
+            "fields": {k: dict(sorted(v.items(), key=lambda kv: -kv[1])) for k, v in fields.items()},
+            "payload": {"event": "EVALUATION_SUBMITTED", "userId": "<visitor id>",
+                        "properties": {"evaluation": {"rating": "positive | neutral | negative"},
+                                       "app": {"app_id": "<app>", "build": "<version>", "platform": "<os>"}}},
+            "filters": {k: sorted(v) for k, v in filters.items()},
+        }}
 
     @ops.get("/cohort/timeline")
     def cohort_timeline() -> dict:

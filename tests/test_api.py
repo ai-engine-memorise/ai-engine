@@ -223,6 +223,41 @@ def test_content_stats_aggregates_cohort():
     assert r["themes"]                                    # popular themes surfaced
 
 
+def _thumbs(uid, rating, ts, app_id="AR Maquette (KWB) - AI"):
+    # exact wire shape observed in the Westerbork export (see adapters.rudderstack.extract_evaluation)
+    return {"event": "EVALUATION_SUBMITTED", "userId": uid, "timestamp": ts, "type": "track",
+            "properties": {"app": {"app_id": app_id, "build": "0.10.2", "platform": "IOS"},
+                           "evaluation": {"rating": rating}}}
+
+
+def test_cohort_evaluation_aggregates_thumbs():
+    client = _client()
+    ts = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+    client.post("/api/ingest", json=[
+        _thumbs("u1", "positive", ts),
+        _thumbs("u2", "positive", ts, app_id="AR Maquette (KWB)"),
+        _thumbs("u3", "negative", ts),
+        _thumbs("u3", "neutral", ts),          # a visitor can rate more than once
+        _view("CONTENT_VIEW_STARTED", "101", ts),
+    ])
+    r = client.get("/api/cohort/evaluation").json()["result"]
+    assert r["n"] == 4 and r["users"] == 3
+    assert r["dist"] == {"positive": 2, "neutral": 1, "negative": 1}
+    assert r["share_positive"] == 0.5
+    assert r["with_request_id"] == 0 and r["with_content_id"] == 0     # nothing to join a served item on
+    assert {a["app_id"] for a in r["by_app"]} == {"AR Maquette (KWB) - AI", "AR Maquette (KWB)"}
+    assert r["fields"]["evaluation.rating"] == {"positive": 2, "neutral": 1, "negative": 1}
+    assert r["payload"]["properties"]["evaluation"]["rating"]            # structure shown on the dashboard
+    assert r["recent"][0]["user_id"] in {"u1", "u2", "u3"} and r["recent"][0]["rating"] in {"positive", "neutral", "negative"}
+    # the per-visitor timeline surfaces the rating too (meta flattens properties.evaluation)
+    h = client.get("/api/usermodel/history?user_id=u3").json()["result"]
+    assert {e["meta"].get("rating") for e in h["events"] if e["event"] == "EVALUATION_SUBMITTED"} == {"negative", "neutral"}
+    # ... and the profile card gets the latest thumbs + count
+    x = client.get("/api/usermodel/extras?user_id=u3").json()["result"]
+    assert x["surveys"]["evaluation"]["count"] == 2 and x["surveys"]["evaluation"]["rating"] in {"negative", "neutral"}
+    assert client.get("/api/usermodel/extras?user_id=u1").json()["result"]["surveys"]["evaluation"]["rating"] == "positive"
+
+
 def test_dashboard_page_served():
     client = _client()
     r = client.get("/dashboard")

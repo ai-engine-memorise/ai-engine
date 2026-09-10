@@ -657,6 +657,16 @@ button.ghost:hover{border-color:var(--accent)}
 
 <script>
 const FEAT=["semantic","tag","recency","aversion","geo"];
+// thumbs icons for the recommendation rating (EVALUATION_SUBMITTED): Feather-style
+// strokes in currentColor so they follow the theme; neutral is a flat "meh" mark
+const THUMB={
+  positive:'<path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>',
+  neutral:'<circle cx="12" cy="12" r="9"/><line x1="8" y1="12" x2="16" y2="12"/>',
+  negative:'<path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/>'};
+const THUMB_COLOR={positive:"var(--c-affinity)",neutral:"var(--mut)",negative:"var(--c-aversion)"};
+function thumbIcon(k,col,size){const sp=el("span",{style:`display:inline-flex;color:${col||THUMB_COLOR[k]||"var(--mut)"};vertical-align:-3px;margin-right:5px`});
+  sp.innerHTML=`<svg width="${size||14}" height="${size||14}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${THUMB[k]||THUMB.neutral}</svg>`;
+  return sp;}
 const COLORS={semantic:"var(--c-semantic)",affinity:"var(--c-affinity)",tag:"var(--c-tag)",recency:"var(--c-recency)",aversion:"var(--c-aversion)",geo:"var(--c-geo)",popularity:"#999"};
 const $=(s,el=document)=>el.querySelector(s);
 const el=(t,a={},...kids)=>{const e=document.createElement(t);for(const k in a){if(k==="class")e.className=a[k];else if(k==="html")e.innerHTML=a[k];else if(k.startsWith("on"))e[k]=a[k];else e.setAttribute(k,a[k]);}for(const k of kids.flat())e.append(k&&k.nodeType?k:document.createTextNode(k??""));return e;};
@@ -1337,13 +1347,20 @@ async function drawCohortStats(box){
     else delete _fbFilter[q];
     refresh();
   };
-  const fbInner=el("div");
+  // post-visit Likert feedback and the recommendation thumbs sit side by side in
+  // one row under the activity cells; the row (and its divider) only appears once
+  // either column has data
+  const fbRow=el("div",{style:"display:none;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px 48px;border-top:1px solid var(--line);margin:18px 0 0;padding-top:14px"});
+  statsCard.append(fbRow);
+  const fbInner=el("div",{style:"min-width:0"}),thInner=el("div",{style:"min-width:0"});
+  fbRow.append(fbInner,thInner);
+  const showRow=()=>{fbRow.style.display="grid";};
   api("/api/cohort/feedback"+(qs?"?"+qs:"")).then(rows=>{
     if(!(rows||[]).length)return;
-    fbInner.append(el("div",{style:"border-top:1px solid var(--line);margin:18px 0 12px"}),
-      el("div",{class:"eyebrow",style:"display:block;margin:0 0 4px"},"Post-visit feedback"));
+    showRow();
+    fbInner.append(el("div",{class:"eyebrow",style:"display:block;margin:0 0 4px"},"Post-visit feedback"));
     const fgrid=el("div",{style:"max-width:560px"});
-    fgrid.append(el("div",{class:"distrow",style:"grid-template-columns:minmax(95px,155px) 260px;margin:0 0 2px"},
+    fgrid.append(el("div",{class:"distrow",style:"grid-template-columns:minmax(95px,155px) minmax(0,260px);margin:0 0 2px"},
       el("span"),
       el("div",{style:"display:flex;justify-content:space-between"},
         el("span",{class:"fbanchor"},"disagree"),el("span",{class:"fbanchor"},"agree"))));
@@ -1393,12 +1410,50 @@ async function drawCohortStats(box){
         if(prev&&prev[0]===a&&prev[1]===b)delete _fbFilter[r.question];  // same again = clear
         else _fbFilter[r.question]=[a,b];
         refresh();};
-      fgrid.append(el("div",{class:"distrow",style:"grid-template-columns:minmax(95px,155px) 260px;margin:7px 0"},
+      fgrid.append(el("div",{class:"distrow",style:"grid-template-columns:minmax(95px,155px) minmax(0,260px);margin:7px 0"},
         el("div",{class:"small",style:_fbFilter[r.question]?"font-weight:600":""},cap1(r.question.replace(/_/g," "))),
         dr));
     }
     fbInner.append(fgrid);
-    statsCard.append(fbInner);
+  }).catch(()=>{});
+
+  // recommendation feedback: the thumbs the app sends as EVALUATION_SUBMITTED
+  // (properties.evaluation.rating = positive | neutral | negative). A per-visitor
+  // verdict on the recommendations as a whole (no content_id / request_id).
+  api("/api/cohort/evaluation"+(qs?"?"+qs:"")).then(ev=>{
+    if(!ev||!ev.n)return;
+    showRow();
+    const R=[["positive","var(--c-affinity)"],["neutral","var(--mut)"],["negative","var(--c-aversion)"]];
+    const rc=k=>(R.find(x=>x[0]===k)||[k,"var(--mut)"]);
+    thInner.append(el("div",{class:"eyebrow",style:"display:block;margin:0 0 4px"},"Recommendation feedback"),
+      el("div",{class:"small mut",style:"margin:0 0 12px"},`${ev.n} ratings from ${ev.users} visitors`));
+    const wrap=el("div",{style:"max-width:420px"});
+    const rated=R.reduce((a,[k])=>a+(ev.dist[k]||0),0)||1;
+    const bar=el("div",{class:"barwrap",style:"height:14px;gap:2px;min-width:0"});
+    R.forEach(([k,col])=>{const v=ev.dist[k]||0;if(!v)return;
+      bar.append(el("div",{class:"seg",style:`width:${100*v/rated}%;background:${col}`,title:`${v} ${k}`}));});
+    wrap.append(bar);
+    const legend=el("div",{class:"row",style:"gap:6px 16px;flex-wrap:wrap;align-items:center;margin:9px 0 0"});
+    R.forEach(([k,col])=>legend.append(el("span",{class:"small"},thumbIcon(k,col),k+" ",el("b",{class:"num"},String(ev.dist[k]||0)))));
+    if(ev.share_positive!=null)legend.append(el("span",{class:"small mut"},`${Math.round(ev.share_positive*100)}% positive`));
+    wrap.append(legend);
+    // latest submissions
+    if((ev.recent||[]).length){
+      const det=el("details",{class:"members"});
+      det.append(el("summary",{},`Latest submissions (${ev.recent.length} of ${ev.n})`));
+      const t=el("table",{style:"margin-top:6px"});
+      t.append(el("tr",{},el("th",{},"time"),el("th",{},"visitor"),el("th",{},"rating"),el("th",{},"app")));
+      for(const r of ev.recent){
+        const k=r.rating||"unknown";const [,col]=rc(k);
+        t.append(el("tr",{},
+          el("td",{class:"small mut num"},(r.ts||"").replace("T"," ").slice(0,16)),
+          el("td",{},el("button",{class:"userchip",onclick:()=>openUser(r.user_id,"history")},r.user_id)),
+          el("td",{class:"small",style:`color:${col}`},thumbIcon(k,col,13),k),
+          el("td",{class:"small mut"},[r.app_id,r.build].filter(Boolean).join(" · "))));
+      }
+      det.append(t);wrap.append(det);
+    }
+    thInner.append(wrap);
   }).catch(()=>{});
 
   // filters active -> show WHO matches right here (the table lives in the other
@@ -1944,7 +1999,11 @@ async function renderUser(v){
     el("div",{class:"cardhead",style:"margin:0"},"Visitor profile"),
     el("div",{class:"row",style:"gap:6px;flex-wrap:wrap"},
       spill("Pre-survey",surv.completed_demographic),
-      spill("Personalization",surv.completed_personalization))));
+      spill("Personalization",surv.completed_personalization),
+      (surv.evaluation&&surv.evaluation.rating)?(()=>{const k=surv.evaluation.rating,col=THUMB_COLOR[k]||"var(--mut)";
+        return el("span",{class:"statusbadge done",style:`color:${col};background:transparent;border-color:${col}66`,
+          title:`recommendation rating: ${k}`+(surv.evaluation.count>1?` (rated ${surv.evaluation.count}×: ${surv.evaluation.history.join(" → ")})`:"")+(surv.evaluation.ts?` · ${surv.evaluation.ts.replace("T"," ").slice(0,16)}`:"")},
+          thumbIcon(k,col,12),"Recommendations "+k);})():"")));
   // demographics
   const demoPairs=Object.entries(demo).filter(([,x])=>x!=null&&x!=="");
   pc.append(el("div",{class:"eyebrow",style:"display:block;margin-bottom:6px"},"Demographics"));
