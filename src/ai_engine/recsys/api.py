@@ -460,7 +460,7 @@ def make_router(components: Components) -> APIRouter:
             cache.pop("users_rows", None)
             cache.pop("cohort_aggs", None)
             cache.pop("fb_scores", None)
-            cache.pop("evaluation_rows", None)
+            # evaluation_rows: NOT popped; its parquet scan is incremental and 60s-TTL'd
         return {"status": "ok", "ingested": len(events), "users": sorted(users),
                 "bandit_updates": bandit_updates}
 
@@ -1128,9 +1128,14 @@ def make_router(components: Components) -> APIRouter:
 
     def _evaluation_rows() -> list[dict]:
         """Every `EVALUATION_SUBMITTED` (thumbs on the recommendations) as a flat row,
-        oldest first, cached 5 min (ingest drops the key). Read from the durable
-        Parquet log when there is one (full history, one predicate-pushed column
-        scan per partition); otherwise from the hot per-user buffer."""
+        oldest first. Read from the durable Parquet log when there is one (full
+        history), otherwise from the hot per-user buffer.
+
+        The Parquet scan is INCREMENTAL: the log is append-only (one immutable file per
+        ingest batch), so each file's thumbs are memoised by path and only files not
+        seen before are opened. A new file costs one read of the `event` column; the
+        `raw` column (the heavy one) is read only for files that actually contain a
+        thumbs row. The merged list is rebuilt at most once a minute."""
         from .adapters.rudderstack import EVALUATION_EVENT, extract_evaluation
 
         def _row(user_id, ts, content_id, request_id, raw) -> Optional[dict]:
@@ -1140,34 +1145,49 @@ def make_router(components: Components) -> APIRouter:
             return {"user_id": user_id, "ts": ts, "content_id": content_id,
                     "request_id": request_id, **ev}
 
+        def _scan_file(f: str) -> list[dict]:
+            import json as _json
+            import pyarrow.parquet as pq
+            import pyarrow.compute as pc
+            try:
+                ev_col = pq.read_table(f, columns=["event"])["event"]
+                mask = pc.equal(ev_col, EVALUATION_EVENT)
+                if not pc.any(mask).as_py():
+                    return []
+                t = pq.read_table(f, columns=["user_id", "ts", "content_id", "request_id", "raw"])
+                t = t.filter(mask)
+            except Exception:
+                return []
+            rows = []
+            for r in t.to_pylist():
+                try:
+                    raw = _json.loads(r.get("raw") or "{}")
+                except Exception:
+                    raw = {}
+                row = _row(r.get("user_id"), r.get("ts"), r.get("content_id"),
+                           r.get("request_id"), raw)
+                if row:
+                    rows.append(row)
+            return rows
+
         def build():
             rows: list[dict] = []
             base = _log_base(c)
             if base and os.path.isdir(base):
                 import glob as _glob
-                import json as _json
                 try:
-                    import pyarrow.parquet as pq
-                    import pyarrow.compute as pc
+                    import pyarrow  # noqa: F401
                 except ImportError:
                     raise HTTPException(status_code=503, detail="pyarrow not installed")
-                cols = ["user_id", "event", "ts", "content_id", "request_id", "raw"]
-                for d in sorted(_glob.glob(os.path.join(base, "date=*"))):
-                    for f in _glob.glob(os.path.join(d, "*.parquet")):
-                        try:
-                            t = pq.read_table(f, columns=cols)
-                        except Exception:
-                            continue
-                        t = t.filter(pc.equal(t["event"], EVALUATION_EVENT))
-                        for r in t.to_pylist():
-                            try:
-                                raw = _json.loads(r.get("raw") or "{}")
-                            except Exception:
-                                raw = {}
-                            row = _row(r.get("user_id"), r.get("ts"), r.get("content_id"),
-                                       r.get("request_id"), raw)
-                            if row:
-                                rows.append(row)
+                cache = getattr(c, "_dash_cache", None)
+                memo: dict = cache.setdefault("evaluation_files", {}) if cache is not None else {}
+                files = sorted(_glob.glob(os.path.join(base, "date=*", "*.parquet")))
+                for f in files:
+                    if f not in memo:
+                        memo[f] = _scan_file(f)
+                    rows.extend(memo[f])
+                for gone in [f for f in memo if f not in files]:   # compacted / deleted files
+                    memo.pop(gone, None)
             else:
                 sigs = list(c.model_store.iter_signals() if hasattr(c.model_store, "iter_signals") else [])
                 for s2 in sigs:
@@ -1184,7 +1204,7 @@ def make_router(components: Components) -> APIRouter:
                             rows.append(row)
             rows.sort(key=lambda r: r.get("ts") or "")
             return rows
-        return _dash_cached(c, "evaluation_rows", 300.0, build)
+        return _dash_cached(c, "evaluation_rows", 60.0, build)
 
     @ops.get("/cohort/evaluation")
     def cohort_evaluation(
